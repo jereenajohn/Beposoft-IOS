@@ -21,7 +21,7 @@ class order_products extends StatefulWidget {
 
   @override
   State<order_products> createState() => _order_productsState();
-}
+} 
 
 class _order_productsState extends State<order_products> {
   drower d = drower();
@@ -191,7 +191,7 @@ class _order_productsState extends State<order_products> {
         final List<dynamic> productsData = parsed['data'];
 
         List<Map<String, dynamic>> productList = [];
-        Set<String> categorySet = {}; // ✅ SAME AS Product_List PAGE
+        Set<String> categorySet = {}; 
 
         for (final p in productsData) {
           // ✅ keep approval logic exactly

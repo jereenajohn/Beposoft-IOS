@@ -4,6 +4,7 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:beposoft/secret_config.dart';
 
 class OrderBulkUpload extends StatefulWidget {
   const OrderBulkUpload({super.key});
@@ -34,11 +35,9 @@ class _OrderBulkUploadState extends State<OrderBulkUpload> {
   bool allAdded = true;
 
   // ===================== SHOPIFY CONFIG =====================
-  final String shopifyEndpoint =
-      'https://ekve0y-1k.myshopify.com/admin/api/2025-01/graphql.json';
-  final String accessToken =
-      'REMOVED_SHOPIFY_TOKEN'; // your token
-
+final String shopifyEndpoint =
+    'https://ekve0y-1k.myshopify.com/admin/api/2025-01/graphql.json';
+final String accessToken = SecretConfig.shopifyAccessToken;
   @override
   void initState() {
     super.initState();
