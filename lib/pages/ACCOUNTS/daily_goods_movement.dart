@@ -28,10 +28,9 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
   DateTime? endDate; // For date range filter
 // //dateselection
 //    DateTime selectedDate = DateTime.now();
-     
 
 //   Future<void> _selectDate(BuildContext context) async {
-//        
+//
 //     final DateTime? picked = await showDatePicker(
 //       context: context,
 //       initialDate: selectedDate,
@@ -41,7 +40,7 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
 //     if (picked != null && picked != selectedDate) {
 //       setState(() {
 //         selectedDate = picked;
-//         
+//
 //       });
 //     }
 //   }
@@ -63,7 +62,7 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
         final productsData = jsonDecode(response.body);
 
         for (var productData in productsData) {
-          var totweight= productData['total_weight']/1000;
+          var totweight = productData['total_weight'] / 1000;
 
           goodsList.add({
             'shipped_date': productData['shipped_date'],
@@ -76,21 +75,20 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
 
         setState(() {
           goods = goodsList;
-          filteredOrders=goods;
+          filteredOrders = goods;
         });
       }
-    } catch (error) {
-      
-    }
+    } catch (error) {}
   }
 
-
-   Future<String?> getTokenFromPrefs() async {
+  Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
-   drower d=drower();
-   Widget _buildDropdownTile(BuildContext context, String title, List<String> options) {
+
+  drower d = drower();
+  Widget _buildDropdownTile(
+      BuildContext context, String title, List<String> options) {
     return ExpansionTile(
       title: Text(title),
       children: options.map((option) {
@@ -98,33 +96,36 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
-            d.navigateToSelectedPage(context, option); // Navigate to selected page
+            d.navigateToSelectedPage(
+                context, option); // Navigate to selected page
           },
         );
       }).toList(),
     );
   }
+
   void logout() async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  await prefs.remove('userId');
-  await prefs.remove('token');
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('userId');
+    await prefs.remove('token');
 
-  // Show a snackbar with the logout success message
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Logout successfully'),
-      duration: Duration(seconds: 2), // Optional: Set how long the snackbar will be visible
-    ),
-  );
+    // Show a snackbar with the logout success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Logout successfully'),
+        duration: Duration(
+            seconds: 2), // Optional: Set how long the snackbar will be visible
+      ),
+    );
 
-  // Navigate to the HomePage
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(builder: (context) =>login()),
-  );
-}
+    // Navigate to the HomePage
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => login()),
+    );
+  }
 
- Future<void> _selectDateRange(BuildContext context) async {
+  Future<void> _selectDateRange(BuildContext context) async {
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2000),
@@ -143,171 +144,175 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
   }
 
   void _filterOrdersByDateRange() {
-    
-  if (startDate != null && endDate != null) {
-    setState(() {
-      filteredOrders = goods.where((order) {
-        final orderDate = DateTime.parse(order['shipped_date']);
-        return (orderDate.isAtSameMomentAs(startDate!) ||
-                orderDate.isAtSameMomentAs(endDate!) ||
-                (orderDate.isAfter(startDate!) && orderDate.isBefore(endDate!)));
-      }).toList();
-    });
+    if (startDate != null && endDate != null) {
+      setState(() {
+        filteredOrders = goods.where((order) {
+          final orderDate = DateTime.parse(order['shipped_date']);
+          return (orderDate.isAtSameMomentAs(startDate!) ||
+              orderDate.isAtSameMomentAs(endDate!) ||
+              (orderDate.isAfter(startDate!) && orderDate.isBefore(endDate!)));
+        }).toList();
+      });
+    }
   }
-}
 
   @override
   void initState() {
     super.initState();
     getgoodsdetails();
   }
-Future<String?> getdepFromPrefs() async {
+
+  Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
 
   Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
-   if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
-
-}
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-
-
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-}else {
+    if (dep == "BDO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdo_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "BDM") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdm_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "warehouse") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseDashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "CEO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "Warehouse Admin") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseAdmin()), // Replace AnotherPage with your target page
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => dashboard()),
       );
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-       onWillPop: () async {
+      onWillPop: () async {
         // Prevent the swipe-back gesture (and back button)
         _navigateBack();
         return false;
       },
       child: Scaffold(
         appBar: AppBar(
-      
-             title: Text(
+          title: Text(
             "Daily Goods Movement",
             style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back), // Custom back arrow
-            onPressed: () async{
-                      final dep= await getdepFromPrefs();
-      if(dep=="BDO" ){
-         Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-              );
-      
-      }
-      else if(dep=="BDM" ){
-         Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-              );
-      }
-      else if(dep=="warehouse" ){
-         Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-              );
-      }
-      else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
- 
-      else if(dep=="Warehouse Admin" ){
-         Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-              );
-      }
-      else {
-      Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => dashboard()), // Replace AnotherPage with your target page
-              );
-      
-      }
-             
+            onPressed: () async {
+              final dep = await getdepFromPrefs();
+              if (dep == "BDO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          bdo_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "BDM") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          bdm_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "warehouse") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          WarehouseDashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "CEO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ceo_dashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "COO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ceo_dashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "Warehouse Admin") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          WarehouseAdmin()), // Replace AnotherPage with your target page
+                );
+              } else {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          dashboard()), // Replace AnotherPage with your target page
+                );
+              }
             },
           ),
-      
           actions: [
-              IconButton(
-                icon: Image.asset('lib/assets/profile.png'),
-                 
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context)=>EditProfileScreen()));
-                  
-                },
-              ),
-            ],
-            
+            IconButton(
+              icon: Image.asset('lib/assets/profile.png'),
+              onPressed: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => EditProfileScreen()));
+              },
             ),
-      
-        
+          ],
+        ),
         body: Column(
           children: [
-      
             // Padding(
             //   padding: const EdgeInsets.all(10),
             //   child: Container(
-            //           height: 46, 
+            //           height: 46,
             //           decoration: BoxDecoration(
             //             border: Border.all(
-            //   color: Colors.blue, 
-            //   width: 1.0, 
+            //   color: Colors.blue,
+            //   width: 1.0,
             //             ),
-            //             borderRadius: BorderRadius.circular(8.0), 
+            //             borderRadius: BorderRadius.circular(8.0),
             //           ),
             //           child: Row(
             //             children: [
@@ -320,7 +325,7 @@ else if(dep=="COO" ){
             //   GestureDetector(
             //     onTap: () {
             //     _selectDate(context);
-            //       
+            //
             //     },
             //     child: Container(
             //       padding: const EdgeInsets.only(left: 55),
@@ -329,42 +334,48 @@ else if(dep=="COO" ){
             //             ],
             //           ),
             //         ),
-            // ),  
-      
-             SizedBox(height: 10,),
-               Padding(
-                 padding: const EdgeInsets.only(right: 10),
-                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                   children: [
-                     ElevatedButton(
-                       onPressed: () => _selectDateRange(context),
-                       style: ElevatedButton.styleFrom(
-                         backgroundColor: Colors.blue, // Set button color to grey
-                         shape: RoundedRectangleBorder(
-                           borderRadius: BorderRadius.circular(8), // Set the border radius
-                         ),
-                       ),
-                       child: Row(
-                         mainAxisSize: MainAxisSize.min, // Ensures the Row takes only as much space as needed
-                         children: [
-                           Icon(
-                             Icons.date_range, // Date range icon
-                             color: Colors.white, // Icon color to match the text
-                           ),
-                           SizedBox(width: 8), // Add some spacing between the icon and text
-                           Text(
-                             'Select Date Range',
-                             style: TextStyle(color: Colors.white), // Set text color to white
-                           ),
-                         ],
-                       ),
-                     ),
-                   ],
-                 ),
-               ),
-        
-                       
+            // ),
+
+            SizedBox(
+              height: 10,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _selectDateRange(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue, // Set button color to grey
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(8), // Set the border radius
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize
+                          .min, // Ensures the Row takes only as much space as needed
+                      children: [
+                        Icon(
+                          Icons.date_range, // Date range icon
+                          color: Colors.white, // Icon color to match the text
+                        ),
+                        SizedBox(
+                            width:
+                                8), // Add some spacing between the icon and text
+                        Text(
+                          'Select Date Range',
+                          style: TextStyle(
+                              color: Colors.white), // Set text color to white
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             Expanded(
               child: filteredOrders.isEmpty
                   ? Center(child: CircularProgressIndicator())
@@ -375,15 +386,21 @@ else if(dep=="COO" ){
                         final item = filteredOrders[index];
                         return GestureDetector(
                           onTap: () {
-                                                            Navigator.push(context, MaterialPageRoute(builder: (context)=>Dgm(shipped_date: item['shipped_date'])));
-
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => Dgm(
+                                        shipped_date: item['shipped_date'])));
                           },
                           child: Container(
                             margin: EdgeInsets.only(bottom: 15),
                             padding: EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.blue.shade100, Colors.blue.shade300],
+                                colors: [
+                                  Colors.blue.shade100,
+                                  Colors.blue.shade300
+                                ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
@@ -402,22 +419,25 @@ else if(dep=="COO" ){
                               children: [
                                 Row(
                                   children: [
-                                    Icon(Icons.calendar_today, color: Colors.blue.shade700),
+                                    Icon(Icons.calendar_today,
+                                        color: Colors.blue.shade700),
                                     SizedBox(width: 8),
                                     Text(
                                       "Shipped Date: ${item['shipped_date']}",
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
-                                        color: const Color.fromARGB(255, 32, 0, 0),
+                                        color:
+                                            const Color.fromARGB(255, 32, 0, 0),
                                       ),
                                     ),
                                   ],
                                 ),
-                                 SizedBox(height: 5),
+                                SizedBox(height: 5),
                                 Row(
                                   children: [
-                                    Icon(Icons.add_box, color: Colors.blue.shade700),
+                                    Icon(Icons.add_box,
+                                        color: Colors.blue.shade700),
                                     SizedBox(width: 8),
                                     Text(
                                       "Total Boxes: ${item['total_boxes']}",
@@ -432,7 +452,8 @@ else if(dep=="COO" ){
                                 SizedBox(height: 3),
                                 Row(
                                   children: [
-                                    Icon(Icons.fitness_center, color: Colors.blue.shade700),
+                                    Icon(Icons.fitness_center,
+                                        color: Colors.blue.shade700),
                                     SizedBox(width: 8),
                                     Text(
                                       "Total A/W: ${item['total_weight']} kg",
@@ -447,7 +468,8 @@ else if(dep=="COO" ){
                                 SizedBox(height: 3),
                                 Row(
                                   children: [
-                                    Icon(Icons.fitness_center_sharp, color: Colors.blue.shade700),
+                                    Icon(Icons.fitness_center_sharp,
+                                        color: Colors.blue.shade700),
                                     SizedBox(width: 8),
                                     Text(
                                       "Volume Weight: ${item['total_volume_weight']} kg",
@@ -462,7 +484,8 @@ else if(dep=="COO" ){
                                 SizedBox(height: 3),
                                 Row(
                                   children: [
-                                    Icon(Icons.attach_money, color: Colors.blue.shade700),
+                                    Icon(Icons.attach_money,
+                                        color: Colors.blue.shade700),
                                     SizedBox(width: 8),
                                     Text(
                                       "Shipping Charge: ₹${item['total_shipping_charge']}",
@@ -489,4 +512,5 @@ else if(dep=="COO" ){
         ),
       ),
     );
-  }}
+  }
+}

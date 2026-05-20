@@ -1089,6 +1089,7 @@ _buildDropdownTile(context, 'Daily Sales Reports',
               _buildDropdownTile(context, 'Reports', [
                 'Sales Report',
                 'Sales Report Excel',
+                'GST Report',
                 // 'All Division Product Sale Report',
                 // 'Cycling & Skating Monthly Excel',
                 // 'Cycling & Skating Daily Excel',

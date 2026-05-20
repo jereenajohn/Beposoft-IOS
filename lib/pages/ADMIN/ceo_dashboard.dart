@@ -48,6 +48,7 @@ import 'package:beposoft/pages/ADMIN/ceo_monthly_family_summary.dart';
 import 'package:beposoft/pages/ADMIN/ceo_parcel_avarage_monthly.dart'
     show PostofficeReport_monthly;
 import 'package:beposoft/pages/ADMIN/ceo_todays_family_summary.dart';
+import 'package:beposoft/pages/ADMIN/dgm_page.dart';
 import 'package:beposoft/pages/ADMIN/family_detailed_summary_page.dart';
 
 import 'package:beposoft/pages/ADMIN/family_wise_analysis_details_page.dart';
@@ -2100,7 +2101,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => daily_goods_movement()),
+                MaterialPageRoute(builder: (context) => daily_goods_movementt()),
               );
             },
             child: Container(
@@ -5920,6 +5921,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                 _buildDropdownTile(context, 'Reports', [
                   'Sales Report',
                   'Sales Report Excel',
+                  'GST Report',
                   'Daily Product Sold Report',
                   // 'All Division Product Sale Report',
                   // 'Cycling & Skating Monthly Excel',

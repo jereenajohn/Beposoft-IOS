@@ -39,6 +39,7 @@ import 'package:beposoft/pages/ACCOUNTS/expence_reeport.dart';
 import 'package:beposoft/pages/ACCOUNTS/expense_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/finance_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/grv_list.dart';
+import 'package:beposoft/pages/ACCOUNTS/gstreportpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/internal_tranfer.dart';
 import 'package:beposoft/pages/ACCOUNTS/monthlyprocyclingskating.dart';
 import 'package:beposoft/pages/ACCOUNTS/new_grv.dart';
@@ -131,7 +132,7 @@ class drower {
         );
         break;
 
-        case 'Add Team':
+      case 'Add Team':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => AddTeam()),
@@ -144,7 +145,7 @@ class drower {
         );
         break;
 
-        case 'Add Team Members':
+      case 'Add Team Members':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => AddTeamMembers()),
@@ -202,6 +203,11 @@ class drower {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => inernal_transfer()),
+        );
+      case 'GST Report':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => GSTReportPage()),
         );
 
       case 'Transfer List':
@@ -754,7 +760,7 @@ class drower {
         );
         break;
 
-        case 'BDO ADD DSR':
+      case 'BDO ADD DSR':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => BdoDsrAdding()),
@@ -909,7 +915,6 @@ class drower {
   void navigateToSelectedPage3(BuildContext context, String option) {
     // Navigate to the selected page based on the option
     switch (option) {
-
       case 'Add Team':
         Navigator.push(
           context,
@@ -917,14 +922,12 @@ class drower {
         );
         break;
 
-        case 'Add Team Members':
+      case 'Add Team Members':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => AddTeamMembers()),
         );
         break;
-
-        
 
       case 'View Call Duration List':
         Navigator.push(
@@ -933,7 +936,7 @@ class drower {
         );
         break;
 
-          case 'Add Team Members':
+      case 'Add Team Members':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => AddTeamMembers()),
@@ -947,7 +950,7 @@ class drower {
         );
         break;
 
-        case 'Add BDO Attendence':
+      case 'Add BDO Attendence':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => BdmReportAdd()),
@@ -1019,7 +1022,7 @@ class drower {
           MaterialPageRoute(builder: (context) => DsrBdoList()),
         );
         break;
-        case 'Add Attendence':
+      case 'Add Attendence':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => BdmReportAdd()),
@@ -1032,14 +1035,12 @@ class drower {
           MaterialPageRoute(builder: (context) => AddBdmOrderSelectionPage()),
         );
         break;
-         case 'Active BDO List':
+      case 'Active BDO List':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => BdmOverallReportPage()),
         );
         break;
-
-        
 
       case 'Product List':
         Navigator.push(

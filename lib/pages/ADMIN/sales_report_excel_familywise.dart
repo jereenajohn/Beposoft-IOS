@@ -38,9 +38,8 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
 
   Map<String, Map<String, dynamic>> staffGrouped = {};
   Map<String, Map<String, dynamic>> filteredStaff = {};
+
   TextEditingController searchController = TextEditingController();
-  String formatDisplayDate(DateTime date) =>
-      DateFormat("dd/MM/yyyy").format(date);
 
   @override
   void initState() {
@@ -48,10 +47,26 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
     fetchFamilyData();
   }
 
-  String formatDate(DateTime date) => DateFormat("yyyy-MM-dd").format(date);
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  String formatDate(DateTime date) {
+    return DateFormat("yyyy-MM-dd").format(date);
+  }
+
+  String formatDisplayDate(DateTime date) {
+    return DateFormat("dd/MM/yyyy").format(date);
+  }
 
   Future<void> fetchFamilyData() async {
-    setState(() => isLoading = true);
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+    });
 
     final start = formatDate(widget.selectedRange.start);
     final end = formatDate(widget.selectedRange.end);
@@ -72,12 +87,24 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
         groupByStaff();
         filteredStaff = Map.from(staffGrouped);
 
-        if (mounted) setState(() => isLoading = false);
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
       } else {
-        if (mounted) setState(() => isLoading = false);
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -87,10 +114,29 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
   void groupByStaff() {
     staffGrouped = {};
 
+    final List<String> pendingStatuses = [
+      "Invoice Created",
+      "Invoice Approved",
+      "Waiting for confirmation",
+      "Waiting For Confirmation",
+    ];
+
+    final List<String> excludedFromApprovedStatuses = [
+      "Invoice Rejected",
+      "Invoice Created",
+      "Invoice Approved",
+      "Waiting for confirmation",
+      "Waiting For Confirmation",
+    ];
+
     for (var order in orders) {
-      String name = order["staff_name"];
-      double amount = (order["amount"] ?? 0).toDouble();
-      bool rejected = order["status"] == "Invoice Rejected";
+      final String name = order["staff_name"]?.toString() ?? "Unknown Staff";
+      final double amount = ((order["amount"] ?? 0) as num).toDouble();
+      final String status = order["status"]?.toString().trim() ?? "";
+
+      final bool rejected = status == "Invoice Rejected";
+      final bool pendingBill = pendingStatuses.contains(status);
+      final bool approvedBill = !excludedFromApprovedStatuses.contains(status);
 
       if (!staffGrouped.containsKey(name)) {
         staffGrouped[name] = {
@@ -98,6 +144,8 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
           "total_amount": 0.0,
           "approved_count": 0,
           "approved_amount": 0.0,
+          "pending_count": 0,
+          "pending_amount": 0.0,
           "rejected_count": 0,
           "rejected_amount": 0.0,
         };
@@ -109,7 +157,14 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
       if (rejected) {
         staffGrouped[name]!["rejected_count"] += 1;
         staffGrouped[name]!["rejected_amount"] += amount;
-      } else {
+      }
+
+      if (pendingBill) {
+        staffGrouped[name]!["pending_count"] += 1;
+        staffGrouped[name]!["pending_amount"] += amount;
+      }
+
+      if (approvedBill) {
         staffGrouped[name]!["approved_count"] += 1;
         staffGrouped[name]!["approved_amount"] += amount;
       }
@@ -123,30 +178,18 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
     if (query.isEmpty) {
       filteredStaff = Map.from(staffGrouped);
     } else {
-      filteredStaff = staffGrouped.map((k, v) => MapEntry(k, v))
-        ..removeWhere(
-            (key, value) => !key.toLowerCase().contains(query.toLowerCase()));
+      filteredStaff = staffGrouped.map((key, value) {
+        return MapEntry(key, value);
+      });
+
+      filteredStaff.removeWhere((key, value) {
+        return !key.toLowerCase().contains(query.toLowerCase());
+      });
     }
 
-    setState(() {});
-  }
-
-  // -------------------------------------------------------------
-  // COMPUTE MONTHLY SUMMARY (ONLY COMPLETED ORDERS)
-  // -------------------------------------------------------------
-  Map<String, dynamic> computeFilteredSummary() {
-    int approvedCount = 0;
-    double approvedAmt = 0.0;
-
-    for (var s in filteredStaff.values) {
-      approvedCount += (s["approved_count"] as int);
-      approvedAmt += (s["approved_amount"] as double);
+    if (mounted) {
+      setState(() {});
     }
-
-    return {
-      "approved_count": approvedCount,
-      "approved_amount": approvedAmt,
-    };
   }
 
   drower d = drower();
@@ -160,6 +203,7 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
     final dep = await getdepFromPrefs();
 
     Widget page;
+
     switch (dep) {
       case "BDO":
         page = bdo_dashbord();
@@ -189,13 +233,18 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
         page = dashboard();
     }
 
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => page));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
   }
 
   // -------------------------------------------------------------
+  // BUILD UI
+  // -------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    final filteredSummary = computeFilteredSummary();
+    final reportSummary = summary;
 
     return Scaffold(
       appBar: AppBar(
@@ -209,18 +258,21 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
           onPressed: () async {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const SalesReportExcel()),
+              MaterialPageRoute(
+                builder: (context) => const SalesReportExcel(),
+              ),
             );
           },
         ),
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
           : Column(
               children: [
                 const SizedBox(height: 10),
 
-                /// SEARCH BAR FIXED
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: buildSearchBar(),
@@ -228,22 +280,23 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
 
                 const SizedBox(height: 10),
 
-                /// MONTHLY SUMMARY CARD FIXED
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: buildCompletedSummaryCard(filteredSummary),
+                  child: buildCompletedSummaryCard(reportSummary),
                 ),
 
                 const SizedBox(height: 10),
 
-                /// SCROLLABLE STAFF CARDS
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Column(
                       children: [
                         for (var staff in filteredStaff.keys)
-                          buildStaffCard(staff, filteredStaff[staff]!),
+                          buildStaffCard(
+                            staff,
+                            filteredStaff[staff]!,
+                          ),
                         const SizedBox(height: 50),
                       ],
                     ),
@@ -251,7 +304,7 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
                 ),
               ],
             ),
-    ); // <-- FIXED: added the missing parenthesis and brace
+    );
   }
 
   // -------------------------------------------------------------
@@ -263,7 +316,12 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+          ),
+        ],
       ),
       child: TextField(
         controller: searchController,
@@ -278,29 +336,61 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
   }
 
   // -------------------------------------------------------------
-  // SIMPLE MONTHLY SUMMARY CARD (COMPLETED ORDERS ONLY)
+  // FULL API SUMMARY CARD
   // -------------------------------------------------------------
   Widget buildCompletedSummaryCard(Map<String, dynamic> data) {
-    String startDate = formatDisplayDate(widget.selectedRange.start);
-    String endDate = formatDisplayDate(widget.selectedRange.end);
+    final totalOrders = data["total_orders"] ??
+        {
+          "count": 0,
+          "amount": 0.0,
+        };
+
+    final nonRejectedOrders = data["non_rejected_orders"] ??
+        {
+          "count": 0,
+          "amount": 0.0,
+        };
+
+    final pendingOrders = data["pending_orders"] ??
+        {
+          "count": 0,
+          "amount": 0.0,
+        };
+
+    final rejectedOrders = data["rejected_orders"] ??
+        {
+          "count": 0,
+          "amount": 0.0,
+        };
+
+    final String startDate = formatDisplayDate(widget.selectedRange.start);
+    final String endDate = formatDisplayDate(widget.selectedRange.end);
 
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0150B8), Color(0xFF3BD67C)],
+          colors: [
+            Color(0xFF0150B8),
+            Color(0xFF3BD67C),
+          ],
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 4),
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 4,
+          ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      padding: const EdgeInsets.symmetric(
+        vertical: 8,
+        horizontal: 10,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // TITLE
           Text(
-            "Completed Orders Summary",
+            "${widget.familyName} Sales Summary",
             style: const TextStyle(
               color: Colors.white,
               fontSize: 14,
@@ -310,7 +400,6 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
 
           const SizedBox(height: 4),
 
-          // DATE RANGE
           Text(
             "$startDate → $endDate",
             style: const TextStyle(
@@ -320,39 +409,93 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
 
-          // COMPACT TABLE
           Table(
             border: TableBorder.all(
               color: Colors.white.withOpacity(0.4),
               width: 0.7,
             ),
             columnWidths: const {
-              0: FlexColumnWidth(1.3),
-              1: FlexColumnWidth(1.3),
+              0: FlexColumnWidth(2.2),
+              1: FlexColumnWidth(1),
+              2: FlexColumnWidth(1.8),
             },
             children: [
               TableRow(
-                decoration:
-                    BoxDecoration(color: Colors.white.withOpacity(0.08)),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                ),
                 children: [
+                  paddedWhiteSmall("Type", bold: true),
                   paddedWhiteSmall("Count", bold: true),
                   paddedWhiteSmall("Amount", bold: true),
                 ],
               ),
-              TableRow(
-                children: [
-                  paddedWhiteSmall("${data["approved_count"]}"),
-                  paddedWhiteSmall(
-                    "₹${(data["approved_amount"] as num).toDouble().toStringAsFixed(2)}",
-                  ),
-                ],
-              ),
+              summaryRow("Total Bills", totalOrders),
+              summaryRow("Approved Bills", nonRejectedOrders),
+              summaryRow("Pending Bills", pendingOrders),
+              summaryRow("Rejected Bills", rejectedOrders),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  TableRow summaryRow(String title, dynamic rowData) {
+    final int count = rowData is Map ? (rowData["count"] ?? 0) : 0;
+
+    final double amount = rowData is Map
+        ? ((rowData["amount"] ?? 0) as num).toDouble()
+        : 0.0;
+
+    return TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: 6,
+            horizontal: 5,
+          ),
+          child: Text(
+            title,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: 6,
+            horizontal: 5,
+          ),
+          child: Text(
+            "$count",
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: 6,
+            horizontal: 5,
+          ),
+          child: Text(
+            "₹${amount.toStringAsFixed(2)}",
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -380,7 +523,12 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)],
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 5,
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -392,28 +540,43 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
     );
   }
 
-  BoxDecoration gradient() => const BoxDecoration(
-        gradient:
-            LinearGradient(colors: [Color(0xFF0150B8), Color(0xFF3BD67C)]),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      );
+  BoxDecoration gradient() {
+    return const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          Color(0xFF0150B8),
+          Color(0xFF3BD67C),
+        ],
+      ),
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(12),
+      ),
+    );
+  }
 
-  Widget header(String text) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: gradient(),
-        child: Text(
-          text.toUpperCase(),
-          style: const TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+  Widget header(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: gradient(),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
         ),
-      );
+      ),
+    );
+  }
 
   Widget tableBody(Map<String, dynamic> data) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Table(
-        border: TableBorder.all(color: Colors.grey.shade400),
+        border: TableBorder.all(
+          color: Colors.grey.shade400,
+        ),
         columnWidths: const {
           0: FlexColumnWidth(2),
           1: FlexColumnWidth(1),
@@ -421,30 +584,51 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
         },
         children: [
           TableRow(
-            decoration: BoxDecoration(color: Colors.grey.shade200),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+            ),
             children: [
               padded("Type", bold: true),
               padded("Count", bold: true),
               padded("Amount", bold: true),
             ],
           ),
-          row("Total Bills", data["total_count"], data["total_amount"]),
-          row("Approved Bills", data["approved_count"],
-              data["approved_amount"]),
-          row("Rejected Bills", data["rejected_count"],
-              data["rejected_amount"]),
+          row(
+            "Total Bills",
+            data["total_count"],
+            data["total_amount"],
+          ),
+          row(
+            "Approved Bills",
+            data["approved_count"],
+            data["approved_amount"],
+          ),
+          row(
+            "Pending Bills",
+            data["pending_count"],
+            data["pending_amount"],
+          ),
+          row(
+            "Rejected Bills",
+            data["rejected_count"],
+            data["rejected_amount"],
+          ),
         ],
       ),
     );
   }
 
   TableRow row(String label, dynamic count, dynamic amt) {
+    final double amount = ((amt ?? 0) as num).toDouble();
+
     return TableRow(
       children: [
         padded(label),
-        padded(count.toString()),
-        padded("₹${(amt as num).toDouble().toStringAsFixed(2)}",
-            color: Colors.green),
+        padded("${count ?? 0}"),
+        padded(
+          "₹${amount.toStringAsFixed(2)}",
+          color: Colors.green,
+        ),
       ],
     );
   }
@@ -463,6 +647,9 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
   }
 
   Widget footer(Map<String, dynamic> data) {
+    final int count = data["total_count"] ?? 0;
+    final double amount = ((data["total_amount"] ?? 0) as num).toDouble();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -470,13 +657,25 @@ class _FamilyReportPageState extends State<FamilyReportPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text("Total", style: TextStyle(color: Colors.white)),
-          Text("${data["total_count"]}",
-              style: const TextStyle(color: Colors.white)),
+          const Text(
+            "Total",
+            style: TextStyle(
+              color: Colors.white,
+            ),
+          ),
           Text(
-              "₹${(data["total_amount"] as num).toDouble().toStringAsFixed(2)}",
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
+            "$count",
+            style: const TextStyle(
+              color: Colors.white,
+            ),
+          ),
+          Text(
+            "₹${amount.toStringAsFixed(2)}",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );

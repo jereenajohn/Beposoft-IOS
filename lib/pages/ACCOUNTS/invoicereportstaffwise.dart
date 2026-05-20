@@ -34,10 +34,15 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart';
 import 'package:open_filex/open_filex.dart';
 
-class  InvoiceReportStaffwise extends StatefulWidget {
+class InvoiceReportStaffwise extends StatefulWidget {
   var id;
   var date;
-  InvoiceReportStaffwise({super.key, required this.id, required this.date});
+
+  InvoiceReportStaffwise({
+    super.key,
+    required this.id,
+    required this.date,
+  });
 
   @override
   State<InvoiceReportStaffwise> createState() => _InvoiceReportStaffwiseState();
@@ -48,11 +53,14 @@ class _InvoiceReportStaffwiseState extends State<InvoiceReportStaffwise> {
   List<Map<String, dynamic>> filteredOrders = [];
   String searchQuery = '';
 
-  DateTime? selectedDate; // For single date filter
-  DateTime? startDate; // For date range filter
-  DateTime? endDate; // For date range filter
+  DateTime? selectedDate;
+  DateTime? startDate;
+  DateTime? endDate;
+
+  bool isLoading = false;
 
   drower d = drower();
+
   Widget _buildDropdownTile(
       BuildContext context, String title, List<String> options) {
     return ExpansionTile(
@@ -62,8 +70,7 @@ class _InvoiceReportStaffwiseState extends State<InvoiceReportStaffwise> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
-            d.navigateToSelectedPage(
-                context, option); // Navigate to selected page
+            d.navigateToSelectedPage(context, option);
           },
         );
       }).toList(),
@@ -85,109 +92,206 @@ class _InvoiceReportStaffwiseState extends State<InvoiceReportStaffwise> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
- 
-Future<void> fetchOrderData() async {
-  try {
-    final token = await getTokenFromPrefs();
-    final dep = await getdepFromPrefs();
-    final jwt = JWT.decode(token!);
-    var name = jwt.payload['name'];
-;
-    String url = '$api/api/orders/';
-    List<Map<String, dynamic>> orderList = [];
 
-    var response = await http.get(
-      Uri.parse(url),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+  String _formatApiDate(dynamic value) {
+    if (value == null) return "";
 
-    ;
-    ;
-    ;
+    String rawDate = value.toString();
 
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      final List ordersData = responseData['results'];
+    try {
+      DateTime parsedDate = DateFormat('yyyy-MM-dd').parse(rawDate);
+      return DateFormat('yyyy-MM-dd').format(parsedDate);
+    } catch (e) {
+      try {
+        DateTime parsedDate = DateTime.parse(rawDate);
+        return DateFormat('yyyy-MM-dd').format(parsedDate);
+      } catch (e) {
+        return rawDate;
+      }
+    }
+  }
 
-      List<Map<String, dynamic>> newOrders = [];
+  Future<void> fetchOrderData() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
 
-      for (var orderData in ordersData) {
-        String rawOrderDate = orderData['order_date'] ?? "";
-        String formattedOrderDate = rawOrderDate;
-        try {
-          DateTime parsedOrderDate = DateFormat('yyyy-MM-dd').parse(rawOrderDate);
-          formattedOrderDate = DateFormat('yyyy-MM-dd').format(parsedOrderDate);
-        } catch (e) {}
+      final token = await getTokenFromPrefs();
 
-
-          if (orderData['status'] != "Order Request by Warehouse") {
-            if(orderData['manage_staff']==widget.id && formattedOrderDate==widget.date){
-            newOrders.add({
-              'id': orderData['id'],
-              'invoice': orderData['invoice'],
-               'manage_staff': orderData['manage_staff'],
-              'customer': {
-                'id':orderData['customer']['id'],
-                'name': orderData['customer']['name'],
-                'phone': orderData['customer']['phone'],
-                'email': orderData['customer']['email'],
-                'address': orderData['customer']['address'],
-              },
-              // 'billing_address': {
-              //   'name': orderData['billing_address']['name'],
-              //   'email': orderData['billing_address']['email'],
-              //   'zipcode': orderData['billing_address']['zipcode'],
-              //   'address': orderData['billing_address']['address'],
-              //   'phone': orderData['billing_address']['phone'],
-              //   'city': orderData['billing_address']['city'],
-              //   'state': orderData['billing_address']['state'],
-              // },
-              // 'bank': {
-              //   'name': orderData['bank']['name'],
-              //   'account_number': orderData['bank']['account_number'],
-              //   'ifsc_code': orderData['bank']['ifsc_code'],
-              //   'branch': orderData['bank']['branch'],
-              // },
-              // 'items': orderData['items'] != null && orderData['items'] is List
-              //     ? orderData['items'].map((item) {
-              //         if (item is Map<String, dynamic>) {
-              //           return {
-              //             'id': item['id'],
-              //             'name': item['name'],
-              //             'quantity': item['quantity'],
-              //             'price': item['price'],
-              //             'tax': item['tax'],
-              //             'discount': item['discount'],
-              //             'images': item['images'],
-              //           };
-              //         }
-              //         return null;
-              //       }).where((item) => item != null).toList()
-              //     : [],
-              'status': orderData['status'],
-              'total_amount': orderData['total_amount'],
-              'order_date': formattedOrderDate,
-            });
-          }
-          }
+      if (token == null || token.isEmpty) {
+        setState(() {
+          orders = [];
+          filteredOrders = [];
+          isLoading = false;
+        });
+        return;
       }
 
-      setState(() {
-        orders = newOrders;
+      final jwt = JWT.decode(token);
+      var name = jwt.payload['name'];
 
-        ;
-        filteredOrders = newOrders;
+      print("JWT NAME: $name");
+      print("WIDGET ID: ${widget.id}");
+      print("WIDGET DATE: ${widget.date}");
+
+      String url = '$api/api/orders/';
+      List<Map<String, dynamic>> orderList = [];
+
+      var response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print("ORDER STATUS CODE: ${response.statusCode}");
+      print("ORDER BODY: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+        List ordersData = [];
+
+        if (responseData['results'] is Map &&
+            responseData['results']['results'] is List) {
+          ordersData = responseData['results']['results'];
+        } else if (responseData['results'] is List) {
+          ordersData = responseData['results'];
+        }
+
+        List<Map<String, dynamic>> newOrders = [];
+
+        String selectedDateString = _formatApiDate(widget.date);
+        String selectedStaffString = widget.id?.toString() ?? "";
+
+        for (var orderData in ordersData) {
+          if (orderData is! Map<String, dynamic>) {
+            continue;
+          }
+
+          String rawOrderDate = orderData['order_date'] ?? "";
+          String formattedOrderDate = _formatApiDate(rawOrderDate);
+
+          String orderStaffName = orderData['manage_staff']?.toString() ?? "";
+          String orderStaffID = orderData['staffID']?.toString() ?? "";
+
+          bool staffMatched = orderStaffName == selectedStaffString ||
+              orderStaffID == selectedStaffString;
+
+          bool dateMatched = formattedOrderDate == selectedDateString;
+
+          print(
+              "CHECK ORDER ${orderData['id']} STAFF NAME: $orderStaffName STAFF ID: $orderStaffID SELECTED: $selectedStaffString DATE: $formattedOrderDate SELECTED DATE: $selectedDateString STAFF MATCH: $staffMatched DATE MATCH: $dateMatched");
+
+          if (orderData['status'] != "Order Request by Warehouse") {
+            if (staffMatched && dateMatched) {
+              Map<String, dynamic> customerMap = {};
+              Map<String, dynamic> billingAddressMap = {};
+              Map<String, dynamic> bankMap = {};
+
+              if (orderData['customer'] is Map<String, dynamic>) {
+                customerMap = orderData['customer'];
+              }
+
+              if (orderData['billing_address'] is Map<String, dynamic>) {
+                billingAddressMap = orderData['billing_address'];
+              }
+
+              if (orderData['bank'] is Map<String, dynamic>) {
+                bankMap = orderData['bank'];
+              }
+
+              newOrders.add({
+                'id': orderData['id'],
+                'invoice': orderData['invoice'],
+                'manage_staff': orderData['manage_staff'],
+                'staffID': orderData['staffID'],
+                'customer': {
+                  'id': customerMap['id'] ?? orderData['customerID'],
+                  'name': customerMap['name'] ??
+                      billingAddressMap['name'] ??
+                      '',
+                  'phone': billingAddressMap['phone'] ?? '',
+                  'email': billingAddressMap['email'] ?? '',
+                  'address': billingAddressMap['address'] ?? '',
+                },
+                'billing_address': {
+                  'name': billingAddressMap['name'] ?? '',
+                  'email': billingAddressMap['email'] ?? '',
+                  'zipcode': billingAddressMap['zipcode'] ?? '',
+                  'address': billingAddressMap['address'] ?? '',
+                  'phone': billingAddressMap['phone'] ?? '',
+                  'city': billingAddressMap['city'] ?? '',
+                  'state': billingAddressMap['state'] ?? '',
+                },
+                'bank': {
+                  'name': bankMap['name'] ?? '',
+                  'account_number': bankMap['account_number'] ?? '',
+                  'ifsc_code': bankMap['ifsc_code'] ?? '',
+                  'branch': bankMap['branch'] ?? '',
+                },
+                'items': orderData['items'] != null && orderData['items'] is List
+                    ? orderData['items'].map((item) {
+                        if (item is Map<String, dynamic>) {
+                          return {
+                            'id': item['id'],
+                            'name': item['name'],
+                            'quantity': item['quantity'],
+                            'price': item['price'],
+                            'tax': item['tax'],
+                            'discount': item['discount'],
+                            'images': item['images'],
+                          };
+                        }
+                        return null;
+                      }).where((item) => item != null).toList()
+                    : [],
+                'status': orderData['status'],
+                'total_amount': orderData['total_amount'],
+                'order_date': formattedOrderDate,
+                'payment_status': orderData['payment_status'],
+                'payment_method': orderData['payment_method'],
+                'shipping_mode': orderData['shipping_mode'],
+                'shipping_charge': orderData['shipping_charge'],
+                'parcel_service_note': orderData['parcel_service_note'],
+                'state': orderData['state'],
+                'company': orderData['company'],
+                'family': orderData['family'],
+                'family_id': orderData['family_id'],
+                'family_name': orderData['family_name'],
+              });
+            }
+          }
+        }
+
+        print("FINAL FILTERED ORDER COUNT: ${newOrders.length}");
+
+        setState(() {
+          orders = newOrders;
+          filteredOrders = newOrders;
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          orders = [];
+          filteredOrders = [];
+          isLoading = false;
+        });
+
+        throw Exception("Failed to load order data");
+      }
+    } catch (error) {
+      print("FETCH ORDER DATA ERROR: $error");
+
+      setState(() {
+        orders = [];
+        filteredOrders = [];
+        isLoading = false;
       });
-    } else {
-      throw Exception("Failed to load order data");
     }
-  } catch (error) {
-    ;
   }
-}
 
   void _filterOrders(String query) {
     setState(() {
@@ -197,23 +301,29 @@ Future<void> fetchOrderData() async {
       } else {
         filteredOrders = orders.where((order) {
           final customerName =
-              order['customer_name']?.toString().toLowerCase() ?? '';
+              order['customer']?['name']?.toString().toLowerCase() ?? '';
+          final customerPhone =
+              order['customer']?['phone']?.toString().toLowerCase() ?? '';
           final invoice = order['invoice']?.toString().toLowerCase() ?? '';
           final manageStaff =
               order['manage_staff']?.toString().toLowerCase() ?? '';
+          final staffID = order['staffID']?.toString().toLowerCase() ?? '';
           final totalAmount =
               order['total_amount']?.toString().toLowerCase() ?? '';
+          final status = order['status']?.toString().toLowerCase() ?? '';
 
           return customerName.contains(query.toLowerCase()) ||
+              customerPhone.contains(query.toLowerCase()) ||
               invoice.contains(query.toLowerCase()) ||
               manageStaff.contains(query.toLowerCase()) ||
-              totalAmount.contains(query.toLowerCase());
+              staffID.contains(query.toLowerCase()) ||
+              totalAmount.contains(query.toLowerCase()) ||
+              status.contains(query.toLowerCase());
         }).toList();
       }
     });
   }
 
-  // Method to filter orders by single date
   void _filterOrdersBySingleDate() {
     if (selectedDate != null) {
       setState(() {
@@ -227,8 +337,6 @@ Future<void> fetchOrderData() async {
     }
   }
 
-  // Method to filter orders between two dates
-  // Method to filter orders between two dates, inclusive of start and end dates
   void _filterOrdersByDateRange() {
     if (startDate != null && endDate != null) {
       setState(() {
@@ -245,7 +353,7 @@ Future<void> fetchOrderData() async {
   Future<void> _selectSingleDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: selectedDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
     );
@@ -280,7 +388,6 @@ Future<void> fetchOrderData() async {
     await prefs.remove('userId');
     await prefs.remove('token');
 
-    // Use a post-frame callback to show the SnackBar after the current frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ScaffoldMessenger.of(context).mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -292,10 +399,8 @@ Future<void> fetchOrderData() async {
       }
     });
 
-    // Wait for the SnackBar to disappear before navigating
     await Future.delayed(Duration(seconds: 2));
 
-    // Navigate to the HomePage after the snackbar is shown
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => login()),
@@ -525,36 +630,34 @@ Future<void> fetchOrderData() async {
           style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back), // Custom back arrow
+          icon: const Icon(Icons.arrow_back),
           onPressed: () async {
             final dep = await getdepFromPrefs();
-           
- 
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                    builder: (context) =>
-                        Sales_Report()), // Replace AnotherPage with your target page
-              );
-            
+
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => Sales_Report()),
+            );
           },
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.calendar_today), // Calendar icon
-            onPressed: () => _selectSingleDate(
-                context), // Call the method to select start date
+            icon: Icon(Icons.refresh),
+            onPressed: () {
+              fetchOrderData();
+            },
           ),
-          // Icon button to open date range picker
           IconButton(
-            icon: Icon(Icons.date_range), // Date range icon
-            onPressed: () => _selectDateRange(
-                context), // Call the method to select date range
+            icon: Icon(Icons.calendar_today),
+            onPressed: () => _selectSingleDate(context),
+          ),
+          IconButton(
+            icon: Icon(Icons.date_range),
+            onPressed: () => _selectDateRange(context),
           ),
           PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert), // 3-dot icon
+            icon: Icon(Icons.more_vert),
             onSelected: (value) {
-              // Handle menu item selection
               switch (value) {
                 case 'Option 1':
                   exportToExcel();
@@ -564,7 +667,6 @@ Future<void> fetchOrderData() async {
                   break;
 
                 default:
-                  // Handle default case
                   break;
               }
             },
@@ -585,7 +687,6 @@ Future<void> fetchOrderData() async {
       ),
       body: Column(
         children: [
-          // Search Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: TextField(
@@ -603,185 +704,174 @@ Future<void> fetchOrderData() async {
               onChanged: _filterOrders,
             ),
           ),
-          // Date Filters
-          // Padding(
-          //   padding: const EdgeInsets.all(8.0),
-          //   child: Row(
-          //     mainAxisAlignment: MainAxisAlignment.center,
-          //     children: [
-          //       SizedBox(
-          //         width: 160,
-          //         child: ElevatedButton(
-          //           onPressed: () => _selectSingleDate(context),
-          //           style: ElevatedButton.styleFrom(
-          //             backgroundColor: const Color.fromARGB(
-          //                 255, 2, 65, 96), // Set button color to grey
-          //             shape: RoundedRectangleBorder(
-          //               borderRadius:
-          //                   BorderRadius.circular(8), // Set the border radius
-          //             ),
-          //           ),
-          //           child: Text(
-          //             'Select Date',
-          //             style: TextStyle(color: Colors.white),
-          //           ),
-          //         ),
-          //       ),
-          //       SizedBox(width: 10),
-          //       ElevatedButton(
-          //         onPressed: () => _selectDateRange(context),
-          //         style: ElevatedButton.styleFrom(
-          //           backgroundColor: const Color.fromARGB(
-          //               255, 2, 65, 96), // Set button color to grey
-          //           shape: RoundedRectangleBorder(
-          //             borderRadius:
-          //                 BorderRadius.circular(8), // Set the border radius
-          //           ),
-          //         ),
-          //         child: Text(
-          //           'Select Date Range',
-          //           style: TextStyle(
-          //               color: Colors.white), // Set text color to white
-          //         ),
-          //       ),
-          //     ],
-          //   ),
-          // ),
-          // Display Orders
           Expanded(
-            child: filteredOrders.isEmpty
+            child: isLoading
                 ? Center(
-                    child: Text(
-                      selectedDate != null ||
-                              (startDate != null && endDate != null)
-                          ? 'No orders available in this date range'
-                          : 'No orders available',
-                      style: TextStyle(
-                          fontSize: 16,
-                          color: const Color.fromARGB(255, 2, 65, 96)),
+                    child: CircularProgressIndicator(
+                      color: Colors.blue,
                     ),
                   )
-                : ListView.builder(
-                    itemCount: filteredOrders.length,
-                    padding: const EdgeInsets.only(right: 10, left: 10),
-                    itemBuilder: (context, index) {
-                      final order = filteredOrders[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3.0),
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) =>
-                                        OrderReview(id: order['id'],customer: order['customer']['id'],)));
-                          },
-                          child: Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15.0),
-                            ),
-                            color: Colors.white,
-                            elevation: 4,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Header section with Invoice and Order Date
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue,
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(15.0),
-                                      topRight: Radius.circular(15.0),
+                : filteredOrders.isEmpty
+                    ? Center(
+                        child: Text(
+                          selectedDate != null ||
+                                  (startDate != null && endDate != null)
+                              ? 'No orders available in this date range'
+                              : 'No orders available',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: const Color.fromARGB(255, 2, 65, 96),
+                          ),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: fetchOrderData,
+                        color: Colors.blue,
+                        child: ListView.builder(
+                          itemCount: filteredOrders.length,
+                          padding: const EdgeInsets.only(right: 10, left: 10),
+                          itemBuilder: (context, index) {
+                            final order = filteredOrders[index];
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 3.0),
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => OrderReview(
+                                        id: order['id'],
+                                        customer: order['customer']['id'],
+                                      ),
                                     ),
+                                  );
+                                },
+                                child: Card(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15.0),
                                   ),
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        '#${order['invoice']}',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                      Text(
-                                        DateFormat('dd MMM yy').format(
-                                            DateTime.parse(
-                                                order['order_date'])),
-                                        style: TextStyle(
-                                            color: Colors.white, fontSize: 14),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                // Order details section
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
+                                  color: Colors.white,
+                                  elevation: 4,
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        'Customer: ${order['customer']['name']}',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                      SizedBox(height: 4.0),
-                                      Text(
-                                        'Staff: ${order['manage_staff']}',
-                                        style: TextStyle(
-                                          fontSize: 13,
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: Radius.circular(15.0),
+                                            topRight: Radius.circular(15.0),
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                '#${order['invoice'] ?? ''}',
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                            Text(
+                                              order['order_date'] != null &&
+                                                      order['order_date']
+                                                          .toString()
+                                                          .isNotEmpty
+                                                  ? DateFormat('dd MMM yy')
+                                                      .format(DateTime.parse(
+                                                          order['order_date']))
+                                                  : '',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      SizedBox(height: 4.0),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            'Status: ',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          Text(
-                                            '${order['status']}',
-                                            style: TextStyle(
+                                      Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Customer: ${order['customer']['name'] ?? ''}',
+                                              style: TextStyle(
                                                 fontSize: 13,
-                                                color: Colors.blue),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: 8.0),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            'Billing Amount:',
-                                            style: TextStyle(
-                                              fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
-                                          ),
-                                          Text(
-                                            '\$${order['total_amount']}',
-                                            style: TextStyle(
+                                            SizedBox(height: 4.0),
+                                            Text(
+                                              'Staff: ${order['manage_staff'] ?? ''}',
+                                              style: TextStyle(
                                                 fontSize: 13,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.green),
-                                          ),
-                                        ],
+                                              ),
+                                            ),
+                                            SizedBox(height: 4.0),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  'Status: ',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: Text(
+                                                    '${order['status'] ?? ''}',
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: Colors.blue,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            SizedBox(height: 8.0),
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                Text(
+                                                  'Billing Amount:',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '₹${order['total_amount'] ?? 0}',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.green,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
+                      ),
           ),
         ],
       ),
