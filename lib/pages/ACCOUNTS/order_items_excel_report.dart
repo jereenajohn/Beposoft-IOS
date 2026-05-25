@@ -43,6 +43,9 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
   late DateTime _toDate;
 
   List<Map<String, dynamic>> _orderItems = [];
+  List<Map<String, dynamic>> _companies = [];
+  String _selectedCompanyId = '';
+  bool _isCompanyLoading = false;
   final ScrollController _horizontalTableController = ScrollController();
 
   /*
@@ -60,6 +63,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
     _fromDate = DateTime(now.year, now.month, 1);
     _toDate = now;
 
+    fetchCompanies();
     fetchOrderItemsExcelReport();
   }
 
@@ -77,6 +81,39 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
     return '$year-$month-$day';
   }
 
+  String _formatDisplayDate(dynamic value) {
+    if (value == null || value.toString().isEmpty) {
+      return '';
+    }
+
+    try {
+      final DateTime date = DateTime.parse(value.toString());
+
+      const List<String> months = [
+        'JAN',
+        'FEB',
+        'MAR',
+        'APR',
+        'MAY',
+        'JUN',
+        'JUL',
+        'AUG',
+        'SEP',
+        'OCT',
+        'NOV',
+        'DEC',
+      ];
+
+      final String day = date.day.toString().padLeft(2, '0');
+      final String month = months[date.month - 1];
+      final String year = date.year.toString().substring(2);
+
+      return '$day-$month-$year';
+    } catch (e) {
+      return value.toString();
+    }
+  }
+
   String _formatAmount(dynamic value) {
     final double amount = double.tryParse(value.toString()) ?? 0.0;
     return amount.toStringAsFixed(2);
@@ -88,6 +125,111 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
       return qty.toInt().toString();
     }
     return qty.toStringAsFixed(2);
+  }
+
+  List<double> _getAvailableTaxPercentages() {
+    final Set<double> taxPercentages = {};
+
+    for (final Map<String, dynamic> item in _orderItems) {
+      final double taxPercentage =
+          double.tryParse(item['tax_percentage']?.toString() ?? '0') ?? 0.0;
+
+      if (taxPercentage > 0) {
+        taxPercentages.add(taxPercentage);
+      }
+    }
+
+    final List<double> sortedTaxPercentages = taxPercentages.toList();
+    sortedTaxPercentages.sort();
+
+    return sortedTaxPercentages;
+  }
+
+  String _formatTaxColumnTitle(double taxPercentage) {
+    if (taxPercentage == taxPercentage.roundToDouble()) {
+      return 'Tax ${taxPercentage.toInt()}%';
+    }
+
+    return 'Tax ${taxPercentage.toStringAsFixed(2)}%';
+  }
+
+  String _getTaxValueForPercentage(
+    Map<String, dynamic> item,
+    double columnTaxPercentage,
+  ) {
+    final double itemTaxPercentage =
+        double.tryParse(item['tax_percentage']?.toString() ?? '0') ?? 0.0;
+
+    if (itemTaxPercentage == columnTaxPercentage) {
+      return _formatAmount(item['tax']);
+    }
+
+    return '';
+  }
+
+  Future<void> fetchCompanies() async {
+    setState(() {
+      _isCompanyLoading = true;
+    });
+
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? token = prefs.getString('token');
+
+      final Uri url = Uri.parse('$baseUrl/api/company/data/');
+
+      debugPrint('COMPANY LIST URL: $url');
+
+      final http.Response response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      );
+
+      debugPrint('COMPANY LIST STATUS: ${response.statusCode}');
+      debugPrint('COMPANY LIST BODY: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final dynamic decodedData = jsonDecode(response.body);
+
+        final List<dynamic> data = decodedData is Map<String, dynamic>
+            ? decodedData['data'] ?? []
+            : decodedData is List
+                ? decodedData
+                : [];
+
+        final List<Map<String, dynamic>> companyList = data
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .map((item) {
+          return {
+            'id': item['id'],
+            'name': item['name']?.toString() ?? '',
+          };
+        }).where((item) {
+          return item['id'] != null && item['name'].toString().isNotEmpty;
+        }).toList();
+
+        setState(() {
+          _companies = companyList;
+          _isCompanyLoading = false;
+        });
+      } else {
+        setState(() {
+          _companies = [];
+          _isCompanyLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('COMPANY LIST ERROR: $e');
+
+      setState(() {
+        _companies = [];
+        _isCompanyLoading = false;
+      });
+    }
   }
 
   Future<void> fetchOrderItemsExcelReport() async {
@@ -120,6 +262,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
       ).replace(
         queryParameters: {
           if (search.isNotEmpty) 'search': search,
+          if (_selectedCompanyId.isNotEmpty) 'company_id': _selectedCompanyId,
         },
       );
 
@@ -199,20 +342,27 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
 
       ex.Sheet sheet = excel["Order Items Report"];
 
-      sheet.setColWidth(0, 14);
-      sheet.setColWidth(1, 18);
-      sheet.setColWidth(2, 28);
-      sheet.setColWidth(3, 38);
-      sheet.setColWidth(4, 10);
-      sheet.setColWidth(5, 12);
-      sheet.setColWidth(6, 12);
-      sheet.setColWidth(7, 18);
-      sheet.setColWidth(8, 16);
-      sheet.setColWidth(9, 12);
-      sheet.setColWidth(10, 16);
+      final List<double> taxPercentages = _getAvailableTaxPercentages();
+
+      sheet.setColWidth(0, 14); // DATE
+      sheet.setColWidth(1, 18); // STATE
+      sheet.setColWidth(2, 18); // Voucher Number
+      sheet.setColWidth(3, 28); // party name
+      sheet.setColWidth(4, 38); // item name
+      sheet.setColWidth(5, 10); // item qty
+      sheet.setColWidth(6, 12); // item rate
+      sheet.setColWidth(7, 12); // per
+      sheet.setColWidth(8, 18); // item basic amt
+
+      for (int i = 0; i < taxPercentages.length; i++) {
+        sheet.setColWidth(9 + i, 14);
+      }
+
+      sheet.setColWidth(9 + taxPercentages.length, 16);
 
       final List<String> headers = [
         'DATE',
+        'state',
         'Voucher Number',
         'party name',
         'item name',
@@ -220,8 +370,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
         'item rate',
         'per',
         'item basic amt',
-        'tax percentage',
-        'tax',
+        ...taxPercentages.map((tax) => _formatTaxColumnTitle(tax)),
         'total amount',
       ];
 
@@ -239,7 +388,8 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
         final Map<String, dynamic> item = _orderItems[rowIndex];
 
         final List<String> rowData = [
-          item['date']?.toString() ?? '',
+          _formatDisplayDate(item['date']),
+          item['state']?.toString() ?? '',
           item['voucher_no']?.toString() ?? '',
           item['party_name']?.toString() ?? '',
           item['item_name']?.toString() ?? '',
@@ -247,8 +397,9 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
           _formatAmount(item['item_rate']),
           item['unit']?.toString() ?? '',
           _formatAmount(item['item_basic_amount']),
-          _formatAmount(item['tax_percentage']),
-          _formatAmount(item['tax']),
+          ...taxPercentages.map(
+            (taxPercentage) => _getTaxValueForPercentage(item, taxPercentage),
+          ),
           _formatAmount(item['total_amount']),
         ];
 
@@ -353,6 +504,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
 
     setState(() {
       _searchController.clear();
+      _selectedCompanyId = '';
       _fromDate = DateTime(now.year, now.month, 1);
       _toDate = now;
     });
@@ -389,11 +541,11 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
           ),
           _summaryItem(
             title: 'From Date',
-            value: _formatDate(_fromDate),
+            value: _formatDisplayDate(_formatDate(_fromDate)),
           ),
           _summaryItem(
             title: 'To Date',
-            value: _formatDate(_toDate),
+            value: _formatDisplayDate(_formatDate(_toDate)),
           ),
           _summaryItem(
             title: 'Total Items',
@@ -497,12 +649,14 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
             },
           ),
           const SizedBox(height: 12),
+          _companyDropdown(),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: _dateButton(
                   label: 'From',
-                  value: _formatDate(_fromDate),
+                  value: _formatDisplayDate(_formatDate(_fromDate)),
                   onTap: _selectFromDate,
                 ),
               ),
@@ -510,7 +664,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
               Expanded(
                 child: _dateButton(
                   label: 'To',
-                  value: _formatDate(_toDate),
+                  value: _formatDisplayDate(_formatDate(_toDate)),
                   onTap: _selectToDate,
                 ),
               ),
@@ -611,6 +765,65 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
     );
   }
 
+  Widget _companyDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedCompanyId.isEmpty ? null : _selectedCompanyId,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Company',
+        prefixIcon: const Icon(Icons.business),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Colors.blue.shade700,
+            width: 1.4,
+          ),
+        ),
+      ),
+      hint: Text(
+        _isCompanyLoading ? 'Loading companies...' : 'All Companies',
+      ),
+      items: [
+        const DropdownMenuItem<String>(
+          value: '',
+          child: Text('All Companies'),
+        ),
+        ..._companies.map((company) {
+          return DropdownMenuItem<String>(
+            value: company['id'].toString(),
+            child: Text(
+              company['name']?.toString() ?? '',
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }),
+      ],
+      onChanged: _isCompanyLoading
+          ? null
+          : (String? value) {
+              setState(() {
+                _selectedCompanyId = value ?? '';
+              });
+
+              fetchOrderItemsExcelReport();
+            },
+    );
+  }
+
   Widget _buildTableSection() {
     if (_isLoading) {
       return const Padding(
@@ -668,7 +881,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
         ),
       );
     }
-
+    final List<double> taxPercentages = _getAvailableTaxPercentages();
     return Container(
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -687,8 +900,8 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
             scrollDirection: Axis.horizontal,
             physics: const ClampingScrollPhysics(),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: 1280,
+              constraints: BoxConstraints(
+                minWidth: 1240 + (taxPercentages.length * 110),
               ),
               child: DataTable(
                 headingRowColor: WidgetStateProperty.all(
@@ -709,18 +922,22 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
                 headingRowHeight: 44,
                 dataRowMinHeight: 48,
                 dataRowMaxHeight: 66,
-                columns: const [
-                  DataColumn(label: Text('Date')),
-                  DataColumn(label: Text('Voucher No')),
-                  DataColumn(label: Text('Party Name')),
-                  DataColumn(label: Text('Item Name')),
-                  DataColumn(label: Text('Qty')),
-                  DataColumn(label: Text('Rate')),
-                  DataColumn(label: Text('Unit')),
-                  DataColumn(label: Text('Basic Amount')),
-                  DataColumn(label: Text('Tax %')),
-                  DataColumn(label: Text('Tax')),
-                  DataColumn(label: Text('Total')),
+                columns: [
+                  const DataColumn(label: Text('Date')),
+                  const DataColumn(label: Text('State')),
+                  const DataColumn(label: Text('Voucher No')),
+                  const DataColumn(label: Text('Party Name')),
+                  const DataColumn(label: Text('Item Name')),
+                  const DataColumn(label: Text('Qty')),
+                  const DataColumn(label: Text('Rate')),
+                  const DataColumn(label: Text('Unit')),
+                  const DataColumn(label: Text('Basic Amount')),
+                  ...taxPercentages.map(
+                    (taxPercentage) => DataColumn(
+                      label: Text(_formatTaxColumnTitle(taxPercentage)),
+                    ),
+                  ),
+                  const DataColumn(label: Text('Total')),
                 ],
                 rows: List.generate(_orderItems.length, (index) {
                   final Map<String, dynamic> item = _orderItems[index];
@@ -735,7 +952,17 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
                       },
                     ),
                     cells: [
-                      DataCell(Text(item['date']?.toString() ?? '')),
+                      DataCell(Text(_formatDisplayDate(item['date']))),
+                      DataCell(
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            item['state']?.toString() ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
                       DataCell(Text(item['voucher_no']?.toString() ?? '')),
                       DataCell(
                         SizedBox(
@@ -761,9 +988,11 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
                       DataCell(Text(_formatAmount(item['item_rate']))),
                       DataCell(Text(item['unit']?.toString() ?? '')),
                       DataCell(Text(_formatAmount(item['item_basic_amount']))),
-                      DataCell(
-                          Text('${_formatAmount(item['tax_percentage'])}%')),
-                      DataCell(Text(_formatAmount(item['tax']))),
+                      ...taxPercentages.map(
+                        (taxPercentage) => DataCell(
+                          Text(_getTaxValueForPercentage(item, taxPercentage)),
+                        ),
+                      ),
                       DataCell(
                         Text(
                           _formatAmount(item['total_amount']),
@@ -846,54 +1075,56 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
     );
   }
 
-
-
-Future<String?> getdepFromPrefs() async {
+  Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
 
-   Future<void> _navigateBack() async {
+  Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
-   if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
-
-}
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-
-
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-}else {
+    if (dep == "BDO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdo_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "BDM") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdm_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "warehouse") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseDashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "CEO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "Warehouse Admin") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseAdmin()), // Replace AnotherPage with your target page
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => dashboard()),
@@ -910,19 +1141,22 @@ else if(dep=="Warehouse Admin" ){
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
-        title: const Text('Order Items Excel Report'),
+        title: const Text(
+          'Order Items Excel Report',
+          style: TextStyle(fontSize: 18),
+        ),
         backgroundColor: Colors.blue.shade700,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-           IconButton(
+        leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
-            color: Colors.black,
+            color: Colors.white,
             size: 20,
           ),
           onPressed: () => _navigateBack(),
         ),
+        actions: [
           IconButton(
             onPressed: _isLoading || _isExporting || _orderItems.isEmpty
                 ? null
