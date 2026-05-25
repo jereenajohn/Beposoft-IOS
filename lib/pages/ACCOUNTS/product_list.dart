@@ -68,6 +68,7 @@ class _Product_ListState extends State<Product_List>
   String? nextPageUrl;
   String? previousPageUrl;
   String emptyMessage = "No products found";
+  Map<String, dynamic> productSummary = <String, dynamic>{};
 
   @override
   void initState() {
@@ -175,6 +176,21 @@ class _Product_ListState extends State<Product_List>
     }
 
     return stockValue.toStringAsFixed(2);
+  }
+
+String _formatAmount(dynamic value) {
+  final double amount = _toDouble(value);
+  return "₹${amount.toStringAsFixed(2)}";
+}
+
+  String _formatNumber(dynamic value) {
+    final double number = _toDouble(value);
+
+    if (number == number.toInt()) {
+      return number.toInt().toString();
+    }
+
+    return number.toStringAsFixed(2);
   }
 
   bool _isOutOfStock(dynamic value) {
@@ -453,6 +469,7 @@ class _Product_ListState extends State<Product_List>
         nextPageUrl = null;
         previousPageUrl = null;
         backendTotalProducts = 0;
+        productSummary = <String, dynamic>{};
         products = <Map<String, dynamic>>[];
         filteredProducts = <Map<String, dynamic>>[];
         emptyMessage = "No products found";
@@ -495,10 +512,16 @@ class _Product_ListState extends State<Product_List>
 
         String responseMessage = "No products found";
         List<dynamic> productsData = <dynamic>[];
+        Map<String, dynamic> parsedSummary = <String, dynamic>{};
 
         if (results is Map) {
           responseMessage =
               results['message']?.toString() ?? "No products found";
+
+          final dynamic summaryData = results['summary'];
+          if (summaryData is Map) {
+            parsedSummary = Map<String, dynamic>.from(summaryData);
+          }
 
           final dynamic data = results['data'];
 
@@ -557,6 +580,7 @@ class _Product_ListState extends State<Product_List>
 
         setState(() {
           backendTotalProducts = count;
+          productSummary = parsedSummary;
           nextPageUrl =
               parsedNext != null && parsedNext.isNotEmpty ? parsedNext : null;
           previousPageUrl = parsedPrevious != null && parsedPrevious.isNotEmpty
@@ -681,6 +705,7 @@ class _Product_ListState extends State<Product_List>
       filteredProducts = <Map<String, dynamic>>[];
 
       backendTotalProducts = 0;
+      productSummary = <String, dynamic>{};
       nextPageUrl = null;
       previousPageUrl = null;
       hasMoreData = true;
@@ -767,7 +792,7 @@ class _Product_ListState extends State<Product_List>
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
+          surfaceTintColor: Colors.white, 
           leading: IconButton(
             icon: const Icon(
               Icons.arrow_back_ios_new_rounded,
@@ -800,6 +825,7 @@ class _Product_ListState extends State<Product_List>
         ),
         body: Column(
           children: <Widget>[
+            // _buildSummaryCard(),
             _buildSearchAndFilters(),
             Expanded(
               child: RefreshIndicator(
@@ -833,6 +859,297 @@ class _Product_ListState extends State<Product_List>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+Widget _buildSummaryCard() {
+  if (productSummary.isEmpty) {
+    return const SizedBox.shrink();
+  }
+
+  final Map<String, dynamic> damagedSummary =
+      productSummary['damaged_stock_summary'] is Map
+          ? Map<String, dynamic>.from(productSummary['damaged_stock_summary'])
+          : <String, dynamic>{};
+
+  final Map<String, dynamic> partiallyDamagedSummary =
+      productSummary['partially_damaged_stock_summary'] is Map
+          ? Map<String, dynamic>.from(
+              productSummary['partially_damaged_stock_summary'],
+            )
+          : <String, dynamic>{};
+
+  return Container(
+    margin: const EdgeInsets.fromLTRB(12, 8, 12, 3),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE5E7EB)),
+      boxShadow: <BoxShadow>[
+        BoxShadow(
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Container(
+              height: 30,
+              width: 30,
+              decoration: BoxDecoration(
+                color: primaryBlue.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(
+                Icons.summarize_rounded,
+                color: primaryBlue,
+                size: 17,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    "Warehouse Summary",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: darkText,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 1),
+                  Text(
+                    "Full stock and amount summary",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 9),
+
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _buildSummaryTile(
+                title: "Total Stock",
+                value: _formatNumber(productSummary['total_stock']),
+                icon: Icons.warehouse_rounded,
+                bgColor: const Color(0xFFECFDF5),
+                iconColor: const Color(0xFF059669),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: _buildSummaryTile(
+                title: "Selling Amount",
+                value: _formatAmount(productSummary['total_selling_amount']),
+                icon: Icons.sell_rounded,
+                bgColor: const Color(0xFFFDF2F8),
+                iconColor: const Color(0xFFDB2777),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 7),
+
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _buildSummaryTile(
+                title: "Landing Cost",
+                value: _formatAmount(
+                  productSummary['total_landing_cost_amount'],
+                ),
+                icon: Icons.local_shipping_rounded,
+                bgColor: const Color(0xFFF8FAFC),
+                iconColor: const Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: _buildSummaryTile(
+                title: "Retail Amount",
+                value: _formatAmount(productSummary['total_retail_amount']),
+                icon: Icons.currency_rupee_rounded,
+                bgColor: const Color(0xFFF0FDFA),
+                iconColor: const Color(0xFF0D9488),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 7),
+
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _buildSummaryTile(
+                title: "Damaged Stock",
+                value: _formatNumber(
+                  damagedSummary['total_damaged_stock'],
+                ),
+                icon: Icons.warning_rounded,
+                bgColor: const Color(0xFFFEF2F2),
+                iconColor: const Color(0xFFDC2626),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: _buildSummaryTile(
+                title: "Partial Damage",
+                value: _formatNumber(
+                  partiallyDamagedSummary[
+                      'total_partially_damaged_stock'],
+                ),
+                icon: Icons.report_problem_rounded,
+                bgColor: const Color(0xFFFFFBEB),
+                iconColor: const Color(0xFFF59E0B),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+ Widget _buildSummaryTile({
+  required String title,
+  required String value,
+  required IconData icon,
+  required Color bgColor,
+  required Color iconColor,
+}) {
+  return Container(
+    constraints: const BoxConstraints(
+      minHeight: 68,
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+    decoration: BoxDecoration(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(13),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(
+              icon,
+              size: 14,
+              color: iconColor,
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 9.2,
+                  height: 1.1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+
+        SizedBox(
+          width: double.infinity,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Text(
+              value,
+              softWrap: false,
+              style: const TextStyle(
+                color: darkText,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+  Widget _buildMiniSummaryRow({
+    required String title,
+    required String value,
+    required String amount,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            "$value Qty",
+            style: const TextStyle(
+              color: darkText,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            amount,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

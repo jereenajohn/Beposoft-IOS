@@ -34,10 +34,14 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
   List<Map<String, dynamic>> todayRows = [];
   List<Map<String, dynamic>> currentMonthRows = [];
 
+  List<Map<String, dynamic>> overallTopProducts = [];
+  bool showAllTopProducts = false;
+
   @override
   void initState() {
     super.initState();
     fetchDailyGoodsMovement();
+    fetchOverallTopProducts();
   }
 
   Future<String?> getTokenFromPrefs() async {
@@ -117,8 +121,7 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
           final Map<String, dynamic> today =
               Map<String, dynamic>.from(serviceMap['today'] ?? {});
 
-          final Map<String, dynamic> currentMonth =
-              Map<String, dynamic>.from(
+          final Map<String, dynamic> currentMonth = Map<String, dynamic>.from(
             serviceMap['current_month'] ??
                 serviceMap['month'] ??
                 serviceMap['currentMonth'] ??
@@ -154,8 +157,7 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
               'actual_weight':
                   _toDouble(currentMonth['total_actual_weight_kg']),
               'volume': _toDouble(currentMonth['total_volume']),
-              'tracking_amount':
-                  _toDouble(currentMonth['total_parcel_amount']),
+              'tracking_amount': _toDouble(currentMonth['total_parcel_amount']),
               'average': _toDouble(currentMonth['average']),
             });
           }
@@ -236,9 +238,73 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>  daily_goods_movement(),
+        builder: (context) => daily_goods_movement(),
       ),
     );
+  }
+
+  Future<void> fetchOverallTopProducts() async {
+    final String? token = await getTokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$api/api/warehouse/box/detail/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is! List) {
+          return;
+        }
+
+        final List<Map<String, dynamic>> topProductsList = [];
+
+        for (var item in decoded) {
+          if (item is! Map<String, dynamic>) {
+            continue;
+          }
+
+          if (item['shipped_date'] == null) {
+            final topProducts = item['top_5_products'];
+
+            if (topProducts is List) {
+              for (var product in topProducts) {
+                if (product is Map<String, dynamic>) {
+                  topProductsList.add({
+                    'product_id': product['product_id'],
+                    'product_name': product['product_name'] ?? '',
+                    'display_name': product['display_name'] ??
+                        product['product_name'] ??
+                        '',
+                    'total_quantity': product['total_quantity'] ?? 0,
+                    'total_amount': product['total_amount'] ?? 0,
+                  });
+                }
+              }
+            }
+
+            break;
+          }
+        }
+
+        if (!mounted) return;
+        setState(() {
+          overallTopProducts = topProductsList;
+          showAllTopProducts = false;
+        });
+      }
+    } catch (e) {
+      // Keep silent because summary page should still work even if top products fail.
+    }
   }
 
   @override
@@ -267,7 +333,10 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
         actions: [
           IconButton(
             tooltip: "Refresh",
-            onPressed: fetchDailyGoodsMovement,
+            onPressed: () async {
+              await fetchDailyGoodsMovement();
+              await fetchOverallTopProducts();
+            },
             icon: const Icon(
               Icons.refresh_rounded,
               color: primaryBlue,
@@ -277,7 +346,10 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
       ),
       body: RefreshIndicator(
         color: primaryBlue,
-        onRefresh: fetchDailyGoodsMovement,
+        onRefresh: () async {
+          await fetchDailyGoodsMovement();
+          await fetchOverallTopProducts();
+        },
         child: isLoading
             ? _buildLoadingView()
             : errorMessage != null
@@ -294,6 +366,7 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // _buildOverallTopProducts(),
           InkWell(
             borderRadius: BorderRadius.circular(22),
             onTap: _goToDailyGoodsMovement,
@@ -304,6 +377,226 @@ class _daily_goods_movementtState extends State<daily_goods_movementt> {
             borderRadius: BorderRadius.circular(22),
             onTap: _goToDailyGoodsMovement,
             child: _buildCurrentMonthTableSection(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverallTopProducts() {
+    if (overallTopProducts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final List<Map<String, dynamic>> visibleProducts = showAllTopProducts
+        ? overallTopProducts
+        : overallTopProducts.take(2).toList();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Top 5 Products",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: primaryBlue,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(
+                color: Colors.grey.shade400,
+                width: 0.8,
+              ),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 36,
+                    dataRowHeight: 34,
+                    headingRowColor: MaterialStateColor.resolveWith(
+                      (states) => primaryBlue,
+                    ),
+                    border: TableBorder(
+                      horizontalInside: BorderSide(
+                        width: 0.5,
+                        color: Colors.grey.shade400,
+                      ),
+                      verticalInside: BorderSide(
+                        width: 0.5,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                    columnSpacing: 10,
+                    columns: const [
+                      DataColumn(
+                        label: SizedBox(
+                          width: 55,
+                          child: Text(
+                            "Sl No",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: 230,
+                          child: Text(
+                            "Product",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: 70,
+                          child: Text(
+                            "Qty",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: 100,
+                          child: Text(
+                            "Amount",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    rows: List<DataRow>.generate(
+                      visibleProducts.length,
+                      (index) {
+                        final product = visibleProducts[index];
+
+                        final String productName =
+                            product['display_name']?.toString().isNotEmpty ==
+                                    true
+                                ? product['display_name'].toString()
+                                : product['product_name']?.toString() ?? '-';
+
+                        final String quantity =
+                            product['total_quantity']?.toString() ?? '0';
+
+                        final double amount = double.tryParse(
+                              product['total_amount']?.toString() ?? '0',
+                            ) ??
+                            0.0;
+
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              SizedBox(
+                                width: 55,
+                                child: Text(
+                                  "${index + 1}",
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              SizedBox(
+                                width: 230,
+                                child: Text(
+                                  productName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              SizedBox(
+                                width: 70,
+                                child: Text(
+                                  quantity,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              SizedBox(
+                                width: 100,
+                                child: Text(
+                                  amount.toStringAsFixed(2),
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                if (overallTopProducts.length > 2)
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.grey.shade400,
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          showAllTopProducts = !showAllTopProducts;
+                        });
+                      },
+                      icon: Icon(
+                        showAllTopProducts
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: 18,
+                        color: primaryBlue,
+                      ),
+                      label: Text(
+                        showAllTopProducts ? "See Less" : "See More",
+                        style: const TextStyle(
+                          color: primaryBlue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
