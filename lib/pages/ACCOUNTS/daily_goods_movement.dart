@@ -17,14 +17,20 @@ import 'package:intl/intl.dart';
 
 class daily_goods_movement extends StatefulWidget {
   @override
-  _daily_goods_movementState createState() => _daily_goods_movementState();
+  _dailygoodspageState createState() => _dailygoodspageState();
 }
 
-class _daily_goods_movementState extends State<daily_goods_movement> {
+class _dailygoodspageState extends State<daily_goods_movement> {
   List<Map<String, dynamic>> goods = [];
   List<Map<String, dynamic>> filteredOrders = [];
   List<Map<String, dynamic>> overallTopProducts = [];
   bool showAllTopProducts = false;
+
+  int currentPage = 1;
+  int totalCount = 0;
+  String? nextPageUrl;
+  String? previousPageUrl;
+  bool isPaginationLoading = false;
 
   bool isLoading = true;
   String? errorMessage;
@@ -51,9 +57,14 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
 //     }
 //   }
 
-  Future<void> getgoodsdetails({DateTime? fromDate, DateTime? toDate}) async {
+  Future<void> getgoodsdetails({
+    DateTime? fromDate,
+    DateTime? toDate,
+    int page = 1,
+  }) async {
     setState(() {
       isLoading = true;
+      isPaginationLoading = true;
       errorMessage = null;
     });
 
@@ -63,22 +74,27 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
       if (token == null || token.isEmpty) {
         setState(() {
           isLoading = false;
+          isPaginationLoading = false;
           errorMessage = "Token not found. Please login again.";
         });
         return;
       }
 
-      String url = '$api/api/warehouse/box/detail/';
+      final Map<String, String> queryParams = {
+        'page': page.toString(),
+      };
 
       if (fromDate != null && toDate != null) {
-        final fromDateText = DateFormat('yyyy-MM-dd').format(fromDate);
-        final toDateText = DateFormat('yyyy-MM-dd').format(toDate);
-
-        url = '$url?from_date=$fromDateText&to_date=$toDateText';
+        queryParams['from_date'] = DateFormat('yyyy-MM-dd').format(fromDate);
+        queryParams['to_date'] = DateFormat('yyyy-MM-dd').format(toDate);
       }
 
+      final uri = Uri.parse(
+        '$api/api/pagenated/warehouse/box/detail/',
+      ).replace(queryParameters: queryParams);
+
       final response = await http.get(
-        Uri.parse(url),
+        uri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -88,13 +104,43 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
       if (response.statusCode == 200) {
         final productsData = jsonDecode(response.body);
 
-        if (productsData is! List) {
+        if (productsData is! Map<String, dynamic>) {
           setState(() {
             goods = [];
             filteredOrders = [];
             overallTopProducts = [];
             isLoading = false;
+            isPaginationLoading = false;
             errorMessage = "Invalid API response format.";
+          });
+          return;
+        }
+
+        final results = productsData['results'];
+
+        if (results is! Map<String, dynamic>) {
+          setState(() {
+            goods = [];
+            filteredOrders = [];
+            overallTopProducts = [];
+            isLoading = false;
+            isPaginationLoading = false;
+            errorMessage = "Invalid results format.";
+          });
+          return;
+        }
+
+        final summary = results['summary'];
+        final data = results['data'];
+
+        if (data is! List) {
+          setState(() {
+            goods = [];
+            filteredOrders = [];
+            overallTopProducts = [];
+            isLoading = false;
+            isPaginationLoading = false;
+            errorMessage = "Invalid data format.";
           });
           return;
         }
@@ -102,41 +148,27 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
         final List<Map<String, dynamic>> goodsList = [];
         final List<Map<String, dynamic>> topProductsList = [];
 
-        for (var productData in productsData) {
-          if (productData is! Map<String, dynamic>) {
-            continue;
-          }
+        if (summary is Map<String, dynamic>) {
+          final topProducts = summary['top_5_products'];
 
-          /*
-          First object example:
-          {
-            "from_date": null,
-            "to_date": null,
-            "top_5_products": [...]
-          }
-
-          This is overall top products.
-          Show this below date filter.
-        */
-          if (productData['shipped_date'] == null) {
-            final topProducts = productData['top_5_products'];
-
-            if (topProducts is List) {
-              for (var product in topProducts) {
-                if (product is Map<String, dynamic>) {
-                  topProductsList.add({
-                    'product_id': product['product_id'],
-                    'product_name': product['product_name'] ?? '',
-                    'display_name': product['display_name'] ??
-                        product['product_name'] ??
-                        '',
-                    'total_quantity': product['total_quantity'] ?? 0,
-                    'total_amount': product['total_amount'] ?? 0,
-                  });
-                }
+          if (topProducts is List) {
+            for (var product in topProducts) {
+              if (product is Map<String, dynamic>) {
+                topProductsList.add({
+                  'product_id': product['product_id'],
+                  'product_name': product['product_name'] ?? '',
+                  'display_name':
+                      product['display_name'] ?? product['product_name'] ?? '',
+                  'total_quantity': product['total_quantity'] ?? 0,
+                  'total_amount': product['total_amount'] ?? 0,
+                });
               }
             }
+          }
+        }
 
+        for (var productData in data) {
+          if (productData is! Map<String, dynamic>) {
             continue;
           }
 
@@ -173,18 +205,23 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
             'total_parcel_amount': productData['total_parcel_amount'] ?? 0,
             'total_invoice_count': productData['total_invoice_count'] ?? 0,
             'total_order_amount': productData['total_order_amount'] ?? 0,
-
-            // Important: this is date-wise top 5 products.
             'top_5_products': dateWiseTopProducts,
           });
         }
 
         setState(() {
+          currentPage = page;
+          totalCount = productsData['count'] ?? 0;
+          nextPageUrl = productsData['next'];
+          previousPageUrl = productsData['previous'];
+
           goods = goodsList;
           filteredOrders = goodsList;
           overallTopProducts = topProductsList;
           showAllTopProducts = false;
+
           isLoading = false;
+          isPaginationLoading = false;
         });
       } else {
         setState(() {
@@ -192,6 +229,7 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
           filteredOrders = [];
           overallTopProducts = [];
           isLoading = false;
+          isPaginationLoading = false;
           errorMessage =
               "Failed to fetch data. Status code: ${response.statusCode}";
         });
@@ -202,6 +240,7 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
         filteredOrders = [];
         overallTopProducts = [];
         isLoading = false;
+        isPaginationLoading = false;
         errorMessage = "Something went wrong: $error";
       });
     }
@@ -234,9 +273,12 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
     setState(() {
       startDate = null;
       endDate = null;
+      currentPage = 1;
+      nextPageUrl = null;
+      previousPageUrl = null;
     });
 
-    await getgoodsdetails();
+    await getgoodsdetails(page: 1);
   }
 
   void logout() async {
@@ -275,10 +317,10 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
         startDate = picked.start;
         endDate = picked.end;
       });
-
       await getgoodsdetails(
         fromDate: picked.start,
         toDate: picked.end,
+        page: 1,
       );
     }
   }
@@ -344,6 +386,92 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
         MaterialPageRoute(builder: (context) => dashboard()),
       );
     }
+  }
+
+  Widget _buildPaginationControls() {
+    if (totalCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: Colors.grey.shade300,
+            width: 0.8,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              "Page $currentPage  •  Total $totalCount",
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: previousPageUrl == null || isPaginationLoading
+                ? null
+                : () {
+                    getgoodsdetails(
+                      fromDate: startDate,
+                      toDate: endDate,
+                      page: currentPage - 1,
+                    );
+                  },
+            icon: const Icon(Icons.arrow_back_ios, size: 13),
+            label: const Text(
+              "Previous",
+              style: TextStyle(fontSize: 11),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey.shade700,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade300,
+              disabledForegroundColor: Colors.grey.shade600,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: nextPageUrl == null || isPaginationLoading
+                ? null
+                : () {
+                    getgoodsdetails(
+                      fromDate: startDate,
+                      toDate: endDate,
+                      page: currentPage + 1,
+                    );
+                  },
+            icon: const Icon(Icons.arrow_forward_ios, size: 13),
+            label: const Text(
+              "Next",
+              style: TextStyle(fontSize: 11),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade300,
+              disabledForegroundColor: Colors.grey.shade600,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildOverallTopProducts() {
@@ -845,8 +973,10 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
                                       children: [
                                         Row(
                                           children: [
-                                            Icon(Icons.calendar_today,
-                                                color: Colors.blue.shade700),
+                                            Icon(
+                                              Icons.calendar_today,
+                                              color: Colors.blue.shade700,
+                                            ),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -864,8 +994,10 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
                                         const SizedBox(height: 5),
                                         Row(
                                           children: [
-                                            Icon(Icons.add_box,
-                                                color: Colors.blue.shade700),
+                                            Icon(
+                                              Icons.add_box,
+                                              color: Colors.blue.shade700,
+                                            ),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -882,8 +1014,10 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
                                         const SizedBox(height: 3),
                                         Row(
                                           children: [
-                                            Icon(Icons.fitness_center,
-                                                color: Colors.blue.shade700),
+                                            Icon(
+                                              Icons.fitness_center,
+                                              color: Colors.blue.shade700,
+                                            ),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -900,8 +1034,10 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
                                         const SizedBox(height: 3),
                                         Row(
                                           children: [
-                                            Icon(Icons.fitness_center_sharp,
-                                                color: Colors.blue.shade700),
+                                            Icon(
+                                              Icons.fitness_center_sharp,
+                                              color: Colors.blue.shade700,
+                                            ),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -918,8 +1054,10 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
                                         const SizedBox(height: 3),
                                         Row(
                                           children: [
-                                            Icon(Icons.attach_money,
-                                                color: Colors.blue.shade700),
+                                            Icon(
+                                              Icons.attach_money,
+                                              color: Colors.blue.shade700,
+                                            ),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -939,7 +1077,9 @@ class _daily_goods_movementState extends State<daily_goods_movement> {
                                 );
                               },
                             ),
-            )
+            ),
+
+            _buildPaginationControls(),
           ],
         ),
       ),

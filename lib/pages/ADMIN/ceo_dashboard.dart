@@ -149,6 +149,8 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   String categoryStartDate = "";
   String categoryEndDate = "";
   bool showAllCategories = false;
+    double dashboardTotalLandingCostAmount = 0.0;
+
 
   List<Map<String, dynamic>> familyAnalysisCards = [];
   Map<String, dynamic> familyAnalysisOverall = {};
@@ -360,7 +362,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     return warehouseId?.toString();
   }
 
-  Future<void> fetchDashboardInventorySummary() async {
+ Future<void> fetchDashboardInventorySummary() async {
     final String? token = await getTokenFromPrefs();
     final String? warehouseId = await getWarehouseFromPrefs();
 
@@ -393,6 +395,8 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
             dashboardTotalStock = _asInt(summary['total_stock']);
             dashboardTotalRetailAmount =
                 _asDouble(summary['total_retail_amount']);
+            dashboardTotalLandingCostAmount =
+                _asDouble(summary['total_landing_cost_amount']);
             dashboardInventoryLoading = false;
           });
         } else {
@@ -2211,7 +2215,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
               _asDouble(productsData?['month_total_amount']),
             ),
             lines: [
-              "Orders: ${_asInt(productsData?['month_count'])}",
+              "Bills: ${_asInt(productsData?['month_count'])}",
               "Monthly sales report",
             ],
             onTap: () {
@@ -2222,12 +2226,14 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
             },
           ),
           _buildDashboardCard(
-            title: "Finance",
+            title: "Finance ",
             icon: Icons.account_balance_wallet_rounded,
-            value: "Today's Balance",
-            lines: [
-              "Opening: ${_currency.format(financeOpeningBalance)}",
-              "Closing: ${_currency.format(financeClosingBalance)}",
+            value: _currency.format(
+              _asDouble(financeClosingBalance),
+            ),
+            lines: const [
+              "Total CB amount",
+              "Bank & cash flow",
             ],
             onTap: () {
               Navigator.push(
@@ -2239,10 +2245,68 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
           _buildDashboardCard(
             title: "Logistics",
             icon: Icons.inventory_2_rounded,
-            value: "Daily Goods",
+            value: "DGM",
             lines: [
-              "Movement report",
-              "Dispatch & parcel tracking",
+          
+              dgmLoading
+                  ? const Text(
+                      "Loading...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Text(
+                          "Amount: ",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.82),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          _currency.format(monthTotalParcelAmount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                        dgmLoading
+                  ? const Text(
+                      "Loading...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Text(
+                          "Weight: ",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.82),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          "${monthTotalWeight.toStringAsFixed(2)} kg",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
             ],
             onTap: () {
               Navigator.push(
@@ -2313,12 +2377,95 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
           _buildDashboardCard(
             title: "Inventory",
             icon: Icons.warehouse_rounded,
-            value: dashboardInventoryLoading
-                ? "Loading..."
-                : "Stock: $dashboardTotalStock",
+            value: "",
             lines: [
-              "Retail: ${_currency.format(dashboardTotalRetailAmount)}",
-              "Warehouse summary",
+              dashboardInventoryLoading
+                  ? const Text(
+                      "Loading...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Text(
+                          "Retail: ",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.82),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          _currency.format(dashboardTotalRetailAmount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+              dashboardInventoryLoading
+                  ? const Text(
+                      "Loading...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Text(
+                          "Landing: ",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.82),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          _currency.format(dashboardTotalLandingCostAmount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+              dashboardInventoryLoading
+                  ? const Text(
+                      "Loading...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Text(
+                          "Stock: ",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.82),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          "$dashboardTotalStock",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
             ],
             onTap: () {
               Navigator.push(
@@ -2348,7 +2495,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     required String title,
     required IconData icon,
     required String value,
-    required List<String> lines,
+    required List<dynamic> lines,
     required VoidCallback onTap,
     Widget? bottom,
   }) {
@@ -2417,32 +2564,40 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    ...lines.take(3).map(
-                          (line) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              line,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.82),
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+                    if (value.isNotEmpty)
+                      Text(
+                        value,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (value.isNotEmpty) const SizedBox(height: 8),
+                    ...lines.take(3).map((line) {
+                      if (line is Widget) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: line,
+                        );
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          line?.toString() ?? '',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.82),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }),
                     const Spacer(),
                     if (bottom != null) bottom,
                   ],
