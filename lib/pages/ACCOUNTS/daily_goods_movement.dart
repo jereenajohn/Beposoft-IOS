@@ -479,7 +479,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
       return const SizedBox.shrink();
     }
 
-    String title = "Top 5 Products";
+    String title = "Top 10 Products";
     if (startDate != null && endDate != null) {
       title =
           "Top 5 Products (${DateFormat('dd-MM-yyyy').format(startDate!)} to ${DateFormat('dd-MM-yyyy').format(endDate!)})";

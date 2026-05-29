@@ -405,155 +405,152 @@ class _admin_dashboardState extends State<admin_dashboard> {
   }
 
   Future<bool> checkAppUpdate(BuildContext context) async {
-  final packageInfo = await PackageInfo.fromPlatform();
-  final currentVersion = packageInfo.version;
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version;
 
-  try {
-    String? storeVersion;
-    Uri? storeUrl;
+    try {
+      String? storeVersion;
+      Uri? storeUrl;
 
-    if (Platform.isAndroid) {
-      final response = await http.get(Uri.parse(
-        'https://play.google.com/store/apps/details?id=com.bepositive.beposoft&hl=en',
-      ));
+      if (Platform.isAndroid) {
+        final response = await http.get(Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.bepositive.beposoft&hl=en',
+        ));
 
-      if (response.statusCode == 200) {
-        final content = response.body;
-        final versionRegex = RegExp(r'\[\[\["([0-9.]+)"\]\]');
-        final match = versionRegex.firstMatch(content);
+        if (response.statusCode == 200) {
+          final content = response.body;
+          final versionRegex = RegExp(r'\[\[\["([0-9.]+)"\]\]');
+          final match = versionRegex.firstMatch(content);
 
-        if (match != null) {
-          storeVersion = match.group(1);
-          storeUrl = Uri.parse(
-            'https://play.google.com/store/apps/details?id=com.bepositive.beposoft',
-          );
+          if (match != null) {
+            storeVersion = match.group(1);
+            storeUrl = Uri.parse(
+              'https://play.google.com/store/apps/details?id=com.bepositive.beposoft',
+            );
+          }
+        }
+      } else if (Platform.isIOS) {
+        final response = await http.get(
+          Uri.parse('https://itunes.apple.com/lookup?id=6748010646&country=in'),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+
+          if (data['resultCount'] != null &&
+              data['resultCount'] > 0 &&
+              data['results'] != null &&
+              data['results'] is List &&
+              data['results'].isNotEmpty) {
+            final appData = data['results'][0];
+            storeVersion = appData['version']?.toString();
+            storeUrl = Uri.parse(
+              'https://apps.apple.com/in/app/beposoft/id6748010646',
+            );
+          }
         }
       }
-    } else if (Platform.isIOS) {
-      final response = await http.get(
-        Uri.parse('https://itunes.apple.com/lookup?id=6748010646&country=in'),
-      );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        if (data['resultCount'] != null &&
-            data['resultCount'] > 0 &&
-            data['results'] != null &&
-            data['results'] is List &&
-            data['results'].isNotEmpty) {
-          final appData = data['results'][0];
-          storeVersion = appData['version']?.toString();
-          storeUrl = Uri.parse(
-            'https://apps.apple.com/in/app/beposoft/id6748010646',
-          );
-        }
-      }
-    }
-
-    if (storeVersion != null &&
-        _isUpdateAvailable(currentVersion, storeVersion)) {
-      final result = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          titlePadding: const EdgeInsets.only(top: 20),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          title: Column(
-            children: [
-              Icon(
-                Icons.system_update,
-                size: 48,
-                color: Colors.green,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Update Available',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+      if (storeVersion != null &&
+          _isUpdateAvailable(currentVersion, storeVersion)) {
+        final result = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            titlePadding: const EdgeInsets.only(top: 20),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            title: Column(
+              children: [
+                Icon(
+                  Icons.system_update,
+                  size: 48,
+                  color: Colors.green,
                 ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Update Available',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'A new version ($storeVersion) is available.\n\nYou are using $currentVersion.\n\nPlease update the app to continue enjoying the latest features and improvements.',
+              style: const TextStyle(fontSize: 16),
+            ),
+            actionsAlignment: MainAxisAlignment.spaceEvenly,
+            actions: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.open_in_new, size: 18),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                label: const Text("Update Now"),
+                onPressed: () async {
+                  if (storeUrl != null && await canLaunchUrl(storeUrl)) {
+                    await launchUrl(
+                      storeUrl,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                  Navigator.of(context).pop(false);
+                },
+              ),
+              TextButton(
+                child: const Text("Maybe Later"),
+                onPressed: () => Navigator.of(context).pop(true),
               ),
             ],
           ),
-          content: Text(
-            'A new version ($storeVersion) is available.\n\nYou are using $currentVersion.\n\nPlease update the app to continue enjoying the latest features and improvements.',
-            style: const TextStyle(fontSize: 16),
-          ),
-          actionsAlignment: MainAxisAlignment.spaceEvenly,
-          actions: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.open_in_new, size: 18),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              label: const Text("Update Now"),
-              onPressed: () async {
-                if (storeUrl != null && await canLaunchUrl(storeUrl)) {
-                  await launchUrl(
-                    storeUrl,
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-                Navigator.of(context).pop(false);
-              },
-            ),
-            TextButton(
-              child: const Text("Maybe Later"),
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-          ],
-        ),
-      );
+        );
 
-      return result == true;
+        return result == true;
+      }
+    } catch (e) {
+      // Optional: print(e);
     }
-  } catch (e) {
-    // Optional: print(e);
+
+    return true;
   }
 
-  return true;
-}
+  bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+    List<int> currentParts =
+        currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
-bool _isUpdateAvailable(String currentVersion, String storeVersion) {
-  List<int> currentParts = currentVersion
-      .split('.')
-      .map((e) => int.tryParse(e) ?? 0)
-      .toList();
+    List<int> storeParts =
+        storeVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
-  List<int> storeParts = storeVersion
-      .split('.')
-      .map((e) => int.tryParse(e) ?? 0)
-      .toList();
+    int maxLength = currentParts.length > storeParts.length
+        ? currentParts.length
+        : storeParts.length;
 
-  int maxLength =
-      currentParts.length > storeParts.length ? currentParts.length : storeParts.length;
-
-  while (currentParts.length < maxLength) {
-    currentParts.add(0);
-  }
-  while (storeParts.length < maxLength) {
-    storeParts.add(0);
-  }
-
-  for (int i = 0; i < maxLength; i++) {
-    if (storeParts[i] > currentParts[i]) {
-      return true;
-    } else if (storeParts[i] < currentParts[i]) {
-      return false;
+    while (currentParts.length < maxLength) {
+      currentParts.add(0);
     }
-  }
+    while (storeParts.length < maxLength) {
+      storeParts.add(0);
+    }
 
-  return false;
-}
+    for (int i = 0; i < maxLength; i++) {
+      if (storeParts[i] > currentParts[i]) {
+        return true;
+      } else if (storeParts[i] < currentParts[i]) {
+        return false;
+      }
+    }
+
+    return false;
+  }
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -588,29 +585,39 @@ bool _isUpdateAvailable(String currentVersion, String storeVersion) {
 
   drower d = drower();
 
-  Widget _buildDropdownTile(
-      BuildContext context, String title, List<String> options) {
-    return ExpansionTile(
-      title: Text(title),
-      children: options.map((option) {
-        return ListTile(
-          title: Text(option),
-          onTap: () {
-            Navigator.pop(context);
-            d.navigateToSelectedPage(
-                context, option); // Navigate to selected page
-          },
-        );
-      }).toList(),
-    );
-  }
+Widget _buildDropdownTile(
+    BuildContext context, String title, List<String> options) {
+  return ExpansionTile(
+    backgroundColor: Colors.white,
+    collapsedBackgroundColor: Colors.white,
+    iconColor: Colors.black,
+    collapsedIconColor: Colors.black,
+    title: Text(
+      title,
+      style: const TextStyle(color: Colors.black),
+    ),
+    children: options.map((option) {
+      return ListTile(
+        tileColor: Colors.white,
+        title: Text(
+          option,
+          style: const TextStyle(color: Colors.black),
+        ),
+        onTap: () {
+          Navigator.pop(context);
+          d.navigateToSelectedPage(context, option);
+        },
+      );
+    }).toList(),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: Colors.grey[200],
+        backgroundColor: Colors.white,
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.white,
@@ -631,21 +638,24 @@ bool _isUpdateAvailable(String currentVersion, String storeVersion) {
             padding: EdgeInsets.zero,
             children: <Widget>[
               DrawerHeader(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        "lib/assets/beposoftt.png",
-                        width: 150, // Change width to desired size
-                        height: 150, // Change height to desired size
-                        fit: BoxFit
-                            .contain, // Use BoxFit.contain to maintain aspect ratio
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.asset(
+                        "lib/assets/appstore.png",
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
                       ),
-                    ],
-                  )),
+                    ),
+                  ],
+                ),
+              ),
               // ListTile(
               //   leading: Icon(Icons.dashboard),
               //   title: Text('Dashboard'),
@@ -744,8 +754,8 @@ bool _isUpdateAvailable(String currentVersion, String storeVersion) {
               _buildDropdownTile(context, 'Internal Transfer',
                   ['Add Transfer', 'Transfer List']),
 
-                  _buildDropdownTile(context, 'Daily Sales Reports',
-                  ['Add Team','Add Team Members','Team wise Report']),
+              _buildDropdownTile(context, 'Daily Sales Reports',
+                  ['Add Team', 'Add Team Members', 'Team wise Report']),
 
               ListTile(
                 leading: Icon(Icons.person),
