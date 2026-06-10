@@ -137,16 +137,26 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
 
   String _formatAmount(dynamic value) {
     final double amount = double.tryParse(value.toString()) ?? 0.0;
-    return amount.toStringAsFixed(2);
+    return amount.round().toString();
   }
 
   String _formatQuantity(dynamic value) {
     final double qty = double.tryParse(value.toString()) ?? 0.0;
-    if (qty == qty.roundToDouble()) {
-      return qty.toInt().toString();
-    }
-    return qty.toStringAsFixed(2);
+    return qty.round().toString();
   }
+
+  // String _formatAmount(dynamic value) {
+  //   final double amount = double.tryParse(value.toString()) ?? 0.0;
+  //   return amount.toStringAsFixed(2);
+  // }
+
+  // String _formatQuantity(dynamic value) {
+  //   final double qty = double.tryParse(value.toString()) ?? 0.0;
+  //   if (qty == qty.roundToDouble()) {
+  //     return qty.toInt().toString();
+  //   }
+  //   return qty.toStringAsFixed(2);
+  // }
 
   bool _isKeralaState(Map<String, dynamic> item) {
     final String state = item['state']?.toString().trim().toLowerCase() ?? '';
@@ -985,7 +995,7 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
           child: SingleChildScrollView(
             controller: _horizontalTableController,
             scrollDirection: Axis.horizontal,
-            physics: const ClampingScrollPhysics(),
+            physics: const BouncingScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 minWidth: 1240 + (taxColumns.length * 110),
@@ -1263,9 +1273,11 @@ class _OrderItemsExcelReportState extends State<OrderItemsExcelReport> {
         child: RefreshIndicator(
           onRefresh: _handleRefresh,
           child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             child: Column(
-              children: [
+              children: [ 
                 _buildSummaryCard(),
                 _buildFilterSection(),
                 _buildMessageBar(),

@@ -430,764 +430,752 @@ class _TeamWiseReportState extends State<TeamWiseReport> {
     }
   }
 
-Future<void> exportTeamReportExcel({bool shareFile = false}) async {
-  try {
-    if (reportData.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No data available to export')),
-      );
-      return;
-    }
-
-    final ex.Excel excel = ex.Excel.createExcel();
-    final String sheetName = excel.getDefaultSheet() ?? 'Sheet1';
-    final ex.Sheet sheet = excel[sheetName];
-
-    String safeString(dynamic value) {
-      if (value == null) return '';
-      return value.toString();
-    }
-
-    double toDouble(dynamic value) {
-      if (value == null) return 0;
-      if (value is int) return value.toDouble();
-      if (value is double) return value;
-      return double.tryParse(value.toString()) ?? 0;
-    }
-
-    dynamic numericCellValue(dynamic value) {
-      final double number = toDouble(value);
-      if (number == number.toInt()) {
-        return number.toInt();
+  Future<void> exportTeamReportExcel({bool shareFile = false}) async {
+    try {
+      if (reportData.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No data available to export')),
+        );
+        return;
       }
-      return double.parse(number.toStringAsFixed(2));
-    }
 
-    int getTeamRowCount(Map<String, dynamic> team) {
-      int count = 0;
-      final members = List<Map<String, dynamic>>.from(team['members'] ?? []);
-      for (final member in members) {
-        final states = List<Map<String, dynamic>>.from(member['states'] ?? []);
-        count += states.isEmpty ? 1 : states.length;
+      final ex.Excel excel = ex.Excel.createExcel();
+      final String sheetName = excel.getDefaultSheet() ?? 'Sheet1';
+      final ex.Sheet sheet = excel[sheetName];
+
+      String safeString(dynamic value) {
+        if (value == null) return '';
+        return value.toString();
       }
-      return count == 0 ? 1 : count;
-    }
 
-    List<String> collectHourlyKeys() {
-      final List<String> orderedKeys = [];
+      double toDouble(dynamic value) {
+        if (value == null) return 0;
+        if (value is int) return value.toDouble();
+        if (value is double) return value;
+        return double.tryParse(value.toString()) ?? 0;
+      }
 
-      void addKey(String key) {
-        if (!orderedKeys.contains(key)) {
-          orderedKeys.add(key);
+      dynamic numericCellValue(dynamic value) {
+        final double number = toDouble(value);
+        if (number == number.toInt()) {
+          return number.toInt();
         }
+        return double.parse(number.toStringAsFixed(2));
       }
 
-      for (final team in reportData) {
+      int getTeamRowCount(Map<String, dynamic> team) {
+        int count = 0;
         final members = List<Map<String, dynamic>>.from(team['members'] ?? []);
         for (final member in members) {
-          final states = List<Map<String, dynamic>>.from(member['states'] ?? []);
-          for (final state in states) {
-            final hourly =
-                Map<String, dynamic>.from(state['hourly_durations'] ?? {});
-            for (final key in hourly.keys) {
-              addKey(key.toString());
+          final states =
+              List<Map<String, dynamic>>.from(member['states'] ?? []);
+          count += states.isEmpty ? 1 : states.length;
+        }
+        return count == 0 ? 1 : count;
+      }
+
+      List<String> collectHourlyKeys() {
+        final List<String> orderedKeys = [];
+
+        void addKey(String key) {
+          if (!orderedKeys.contains(key)) {
+            orderedKeys.add(key);
+          }
+        }
+
+        for (final team in reportData) {
+          final members =
+              List<Map<String, dynamic>>.from(team['members'] ?? []);
+          for (final member in members) {
+            final states =
+                List<Map<String, dynamic>>.from(member['states'] ?? []);
+            for (final state in states) {
+              final hourly =
+                  Map<String, dynamic>.from(state['hourly_durations'] ?? {});
+              for (final key in hourly.keys) {
+                addKey(key.toString());
+              }
             }
+          }
+        }
+
+        final totalHourly =
+            Map<String, dynamic>.from(totals['hourly_durations'] ?? {});
+        for (final key in totalHourly.keys) {
+          addKey(key.toString());
+        }
+
+        return orderedKeys;
+      }
+
+      final ex.Border thinBorder = ex.Border(borderStyle: ex.BorderStyle.Thin);
+      final ex.Border mediumBorder =
+          ex.Border(borderStyle: ex.BorderStyle.Medium);
+
+      final List<String> hourlyKeys = collectHourlyKeys();
+
+      final List<String> headers = [
+        'SL NO',
+        'TEAM',
+        'TEAM UNBILLED',
+        'BDO',
+        'STATE NO',
+        'STATE',
+        'DISTRICT',
+        'TOTAL UNBILLED',
+        'UNBILLED TO BILLED',
+        'NEW CUSTOMER',
+        'NEW CONVERSION',
+        'BILLING',
+        'VOLUME',
+        'TOTAL CALL DURATION',
+        ...hourlyKeys,
+      ];
+
+      final ex.CellStyle titleStyle = ex.CellStyle(
+        bold: true,
+        fontSize: 16,
+        fontColorHex: '#FFFFFF',
+        backgroundColorHex: '#0B5ED7',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: mediumBorder,
+        rightBorder: mediumBorder,
+        topBorder: mediumBorder,
+        bottomBorder: mediumBorder,
+      );
+
+      final ex.CellStyle headerStyle = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#FFFFFF',
+        backgroundColorHex: '#1E88E5',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle teamBlockStyle1 = ex.CellStyle(
+        backgroundColorHex: '#DCEAF7',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle teamBlockStyle2 = ex.CellStyle(
+        backgroundColorHex: '#E7F1FA',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle teamBlockLeftStyle1 = ex.CellStyle(
+        backgroundColorHex: '#DCEAF7',
+        horizontalAlign: ex.HorizontalAlign.Left,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle teamBlockLeftStyle2 = ex.CellStyle(
+        backgroundColorHex: '#E7F1FA',
+        horizontalAlign: ex.HorizontalAlign.Left,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle teamMergedStyle1 = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#1F1F1F',
+        backgroundColorHex: '#E6D9F2',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle teamMergedStyle2 = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#1F1F1F',
+        backgroundColorHex: '#DCCBED',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+      final ex.CellStyle memberMergedStyle1 = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#000000',
+        backgroundColorHex: '#FFF176', // ✅ light yellow
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle memberMergedStyle2 = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#000000',
+        backgroundColorHex: '#FFEE58', // ✅ slightly darker yellow
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle totalStyle = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#FFFFFF',
+        backgroundColorHex: '#198754',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: mediumBorder,
+        rightBorder: mediumBorder,
+        topBorder: mediumBorder,
+        bottomBorder: mediumBorder,
+      );
+
+      final ex.CellStyle summaryTitleStyle = ex.CellStyle(
+        bold: true,
+        fontSize: 13,
+        fontColorHex: '#FFFFFF',
+        backgroundColorHex: '#0A73FF',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+      );
+
+      final ex.CellStyle summaryHeaderStyle = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#FFFFFF',
+        backgroundColorHex: '#1E88E5',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle summaryLabelStyle = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#16324F',
+        backgroundColorHex: '#EAF3FF',
+        horizontalAlign: ex.HorizontalAlign.Left,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle summaryValueStyle = ex.CellStyle(
+        bold: true,
+        fontColorHex: '#0F5132',
+        backgroundColorHex: '#F4FFF8',
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      void setTextCell(int row, int col, dynamic value, ex.CellStyle style) {
+        final cell = sheet.cell(
+          ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: col),
+        );
+        cell.value = safeString(value);
+        cell.cellStyle = style;
+      }
+
+      void setNumCell(int row, int col, dynamic value, ex.CellStyle style) {
+        final cell = sheet.cell(
+          ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: col),
+        );
+        cell.value = numericCellValue(value);
+        cell.cellStyle = style;
+      }
+
+      void setEmptyStyledCell(int row, int col, ex.CellStyle style) {
+        final cell = sheet.cell(
+          ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: col),
+        );
+        cell.value = '';
+        cell.cellStyle = style;
+      }
+
+      void fillStyledRange({
+        required int startRow,
+        required int endRow,
+        required int startCol,
+        required int endCol,
+        required ex.CellStyle style,
+      }) {
+        for (int r = startRow; r <= endRow; r++) {
+          for (int c = startCol; c <= endCol; c++) {
+            setEmptyStyledCell(r, c, style);
           }
         }
       }
 
-      final totalHourly =
-          Map<String, dynamic>.from(totals['hourly_durations'] ?? {});
-      for (final key in totalHourly.keys) {
-        addKey(key.toString());
+      void mergeRowTitle({
+        required int row,
+        required int startCol,
+        required int endCol,
+        required String text,
+        required ex.CellStyle style,
+      }) {
+        for (int c = startCol; c <= endCol; c++) {
+          setEmptyStyledCell(row, c, style);
+        }
+        sheet.merge(
+          ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: startCol),
+          ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: endCol),
+        );
+        setTextCell(row, startCol, text, style);
       }
 
-      return orderedKeys;
-    }
+      int maxLen(String s) => s.trim().length;
 
-    final ex.Border thinBorder = ex.Border(borderStyle: ex.BorderStyle.Thin);
-    final ex.Border mediumBorder =
-        ex.Border(borderStyle: ex.BorderStyle.Medium);
+      final Map<int, int> maxColumnLengths = {};
+      for (int i = 0; i < headers.length; i++) {
+        maxColumnLengths[i] = maxLen(headers[i]);
+      }
 
-    final List<String> hourlyKeys = collectHourlyKeys();
-
-    final List<String> headers = [
-      'SL NO',
-      'TEAM',
-      'TEAM UNBILLED',
-      'BDO',
-      'STATE NO',
-      'STATE',
-      'DISTRICT',
-      'TOTAL UNBILLED',
-      'UNBILLED TO BILLED',
-      'NEW CUSTOMER',
-      'NEW CONVERSION',
-      'BILLING',
-      'VOLUME',
-      'TOTAL CALL DURATION',
-      ...hourlyKeys,
-    ];
-
-    final ex.CellStyle titleStyle = ex.CellStyle(
-      bold: true,
-      fontSize: 16,
-      fontColorHex: '#FFFFFF',
-      backgroundColorHex: '#0B5ED7',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: mediumBorder,
-      rightBorder: mediumBorder,
-      topBorder: mediumBorder,
-      bottomBorder: mediumBorder,
-    );
-
-    final ex.CellStyle headerStyle = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#FFFFFF',
-      backgroundColorHex: '#1E88E5',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle teamBlockStyle1 = ex.CellStyle(
-      backgroundColorHex: '#DCEAF7',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle teamBlockStyle2 = ex.CellStyle(
-      backgroundColorHex: '#E7F1FA',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle teamBlockLeftStyle1 = ex.CellStyle(
-      backgroundColorHex: '#DCEAF7',
-      horizontalAlign: ex.HorizontalAlign.Left,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle teamBlockLeftStyle2 = ex.CellStyle(
-      backgroundColorHex: '#E7F1FA',
-      horizontalAlign: ex.HorizontalAlign.Left,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle teamMergedStyle1 = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#1F1F1F',
-      backgroundColorHex: '#E6D9F2',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle teamMergedStyle2 = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#1F1F1F',
-      backgroundColorHex: '#DCCBED',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle memberMergedStyle1 = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#000000',
-      backgroundColorHex: '#FFF176',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle memberMergedStyle2 = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#000000',
-      backgroundColorHex: '#FFEE58',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle totalStyle = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#FFFFFF',
-      backgroundColorHex: '#198754',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: mediumBorder,
-      rightBorder: mediumBorder,
-      topBorder: mediumBorder,
-      bottomBorder: mediumBorder,
-    );
-
-    final ex.CellStyle summaryTitleStyle = ex.CellStyle(
-      bold: true,
-      fontSize: 13,
-      fontColorHex: '#FFFFFF',
-      backgroundColorHex: '#0A73FF',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-    );
-
-    final ex.CellStyle summaryHeaderStyle = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#FFFFFF',
-      backgroundColorHex: '#1E88E5',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle summaryLabelStyle = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#16324F',
-      backgroundColorHex: '#EAF3FF',
-      horizontalAlign: ex.HorizontalAlign.Left,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    final ex.CellStyle summaryValueStyle = ex.CellStyle(
-      bold: true,
-      fontColorHex: '#0F5132',
-      backgroundColorHex: '#F4FFF8',
-      horizontalAlign: ex.HorizontalAlign.Center,
-      verticalAlign: ex.VerticalAlign.Center,
-      leftBorder: thinBorder,
-      rightBorder: thinBorder,
-      topBorder: thinBorder,
-      bottomBorder: thinBorder,
-    );
-
-    void setTextCell(int row, int col, dynamic value, ex.CellStyle style) {
-      final cell = sheet.cell(
-        ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: col),
-      );
-      cell.value = safeString(value);
-      cell.cellStyle = style;
-    }
-
-    void setNumCell(int row, int col, dynamic value, ex.CellStyle style) {
-      final cell = sheet.cell(
-        ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: col),
-      );
-      cell.value = numericCellValue(value);
-      cell.cellStyle = style;
-    }
-
-    void setEmptyStyledCell(int row, int col, ex.CellStyle style) {
-      final cell = sheet.cell(
-        ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: col),
-      );
-      cell.value = '';
-      cell.cellStyle = style;
-    }
-
-    void fillStyledRange({
-      required int startRow,
-      required int endRow,
-      required int startCol,
-      required int endCol,
-      required ex.CellStyle style,
-    }) {
-      for (int r = startRow; r <= endRow; r++) {
-        for (int c = startCol; c <= endCol; c++) {
-          setEmptyStyledCell(r, c, style);
+      void considerLength(int col, dynamic value) {
+        final int len = maxLen(safeString(value));
+        if (len > (maxColumnLengths[col] ?? 0)) {
+          maxColumnLengths[col] = len;
         }
       }
-    }
 
-    void mergeRowTitle({
-      required int row,
-      required int startCol,
-      required int endCol,
-      required String text,
-      required ex.CellStyle style,
-    }) {
-      for (int c = startCol; c <= endCol; c++) {
-        setEmptyStyledCell(row, c, style);
-      }
-      sheet.merge(
-        ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: startCol),
-        ex.CellIndex.indexByColumnRow(rowIndex: row, columnIndex: endCol),
-      );
-      setTextCell(row, startCol, text, style);
-    }
-
-    int maxLen(String s) => s.trim().length;
-
-    final Map<int, int> maxColumnLengths = {};
-    for (int i = 0; i < headers.length; i++) {
-      maxColumnLengths[i] = maxLen(headers[i]);
-    }
-
-    void considerLength(int col, dynamic value) {
-      final int len = maxLen(safeString(value));
-      if (len > (maxColumnLengths[col] ?? 0)) {
-        maxColumnLengths[col] = len;
-      }
-    }
-
-    mergeRowTitle(
-      row: 0,
-      startCol: 0,
-      endCol: headers.length - 1,
-      text: 'TEAM WISE DSR REPORT',
-      style: titleStyle,
-    );
-
-    const int headerRowIndex = 2;
-    for (int col = 0; col < headers.length; col++) {
-      setTextCell(headerRowIndex, col, headers[col], headerStyle);
-    }
-
-    int currentRow = headerRowIndex + 1;
-    int teamSlNo = 1;
-
-    for (int teamIndex = 0; teamIndex < reportData.length; teamIndex++) {
-      final Map<String, dynamic> team = reportData[teamIndex];
-      final List<Map<String, dynamic>> members =
-          List<Map<String, dynamic>>.from(team['members'] ?? []);
-
-      final String teamName = safeString(team['team_name']).trim().isEmpty
-          ? 'No Team'
-          : safeString(team['team_name']);
-      final dynamic teamUnbilled = team['team_unbilled'] ?? 0;
-
-      final bool evenBlock = teamIndex.isOdd;
-
-      final ex.CellStyle rowCenterStyle =
-          evenBlock ? teamBlockStyle2 : teamBlockStyle1;
-      final ex.CellStyle rowLeftStyle =
-          evenBlock ? teamBlockLeftStyle2 : teamBlockLeftStyle1;
-      final ex.CellStyle teamMergedStyle =
-          evenBlock ? teamMergedStyle2 : teamMergedStyle1;
-      final ex.CellStyle memberMergedStyle =
-          evenBlock ? memberMergedStyle2 : memberMergedStyle1;
-
-      final int teamStartRow = currentRow;
-      final int teamRowCount = getTeamRowCount(team);
-      final int teamEndRow = teamStartRow + teamRowCount - 1;
-
-      fillStyledRange(
-        startRow: teamStartRow,
-        endRow: teamEndRow,
+      mergeRowTitle(
+        row: 0,
         startCol: 0,
         endCol: headers.length - 1,
-        style: rowCenterStyle,
+        text: 'TEAM WISE DSR REPORT',
+        style: titleStyle,
       );
 
-      for (int r = teamStartRow; r <= teamEndRow; r++) {
-        setEmptyStyledCell(r, 6, rowLeftStyle);
+      const int headerRowIndex = 2;
+      for (int col = 0; col < headers.length; col++) {
+        setTextCell(headerRowIndex, col, headers[col], headerStyle);
       }
 
-      setNumCell(teamStartRow, 0, teamSlNo, teamMergedStyle);
-      setTextCell(teamStartRow, 1, teamName, teamMergedStyle);
-      setNumCell(teamStartRow, 2, teamUnbilled, teamMergedStyle);
+      int currentRow = headerRowIndex + 1;
+      int teamSlNo = 1;
 
-      considerLength(0, teamSlNo);
-      considerLength(1, teamName);
-      considerLength(2, teamUnbilled);
+      for (int teamIndex = 0; teamIndex < reportData.length; teamIndex++) {
+        final Map<String, dynamic> team = reportData[teamIndex];
+        final List<Map<String, dynamic>> members =
+            List<Map<String, dynamic>>.from(team['members'] ?? []);
 
-      if (teamRowCount > 1) {
-        sheet.merge(
-          ex.CellIndex.indexByColumnRow(
-              rowIndex: teamStartRow, columnIndex: 0),
-          ex.CellIndex.indexByColumnRow(rowIndex: teamEndRow, columnIndex: 0),
+        final String teamName = safeString(team['team_name']).trim().isEmpty
+            ? 'No Team'
+            : safeString(team['team_name']);
+        final dynamic teamUnbilled = team['team_unbilled'] ?? 0;
+
+        final bool evenBlock = teamIndex.isOdd;
+
+        final ex.CellStyle rowCenterStyle =
+            evenBlock ? teamBlockStyle2 : teamBlockStyle1;
+        final ex.CellStyle rowLeftStyle =
+            evenBlock ? teamBlockLeftStyle2 : teamBlockLeftStyle1;
+        final ex.CellStyle teamMergedStyle =
+            evenBlock ? teamMergedStyle2 : teamMergedStyle1;
+        final ex.CellStyle memberMergedStyle =
+            evenBlock ? memberMergedStyle2 : memberMergedStyle1;
+
+        final int teamStartRow = currentRow;
+        final int teamRowCount = getTeamRowCount(team);
+        final int teamEndRow = teamStartRow + teamRowCount - 1;
+
+        fillStyledRange(
+          startRow: teamStartRow,
+          endRow: teamEndRow,
+          startCol: 0,
+          endCol: headers.length - 1,
+          style: rowCenterStyle,
         );
-        sheet.merge(
-          ex.CellIndex.indexByColumnRow(
-              rowIndex: teamStartRow, columnIndex: 1),
-          ex.CellIndex.indexByColumnRow(rowIndex: teamEndRow, columnIndex: 1),
-        );
-        sheet.merge(
-          ex.CellIndex.indexByColumnRow(
-              rowIndex: teamStartRow, columnIndex: 2),
-          ex.CellIndex.indexByColumnRow(rowIndex: teamEndRow, columnIndex: 2),
-        );
-      }
 
-      if (members.isEmpty) {
-        currentRow++;
-      } else {
-        for (final member in members) {
-          final List<Map<String, dynamic>> states =
-              List<Map<String, dynamic>>.from(member['states'] ?? []);
-          final String memberName = safeString(member['created_by_name']);
+        for (int r = teamStartRow; r <= teamEndRow; r++) {
+          setEmptyStyledCell(r, 6, rowLeftStyle);
+        }
 
-          final int memberStartRow = currentRow;
-          final int memberRowCount = states.isEmpty ? 1 : states.length;
-          final int memberEndRow = memberStartRow + memberRowCount - 1;
+        setNumCell(teamStartRow, 0, teamSlNo, teamMergedStyle);
+        setTextCell(teamStartRow, 1, teamName, teamMergedStyle);
+        setNumCell(teamStartRow, 2, teamUnbilled, teamMergedStyle);
 
-          setTextCell(memberStartRow, 3, memberName, memberMergedStyle);
-          considerLength(3, memberName);
+        considerLength(0, teamSlNo);
+        considerLength(1, teamName);
+        considerLength(2, teamUnbilled);
 
-          if (memberRowCount > 1) {
-            sheet.merge(
-              ex.CellIndex.indexByColumnRow(
-                rowIndex: memberStartRow,
-                columnIndex: 3,
-              ),
-              ex.CellIndex.indexByColumnRow(
-                rowIndex: memberEndRow,
-                columnIndex: 3,
-              ),
-            );
-          }
+        if (teamRowCount > 1) {
+          sheet.merge(
+            ex.CellIndex.indexByColumnRow(
+                rowIndex: teamStartRow, columnIndex: 0),
+            ex.CellIndex.indexByColumnRow(rowIndex: teamEndRow, columnIndex: 0),
+          );
+          sheet.merge(
+            ex.CellIndex.indexByColumnRow(
+                rowIndex: teamStartRow, columnIndex: 1),
+            ex.CellIndex.indexByColumnRow(rowIndex: teamEndRow, columnIndex: 1),
+          );
+          sheet.merge(
+            ex.CellIndex.indexByColumnRow(
+                rowIndex: teamStartRow, columnIndex: 2),
+            ex.CellIndex.indexByColumnRow(rowIndex: teamEndRow, columnIndex: 2),
+          );
+        }
 
-          if (states.isEmpty) {
-            currentRow++;
-          } else {
-            for (int stateIndex = 0;
-                stateIndex < states.length;
-                stateIndex++) {
-              final Map<String, dynamic> state = states[stateIndex];
-              final Map<String, dynamic> hourly =
-                  Map<String, dynamic>.from(state['hourly_durations'] ?? {});
+        if (members.isEmpty) {
+          currentRow++;
+        } else {
+          for (final member in members) {
+            final List<Map<String, dynamic>> states =
+                List<Map<String, dynamic>>.from(member['states'] ?? []);
+            final String memberName = safeString(member['created_by_name']);
 
-              setNumCell(currentRow, 4, stateIndex + 1, rowCenterStyle);
-              setTextCell(
-                currentRow,
-                5,
-                state['state_name'] ?? '',
-                rowCenterStyle,
-              );
-              setTextCell(
-                currentRow,
-                6,
-                state['district_name'] ?? '',
-                rowLeftStyle,
-              );
-              setNumCell(
-                currentRow,
-                7,
-                state['total_unbilled'] ?? 0,
-                rowCenterStyle,
-              );
-              setNumCell(
-                currentRow,
-                8,
-                state['unbilled_to_billed'] ?? 0,
-                rowCenterStyle,
-              );
-              setNumCell(
-                currentRow,
-                9,
-                state['new_customer'] ?? 0,
-                rowCenterStyle,
-              );
-              setNumCell(
-                currentRow,
-                10,
-                state['new_conversion'] ?? 0,
-                rowCenterStyle,
-              );
-              setNumCell(
-                currentRow,
-                11,
-                state['billing'] ?? 0,
-                rowCenterStyle,
-              );
-              setNumCell(
-                currentRow,
-                12,
-                state['volume'] ?? 0,
-                rowCenterStyle,
-              );
-              setNumCell(
-                currentRow,
-                13,
-                state['total_call_duration'] ?? 0,
-                rowCenterStyle,
-              );
+            final int memberStartRow = currentRow;
+            final int memberRowCount = states.isEmpty ? 1 : states.length;
+            final int memberEndRow = memberStartRow + memberRowCount - 1;
 
-              considerLength(4, stateIndex + 1);
-              considerLength(5, state['state_name'] ?? '');
-              considerLength(6, state['district_name'] ?? '');
-              considerLength(7, state['total_unbilled'] ?? 0);
-              considerLength(8, state['unbilled_to_billed'] ?? 0);
-              considerLength(9, state['new_customer'] ?? 0);
-              considerLength(10, state['new_conversion'] ?? 0);
-              considerLength(11, state['billing'] ?? 0);
-              considerLength(12, state['volume'] ?? 0);
-              considerLength(13, state['total_call_duration'] ?? 0);
+            setTextCell(memberStartRow, 3, memberName, memberMergedStyle);
+            considerLength(3, memberName);
 
-              for (int h = 0; h < hourlyKeys.length; h++) {
-                final dynamic value = hourly[hourlyKeys[h]] ?? 0;
-                setNumCell(currentRow, 14 + h, value, rowCenterStyle);
-                considerLength(14 + h, value);
-              }
+            if (memberRowCount > 1) {
+              sheet.merge(
+                ex.CellIndex.indexByColumnRow(
+                  rowIndex: memberStartRow,
+                  columnIndex: 3,
+                ),
+                ex.CellIndex.indexByColumnRow(
+                  rowIndex: memberEndRow,
+                  columnIndex: 3,
+                ),
+              );
+            }
 
+            if (states.isEmpty) {
               currentRow++;
+            } else {
+              for (int stateIndex = 0;
+                  stateIndex < states.length;
+                  stateIndex++) {
+                final Map<String, dynamic> state = states[stateIndex];
+                final Map<String, dynamic> hourly =
+                    Map<String, dynamic>.from(state['hourly_durations'] ?? {});
+
+                setNumCell(currentRow, 4, stateIndex + 1, rowCenterStyle);
+                setTextCell(
+                  currentRow,
+                  5,
+                  state['state_name'] ?? '',
+                  rowCenterStyle,
+                );
+                setTextCell(
+                  currentRow,
+                  6,
+                  state['district_name'] ?? '',
+                  rowLeftStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  7,
+                  state['total_unbilled'] ?? 0,
+                  rowCenterStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  8,
+                  state['unbilled_to_billed'] ?? 0,
+                  rowCenterStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  9,
+                  state['new_customer'] ?? 0,
+                  rowCenterStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  10,
+                  state['new_conversion'] ?? 0,
+                  rowCenterStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  11,
+                  state['billing'] ?? 0,
+                  rowCenterStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  12,
+                  state['volume'] ?? 0,
+                  rowCenterStyle,
+                );
+                setNumCell(
+                  currentRow,
+                  13,
+                  state['total_call_duration'] ?? 0,
+                  rowCenterStyle,
+                );
+
+                considerLength(4, stateIndex + 1);
+                considerLength(5, state['state_name'] ?? '');
+                considerLength(6, state['district_name'] ?? '');
+                considerLength(7, state['total_unbilled'] ?? 0);
+                considerLength(8, state['unbilled_to_billed'] ?? 0);
+                considerLength(9, state['new_customer'] ?? 0);
+                considerLength(10, state['new_conversion'] ?? 0);
+                considerLength(11, state['billing'] ?? 0);
+                considerLength(12, state['volume'] ?? 0);
+                considerLength(13, state['total_call_duration'] ?? 0);
+
+                for (int h = 0; h < hourlyKeys.length; h++) {
+                  final dynamic value = hourly[hourlyKeys[h]] ?? 0;
+                  setNumCell(currentRow, 14 + h, value, rowCenterStyle);
+                  considerLength(14 + h, value);
+                }
+
+                currentRow++;
+              }
             }
           }
         }
+
+        teamSlNo++;
       }
 
-      teamSlNo++;
-    }
+      final Map<String, dynamic> totalHourly =
+          Map<String, dynamic>.from(totals['hourly_durations'] ?? {});
+      final int totalRow = currentRow;
 
-    final Map<String, dynamic> totalHourly =
-        Map<String, dynamic>.from(totals['hourly_durations'] ?? {});
-    final int totalRow = currentRow;
+      fillStyledRange(
+        startRow: totalRow,
+        endRow: totalRow,
+        startCol: 0,
+        endCol: headers.length - 1,
+        style: totalStyle,
+      );
 
-    fillStyledRange(
-      startRow: totalRow,
-      endRow: totalRow,
-      startCol: 0,
-      endCol: headers.length - 1,
-      style: totalStyle,
-    );
-
-    setTextCell(totalRow, 1, 'TOTAL', totalStyle);
-    setNumCell(totalRow, 2, totals['team_unbilled'] ?? 0, totalStyle);
-    setNumCell(
-      totalRow,
-      7,
-      totals['total_unbilled'] ?? totals['team_unbilled'] ?? 0,
-      totalStyle,
-    );
-    setNumCell(totalRow, 8, totals['unbilled_to_billed'] ?? 0, totalStyle);
-    setNumCell(totalRow, 9, totals['new_customer'] ?? 0, totalStyle);
-    setNumCell(totalRow, 10, totals['new_conversion'] ?? 0, totalStyle);
-    setNumCell(totalRow, 11, totals['billing'] ?? 0, totalStyle);
-    setNumCell(totalRow, 12, totals['volume'] ?? 0, totalStyle);
-    setNumCell(totalRow, 13, totals['total_call_duration'] ?? 0, totalStyle);
-
-    considerLength(2, totals['team_unbilled'] ?? 0);
-    considerLength(7, totals['total_unbilled'] ?? totals['team_unbilled'] ?? 0);
-    considerLength(8, totals['unbilled_to_billed'] ?? 0);
-    considerLength(9, totals['new_customer'] ?? 0);
-    considerLength(10, totals['new_conversion'] ?? 0);
-    considerLength(11, totals['billing'] ?? 0);
-    considerLength(12, totals['volume'] ?? 0);
-    considerLength(13, totals['total_call_duration'] ?? 0);
-
-    for (int h = 0; h < hourlyKeys.length; h++) {
-      final dynamic value = totalHourly[hourlyKeys[h]] ?? 0;
-      setNumCell(totalRow, 14 + h, value, totalStyle);
-      considerLength(14 + h, value);
-    }
-
-    final int summaryStartRow = totalRow + 3;
-
-    mergeRowTitle(
-      row: summaryStartRow,
-      startCol: 0,
-      endCol: 3,
-      text: 'OVERALL TOTALS SUMMARY',
-      style: summaryTitleStyle,
-    );
-
-    setTextCell(summaryStartRow + 1, 0, 'METRIC', summaryHeaderStyle);
-    setTextCell(summaryStartRow + 1, 1, 'VALUE', summaryHeaderStyle);
-    setTextCell(summaryStartRow + 1, 2, 'METRIC', summaryHeaderStyle);
-    setTextCell(summaryStartRow + 1, 3, 'VALUE', summaryHeaderStyle);
-
-    final List<List<dynamic>> summaryRows = [
-      [
-        'Team Unbilled',
-        totals['team_unbilled'] ?? 0,
-        'Total Unbilled',
-        totals['total_unbilled'] ?? totals['team_unbilled'] ?? 0,
-      ],
-      [
-        'Unbilled To Billed',
-        totals['unbilled_to_billed'] ?? 0,
-        'New Customer',
-        totals['new_customer'] ?? 0,
-      ],
-      [
-        'New Conversion',
-        totals['new_conversion'] ?? 0,
-        'Billing',
-        totals['billing'] ?? 0,
-      ],
-      [
-        'Volume',
-        totals['volume'] ?? 0,
-        'Total Call Duration',
-        totals['total_call_duration'] ?? 0,
-      ],
-      [
-        'Avg Call Duration (Mins)',
-        totals['call_duration_average_minutes'] ?? 0,
-        'Avg Call Duration (%)',
-        totals['call_duration_average_percentage'] ?? 0,
-      ],
-    ];
-
-    int overallRowCursor = summaryStartRow + 2;
-    for (final row in summaryRows) {
-      setTextCell(overallRowCursor, 0, row[0], summaryLabelStyle);
-      setNumCell(overallRowCursor, 1, row[1], summaryValueStyle);
-      setTextCell(overallRowCursor, 2, row[2], summaryLabelStyle);
-      setNumCell(overallRowCursor, 3, row[3], summaryValueStyle);
-      overallRowCursor++;
-    }
-
-    const int hourlyStartCol = 5;
-
-    mergeRowTitle(
-      row: summaryStartRow,
-      startCol: hourlyStartCol,
-      endCol: hourlyStartCol + 1,
-      text: 'HOURLY DURATIONS',
-      style: summaryTitleStyle,
-    );
-
-    setTextCell(
-      summaryStartRow + 1,
-      hourlyStartCol,
-      'TIME SLOT',
-      summaryHeaderStyle,
-    );
-    setTextCell(
-      summaryStartRow + 1,
-      hourlyStartCol + 1,
-      'MINUTES',
-      summaryHeaderStyle,
-    );
-
-    int hourlySummaryRow = summaryStartRow + 2;
-    for (final key in hourlyKeys) {
-      setTextCell(hourlySummaryRow, hourlyStartCol, key, summaryLabelStyle);
+      setTextCell(totalRow, 1, 'TOTAL', totalStyle);
+      setNumCell(totalRow, 2, totals['team_unbilled'] ?? 0, totalStyle);
       setNumCell(
-        hourlySummaryRow,
-        hourlyStartCol + 1,
-        totalHourly[key] ?? 0,
-        summaryValueStyle,
+        totalRow,
+        7,
+        totals['total_unbilled'] ?? totals['team_unbilled'] ?? 0,
+        totalStyle,
       );
-      hourlySummaryRow++;
-    }
+      setNumCell(totalRow, 8, totals['unbilled_to_billed'] ?? 0, totalStyle);
+      setNumCell(totalRow, 9, totals['new_customer'] ?? 0, totalStyle);
+      setNumCell(totalRow, 10, totals['new_conversion'] ?? 0, totalStyle);
+      setNumCell(totalRow, 11, totals['billing'] ?? 0, totalStyle);
+      setNumCell(totalRow, 12, totals['volume'] ?? 0, totalStyle);
+      setNumCell(totalRow, 13, totals['total_call_duration'] ?? 0, totalStyle);
 
-    double widthFromLen(int len) {
-      double w = len * 1.2 + 3;
-      if (w < 10) w = 10;
-      if (w > 40) w = 40;
-      return w;
-    }
+      considerLength(2, totals['team_unbilled'] ?? 0);
+      considerLength(
+          7, totals['total_unbilled'] ?? totals['team_unbilled'] ?? 0);
+      considerLength(8, totals['unbilled_to_billed'] ?? 0);
+      considerLength(9, totals['new_customer'] ?? 0);
+      considerLength(10, totals['new_conversion'] ?? 0);
+      considerLength(11, totals['billing'] ?? 0);
+      considerLength(12, totals['volume'] ?? 0);
+      considerLength(13, totals['total_call_duration'] ?? 0);
 
-    for (int col = 0; col < headers.length; col++) {
-      double width =
-          widthFromLen(maxColumnLengths[col] ?? headers[col].length);
-
-      if (col == 1) width = width < 20 ? 20 : width;
-      if (col == 2) width = width < 18 ? 18 : width;
-      if (col == 3) width = width < 22 ? 22 : width;
-      if (col == 5) width = width < 18 ? 18 : width;
-      if (col == 6) width = width < 20 ? 20 : width;
-      if (col == 13) width = width < 20 ? 20 : width;
-      if (col >= 14) width = width < 14 ? 14 : width;
-
-      sheet.setColWidth(col, width);
-    }
-
-    final Directory dir = await getApplicationDocumentsDirectory();
-    final String timestamp =
-        DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final String filePath = '${dir.path}/team_wise_report_$timestamp.xlsx';
-
-    final List<int>? bytes = excel.encode();
-    if (bytes == null) {
-      throw Exception('Excel generation failed');
-    }
-
-    final File file = File(filePath);
-    await file.create(recursive: true);
-    await file.writeAsBytes(bytes, flush: true);
-
-    if (shareFile) {
-      final renderObject = context.findRenderObject();
-      Rect sharePositionOrigin = const Rect.fromLTWH(1, 1, 1, 1);
-
-      if (renderObject is RenderBox && renderObject.hasSize) {
-        final size = renderObject.size;
-        final offset = renderObject.localToGlobal(Offset.zero);
-
-        double left = offset.dx;
-        double top = offset.dy;
-        double width = size.width;
-        double height = size.height;
-
-        if (width <= 0) width = 1;
-        if (height <= 0) height = 1;
-        if (left < 0) left = 1;
-        if (top < 0) top = 1;
-
-        sharePositionOrigin = Rect.fromLTWH(left, top, width, height);
+      for (int h = 0; h < hourlyKeys.length; h++) {
+        final dynamic value = totalHourly[hourlyKeys[h]] ?? 0;
+        setNumCell(totalRow, 14 + h, value, totalStyle);
+        considerLength(14 + h, value);
       }
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Team Wise DSR Report',
-        sharePositionOrigin: sharePositionOrigin,
-      );
-    } else {
-      final result = await OpenFilex.open(file.path);
-      debugPrint('OPEN FILE RESULT: ${result.type} ${result.message}');
-    }
+      final int summaryStartRow = totalRow + 3;
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xff0A73FF),
-        content: Text(
-          shareFile
-              ? 'Excel generated and ready to share'
-              : 'Excel exported successfully',
+      mergeRowTitle(
+        row: summaryStartRow,
+        startCol: 0,
+        endCol: 3,
+        text: 'OVERALL TOTALS SUMMARY',
+        style: summaryTitleStyle,
+      );
+
+      setTextCell(summaryStartRow + 1, 0, 'METRIC', summaryHeaderStyle);
+      setTextCell(summaryStartRow + 1, 1, 'VALUE', summaryHeaderStyle);
+      setTextCell(summaryStartRow + 1, 2, 'METRIC', summaryHeaderStyle);
+      setTextCell(summaryStartRow + 1, 3, 'VALUE', summaryHeaderStyle);
+
+      final List<List<dynamic>> summaryRows = [
+        [
+          'Team Unbilled',
+          totals['team_unbilled'] ?? 0,
+          'New Leads',
+          totals['new_leads'] ?? 0,
+        ],
+        [
+          'Total Unbilled',
+          totals['total_unbilled'] ?? totals['team_unbilled'] ?? 0,
+          'Unbilled To Billed',
+          totals['unbilled_to_billed'] ?? 0,
+        ],
+        [
+          'Unbilled To Billed',
+          totals['unbilled_to_billed'] ?? 0,
+          'New Customer',
+          totals['new_customer'] ?? 0,
+        ],
+        [
+          'New Conversion',
+          totals['new_conversion'] ?? 0,
+          'Billing',
+          totals['billing'] ?? 0,
+        ],
+        [
+          'Volume',
+          totals['volume'] ?? 0,
+          'Total Call Duration',
+          totals['total_call_duration'] ?? 0,
+        ],
+        [
+          'Avg Call Duration (Mins)',
+          totals['call_duration_average_minutes'] ?? 0,
+          'Avg Call Duration (%)',
+          totals['call_duration_average_percentage'] ?? 0,
+        ],
+      ];
+
+      int overallRowCursor = summaryStartRow + 2;
+      for (final row in summaryRows) {
+        setTextCell(overallRowCursor, 0, row[0], summaryLabelStyle);
+        setNumCell(overallRowCursor, 1, row[1], summaryValueStyle);
+        setTextCell(overallRowCursor, 2, row[2], summaryLabelStyle);
+        setNumCell(overallRowCursor, 3, row[3], summaryValueStyle);
+        overallRowCursor++;
+      }
+
+      const int hourlyStartCol = 5;
+
+      mergeRowTitle(
+        row: summaryStartRow,
+        startCol: hourlyStartCol,
+        endCol: hourlyStartCol + 1,
+        text: 'HOURLY DURATIONS',
+        style: summaryTitleStyle,
+      );
+
+      setTextCell(
+        summaryStartRow + 1,
+        hourlyStartCol,
+        'TIME SLOT',
+        summaryHeaderStyle,
+      );
+      setTextCell(
+        summaryStartRow + 1,
+        hourlyStartCol + 1,
+        'MINUTES',
+        summaryHeaderStyle,
+      );
+
+      int hourlySummaryRow = summaryStartRow + 2;
+      for (final key in hourlyKeys) {
+        setTextCell(hourlySummaryRow, hourlyStartCol, key, summaryLabelStyle);
+        setNumCell(
+          hourlySummaryRow,
+          hourlyStartCol + 1,
+          totalHourly[key] ?? 0,
+          summaryValueStyle,
+        );
+        hourlySummaryRow++;
+      }
+
+      double widthFromLen(int len) {
+        double w = len * 1.2 + 3;
+        if (w < 10) w = 10;
+        if (w > 40) w = 40;
+        return w;
+      }
+
+      for (int col = 0; col < headers.length; col++) {
+        double width =
+            widthFromLen(maxColumnLengths[col] ?? headers[col].length);
+
+        if (col == 1) width = width < 20 ? 20 : width;
+        if (col == 2) width = width < 18 ? 18 : width;
+        if (col == 3) width = width < 22 ? 22 : width;
+        if (col == 5) width = width < 18 ? 18 : width;
+        if (col == 6) width = width < 20 ? 20 : width;
+        if (col == 13) width = width < 20 ? 20 : width;
+        if (col >= 14) width = width < 14 ? 14 : width;
+
+        sheet.setColWidth(col, width);
+      }
+
+      final Directory dir = await getApplicationDocumentsDirectory();
+      final String timestamp =
+          DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final String filePath = '${dir.path}/team_wise_report_$timestamp.xlsx';
+
+      final List<int>? bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('Excel generation failed');
+      }
+
+      final File file = File(filePath);
+      await file.create(recursive: true);
+      await file.writeAsBytes(bytes, flush: true);
+
+      if (shareFile) {
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Team Wise DSR Report',
+        );
+      } else {
+        final result = await OpenFilex.open(file.path);
+        debugPrint('OPEN FILE RESULT: ${result.type} ${result.message}');
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xff0A73FF),
+          content: Text(
+            shareFile
+                ? 'Excel generated and ready to share'
+                : 'Excel exported successfully',
+          ),
         ),
-      ),
-    );
-  } catch (e) {
-    debugPrint('EXPORT EXCEL ERROR: $e');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to export excel: $e')),
-    );
+      );
+    } catch (e) {
+      debugPrint('EXPORT EXCEL ERROR: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export excel: $e')),
+      );
+    }
   }
-}
 
   String formatValue(dynamic value) {
     if (value == null) return '0';
@@ -2321,6 +2309,7 @@ Future<void> exportTeamReportExcel({bool shareFile = false}) async {
             mainAxisSpacing: isSmall ? 8 : 10,
             children: [
               buildMiniMetric("Team Unbilled", totals['team_unbilled']),
+              buildMiniMetric("New Leads", totals['new_leads']),
               // buildMiniMetric(
               //   "Total Unbilled",
               //   totals['total_unbilled'] ?? totals['team_unbilled'],

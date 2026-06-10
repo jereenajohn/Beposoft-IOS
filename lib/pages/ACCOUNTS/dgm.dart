@@ -414,7 +414,7 @@ class _DgmState extends State<Dgm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Top 5 Products - ${widget.shipped_date}",
+          "Top 10 Products - ${widget.shipped_date}",
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,

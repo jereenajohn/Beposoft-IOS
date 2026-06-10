@@ -55,6 +55,9 @@ class _Staff_UpdateState extends State<Staff_Update> {
   final TextEditingController aadhar_no = TextEditingController();
   final TextEditingController pan_no = TextEditingController();
   final TextEditingController place = TextEditingController();
+  final TextEditingController emergency_contact_name1 = TextEditingController();
+  final TextEditingController emergency_contact_number1 =
+      TextEditingController();
 
   List<Map<String, dynamic>> statess = [];
   List<Map<String, dynamic>> fam = [];
@@ -95,6 +98,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
   String? existingSignatureUrl;
   String? existingExpLetterUrl;
   String? existingSalarySlipUrl;
+
+  File? selectedAadharImage;
+  File? selectedPanImage;
+
+  String? existingAadharImageUrl;
+  String? existingPanImageUrl;
 
   List<int> allocated_states = [];
   List<String> allocatedStateNames = [];
@@ -178,14 +187,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
-    } 
-    else if (depValue == "SD") {
+    } else if (depValue == "SD") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => SdDashboard()),
       );
-    } 
-    else if (depValue == "HR") {
+    } else if (depValue == "HR") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HrDashboard()),
@@ -637,6 +644,13 @@ class _Staff_UpdateState extends State<Staff_Update> {
                 int.tryParse(staffData['warehouse_id']?.toString() ?? '');
             selectedPostingStateId =
                 int.tryParse(staffData['state']?.toString() ?? '');
+            existingAadharImageUrl = staffData['aadhar_image']?.toString();
+            existingPanImageUrl = staffData['pan_image']?.toString();
+            emergency_contact_name1.text =
+                staffData['emergency_contact_name1']?.toString() ?? '';
+
+            emergency_contact_number1.text =
+                staffData['emergency_contact_number1']?.toString() ?? '';
 
             if (staffData['family'] != null) {
               selectedFamily = [
@@ -784,7 +798,9 @@ class _Staff_UpdateState extends State<Staff_Update> {
         'staff_id': staff_id.text,
         'emergency_contact_name': emergency_contact_name.text,
         'emergency_contact_number': emergency_contact_number.text,
-        'experience': int.tryParse(experience.text) ?? 0,
+        'experience': experience.text.trim(),
+        'emergency_contact_name1': emergency_contact_name1.text.trim(),
+        'emergency_contact_number1': emergency_contact_number1.text.trim(),
         'previous_company': previous_company.text,
         'blood_group': selectedBloodGroup ?? '',
         'education': education.text,
@@ -846,6 +862,44 @@ class _Staff_UpdateState extends State<Staff_Update> {
     }
   }
 
+  void pickAadharImage() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+
+    if (result != null) {
+      setState(() {
+        selectedAadharImage = File(result.files.single.path!);
+      });
+    }
+  }
+
+  void pickPanImage() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+
+    if (result != null) {
+      setState(() {
+        selectedPanImage = File(result.files.single.path!);
+      });
+    }
+  }
+
+  void removeAadharImage() {
+    setState(() {
+      selectedAadharImage = null;
+      existingAadharImageUrl = null;
+    });
+  }
+
+  void removePanImage() {
+    setState(() {
+      selectedPanImage = null;
+      existingPanImageUrl = null;
+    });
+  }
+
   Future<bool> updateStaffFiles(BuildContext scaffoldContext) async {
     final token = await gettokenFromPrefs();
 
@@ -853,7 +907,9 @@ class _Staff_UpdateState extends State<Staff_Update> {
       if (selectedImage == null &&
           selectedSignature == null &&
           selectedExpLetter == null &&
-          selectedSalarySlip == null) {
+          selectedSalarySlip == null &&
+          selectedAadharImage == null &&
+          selectedPanImage == null) {
         return true;
       }
 
@@ -893,6 +949,24 @@ class _Staff_UpdateState extends State<Staff_Update> {
           await http.MultipartFile.fromPath(
             'salrary_slip',
             selectedSalarySlip!.path,
+          ),
+        );
+      }
+
+      if (selectedAadharImage != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'aadhar_image',
+            selectedAadharImage!.path,
+          ),
+        );
+      }
+
+      if (selectedPanImage != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'pan_image',
+            selectedPanImage!.path,
           ),
         );
       }
@@ -2250,7 +2324,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "Termination Date",
+            "Last day of working",
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -2335,6 +2409,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
     staff_id.dispose();
     emergency_contact_name.dispose();
     emergency_contact_number.dispose();
+    emergency_contact_name1.dispose();
+    emergency_contact_number1.dispose();
     experience.dispose();
     previous_company.dispose();
     education.dispose();
@@ -2468,6 +2544,22 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   'Grade',
                                   icon: Icons.stacked_bar_chart_outlined,
                                 ),
+                                _buildTextField(
+                                  experience,
+                                  'Experience',
+                                  icon: Icons.timeline_outlined,
+                                  keyboardType: TextInputType.text,
+                                ),
+                                _buildTextField(
+                                  previous_company,
+                                  'Previous Company',
+                                  icon: Icons.business_outlined,
+                                ),
+                                _buildTextField(
+                                  education,
+                                  'Education',
+                                  icon: Icons.school_outlined,
+                                ),
                                 _buildDateField(
                                   title: "Joining Date",
                                   date: selectejoin,
@@ -2505,21 +2597,32 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   keyboardType: TextInputType.phone,
                                 ),
                                 _buildTextField(
-                                  experience,
-                                  'Experience',
-                                  icon: Icons.timeline_outlined,
-                                  keyboardType: TextInputType.number,
+                                  emergency_contact_name1,
+                                  'Emergency Contact Name 2',
+                                  icon: Icons.contact_phone_outlined,
                                 ),
                                 _buildTextField(
-                                  previous_company,
-                                  'Previous Company',
-                                  icon: Icons.business_outlined,
+                                  emergency_contact_number1,
+                                  'Emergency Contact Number 2',
+                                  icon: Icons.call_outlined,
+                                  keyboardType: TextInputType.phone,
                                 ),
-                                _buildTextField(
-                                  education,
-                                  'Education',
-                                  icon: Icons.school_outlined,
-                                ),
+                                // _buildTextField(
+                                //   experience,
+                                //   'Experience',
+                                //   icon: Icons.timeline_outlined,
+                                //   keyboardType: TextInputType.text,
+                                // ),
+                                // _buildTextField(
+                                //   previous_company,
+                                //   'Previous Company',
+                                //   icon: Icons.business_outlined,
+                                // ),
+                                // _buildTextField(
+                                //   education,
+                                //   'Education',
+                                //   icon: Icons.school_outlined,
+                                // ),
                                 _buildBloodGroupDropdown(),
                                 _buildTextField(
                                   aadhar_no,
@@ -2536,48 +2639,48 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                 ),
                               ],
                             ),
-                            _buildSectionCard(
-                              title: "License, Address & Country",
-                              children: [
-                                _buildTextField(
-                                  driving_license,
-                                  'Driving License',
-                                  icon: Icons.drive_eta_outlined,
-                                ),
-                                _buildDateField(
-                                  title: "License Expiry Date",
-                                  date: selecteExp,
-                                  onTap: () => _selectDate(
-                                    context,
-                                    selecteExp,
-                                    (picked) => selecteExp = picked,
-                                  ),
-                                ),
-                                _buildTextField(
-                                  address,
-                                  'Address',
-                                  icon: Icons.location_on_outlined,
-                                  maxLines: 3,
-                                ),
-                                _buildTextField(
-                                  city,
-                                  'City',
-                                  icon: Icons.location_city_outlined,
-                                ),
-                                _buildTextField(
-                                  Country,
-                                  'Country',
-                                  icon: Icons.public_outlined,
-                                ),
-                                _buildPostingStateDropdown(),
-                                _buildTextField(
-                                  place,
-                                  'Place',
-                                  icon: Icons.place_outlined,
-                                ),
-                                _buildCountryCodeDropdown(),
-                              ],
-                            ),
+                            // _buildSectionCard(
+                            //   title: "License, Address & Country",
+                            //   children: [
+                            //     _buildTextField(
+                            //       driving_license,
+                            //       'Driving License',
+                            //       icon: Icons.drive_eta_outlined,
+                            //     ),
+                            //     _buildDateField(
+                            //       title: "License Expiry Date",
+                            //       date: selecteExp,
+                            //       onTap: () => _selectDate(
+                            //         context,
+                            //         selecteExp,
+                            //         (picked) => selecteExp = picked,
+                            //       ),
+                            //     ),
+                            //     _buildTextField(
+                            //       address,
+                            //       'Address',
+                            //       icon: Icons.location_on_outlined,
+                            //       maxLines: 3,
+                            //     ),
+                            //     _buildTextField(
+                            //       city,
+                            //       'City',
+                            //       icon: Icons.location_city_outlined,
+                            //     ),
+                            //     _buildTextField(
+                            //       Country,
+                            //       'Country',
+                            //       icon: Icons.public_outlined,
+                            //     ),
+                            //     _buildPostingStateDropdown(),
+                            //     _buildTextField(
+                            //       place,
+                            //       'Place',
+                            //       icon: Icons.place_outlined,
+                            //     ),
+                            //     _buildCountryCodeDropdown(),
+                            //   ],
+                            // ),
                             _buildSectionCard(
                               title: "Uploads",
                               children: [
@@ -2589,14 +2692,14 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   onTap: imageSelect,
                                   onRemove: removeImage,
                                 ),
-                                _buildUploadTile(
-                                  title: "Signature",
-                                  fallbackText: "Select Signature",
-                                  file: selectedSignature,
-                                  existingUrl: existingSignatureUrl,
-                                  onTap: imageSelect1,
-                                  onRemove: removeSignatureImage,
-                                ),
+                                // _buildUploadTile(
+                                //   title: "Signature",
+                                //   fallbackText: "Select Signature",
+                                //   file: selectedSignature,
+                                //   existingUrl: existingSignatureUrl,
+                                //   onTap: imageSelect1,
+                                //   onRemove: removeSignatureImage,
+                                // ),
                                 _buildUploadTile(
                                   title: "Experience Letter",
                                   fallbackText: "Select Experience Letter",
@@ -2605,13 +2708,39 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   onTap: pickExpLetter,
                                   onRemove: removeExpLetter,
                                 ),
+                                // _buildUploadTile(
+                                //   title: "Salary Slip",
+                                //   fallbackText: "Select Salary Slip",
+                                //   file: selectedSalarySlip,
+                                //   existingUrl: existingSalarySlipUrl,
+                                //   onTap: pickSalarySlip,
+                                //   onRemove: removeSalarySlip,
+                                // ),
                                 _buildUploadTile(
-                                  title: "Salary Slip",
-                                  fallbackText: "Select Salary Slip",
-                                  file: selectedSalarySlip,
-                                  existingUrl: existingSalarySlipUrl,
-                                  onTap: pickSalarySlip,
-                                  onRemove: removeSalarySlip,
+                                  title: "Aadhar Image",
+                                  fallbackText: "Select Aadhar Image",
+                                  file: selectedAadharImage,
+                                  existingUrl: existingAadharImageUrl,
+                                  onTap: pickAadharImage,
+                                  onRemove: () {
+                                    setState(() {
+                                      selectedAadharImage = null;
+                                      existingAadharImageUrl = null;
+                                    });
+                                  },
+                                ),
+                                _buildUploadTile(
+                                  title: "PAN Image",
+                                  fallbackText: "Select PAN Image",
+                                  file: selectedPanImage,
+                                  existingUrl: existingPanImageUrl,
+                                  onTap: pickPanImage,
+                                  onRemove: () {
+                                    setState(() {
+                                      selectedPanImage = null;
+                                      existingPanImageUrl = null;
+                                    });
+                                  },
                                 ),
                                 const SizedBox(height: 4),
                                 SizedBox(

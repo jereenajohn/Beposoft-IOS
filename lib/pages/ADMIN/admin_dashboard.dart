@@ -1147,6 +1147,8 @@ Widget _buildDropdownTile(
               _buildDropdownTile(context, 'Staff', [
                 'Add Staff',
                 'Staff',
+                 'Staff Exit Form',
+                'Staff Exit List',
               ]),
               // _buildDropdownTile(context, 'Credit Note', [
               //   'Add Credit Note',

@@ -366,9 +366,9 @@ final String accessToken = SecretConfig.shopifyAccessToken;
         }),
       );
 
-      // print("🛒 Shopify orders status: ${response.statusCode}");
+      print("🛒 Shopify orders status: ${response.statusCode}");
       if (response.statusCode != 200) {
-        // print("🛒 Shopify error body: ${response.body}");
+        print("🛒 Shopify error body: ${response.body}");
       }
 
       if (response.statusCode == 200) {
@@ -377,13 +377,13 @@ final String accessToken = SecretConfig.shopifyAccessToken;
         if (data == null ||
             data['data'] == null ||
             data['data']['orders'] == null) {
-          // print("❌ Shopify invalid response: $data");
+          print("❌ Shopify invalid response: $data");
           throw Exception("Invalid response format from Shopify API");
         }
 
         final orders = data['data']['orders'];
         final edgesList = orders['edges'] as List<dynamic>;
-        // print("🛒 Shopify orders fetched: ${edgesList.length}");
+        print("🛒 Shopify orders fetched: ${edgesList.length}");
 
         final allOrders = edgesList.map<Map<String, dynamic>>((e) {
           final node = Map<String, dynamic>.from(e['node']);
@@ -410,7 +410,7 @@ final String accessToken = SecretConfig.shopifyAccessToken;
         throw Exception("Failed to fetch orders");
       }
     } catch (e) {
-      // print("❌ fetchLatest300Orders() error: $e");
+      print("❌ fetchLatest300Orders() error: $e");
       throw Exception("Failed to fetch latest 300 orders: $e");
     }
   }

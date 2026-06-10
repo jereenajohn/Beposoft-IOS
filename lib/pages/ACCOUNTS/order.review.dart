@@ -1457,6 +1457,38 @@ class _OrderReviewState extends State<OrderReview> {
     } catch (e) {}
   }
 
+  Future<void> sendOrderItemDatalogLog(
+    BuildContext scaffoldContext,
+    Map<String, dynamic> beforeData,
+    Map<String, dynamic> afterData,
+  ) async {
+    final token = await getTokenFromPrefs();
+    if (token == null) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$api/api/datalog/create/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'before_data': beforeData,
+          'after_data': afterData,
+          'order': widget.id,
+        }),
+      );
+
+      if (response.statusCode != 201) {
+        debugPrint(
+          'Datalog create failed: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('Datalog create exception: $e');
+    }
+  }
+
   Future<void> updatenote() async {
     try {
       final token = await getTokenFromPrefs();
@@ -3425,7 +3457,7 @@ class _OrderReviewState extends State<OrderReview> {
     }
   }
 
-  Future<void> removeproduct(int Id) async {
+  Future<void> removeproduct(int Id, Map<String, dynamic> item) async {
     final token = await getTokenFromPrefs();
 
     try {
@@ -3437,13 +3469,30 @@ class _OrderReviewState extends State<OrderReview> {
       );
 
       if (response.statusCode == 200) {
+        await sendOrderItemDatalogLog(
+          context,
+          {
+            'item_id': item['id'],
+            'product_name': item['name'] ?? item['product_name'] ?? 'Unknown',
+            'quantity': item['quantity'],
+            'rate': item['rate'],
+            'discount': item['discount'],
+            'status': 'present',
+            'action': 'delete',
+          },
+          {
+            'item_id': item['id'],
+            'status': 'deleted',
+            'action': 'delete',
+          },
+        );
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Color.fromARGB(255, 49, 212, 4),
             content: Text('Deleted sucessfully'),
           ),
         );
-        // Navigator.push(context, MaterialPageRoute(builder: (context)=>OrderReview(id:widget.id)));
         await fetchOrderItems();
       }
 
@@ -3451,7 +3500,9 @@ class _OrderReviewState extends State<OrderReview> {
       } else {
         throw Exception('Failed to delete wishlist ID: $Id');
       }
-    } catch (error) {}
+    } catch (error) {
+      debugPrint('removeproduct error: $error');
+    }
   }
 
   void removeProductindex(int index) {
@@ -3728,7 +3779,27 @@ class _OrderReviewState extends State<OrderReview> {
     );
   }
 
+  bool canEditProductPopup() {
+    final String dept = (dep ?? '').toString().trim().toLowerCase();
+    final String orderStatus =
+        (ord?['status'] ?? '').toString().trim().toLowerCase();
+
+    if (dept == 'bdo') {
+      return orderStatus == 'invoice created';
+    }
+
+    if (dept == 'bdm') {
+      return orderStatus == 'invoice created' ||
+          orderStatus == 'invoice approved';
+    }
+
+    return true;
+  }
+
   void showPopupDialog(BuildContext context, Map<String, dynamic> item) {
+    if (!canEditProductPopup()) {
+      return;
+    }
     TextEditingController quantityController =
         TextEditingController(text: item['quantity']?.toString() ?? '');
     TextEditingController discountController =
@@ -3789,7 +3860,7 @@ class _OrderReviewState extends State<OrderReview> {
                 final upprice =
                     double.tryParse(priceController.text) ?? item['rate'];
 
-                updatedetails(item['id'], quantity, discount, upprice);
+                updatedetails(item['id'], quantity, discount, upprice, item);
                 Navigator.of(context).pop();
                 fetchOrderItems();
                 fetchCustomerLedgerDetails();
@@ -3802,8 +3873,8 @@ class _OrderReviewState extends State<OrderReview> {
     );
   }
 
-  Future<void> updatedetails(
-      int id, int quantity, double discount, var price) async {
+  Future<void> updatedetails(int id, int quantity, double discount, var price,
+      Map<String, dynamic> previousItem) async {
     try {
       final token = await getTokenFromPrefs();
       final response = await http.put(
@@ -3817,6 +3888,26 @@ class _OrderReviewState extends State<OrderReview> {
       );
 // print(response.body);
       if (response.statusCode == 200) {
+        await sendOrderItemDatalogLog(
+          context,
+          {
+            'item_id': id,
+            'quantity': previousItem['quantity'],
+            'rate': previousItem['rate'],
+            'discount': previousItem['discount'],
+            'status': 'before_update',
+            'action': 'update',
+          },
+          {
+            'item_id': id,
+            'quantity': quantity,
+            'rate': price,
+            'discount': discount,
+            'status': 'after_update',
+            'action': 'update',
+          },
+        );
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Cart item updated successfully!'),
@@ -4494,71 +4585,74 @@ class _OrderReviewState extends State<OrderReview> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-             Container(
-  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 60),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(20),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.grey.withOpacity(0.5),
-        spreadRadius: 2,
-        blurRadius: 10,
-        offset: Offset(0, 4),
-      ),
-    ],
-  ),
-  child: Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      // Back arrow
-      GestureDetector(
-        onTap: () {
-          Navigator.pop(context);
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: EdgeInsets.all(6),
-          child: Icon(Icons.arrow_back, color: Colors.black),
-        ),
-      ),
-      SizedBox(width: 10),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 60),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.5),
+                      spreadRadius: 2,
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Back arrow
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.arrow_back, color: Colors.black),
+                      ),
+                    ),
+                    SizedBox(width: 10),
 
-      // Truck icon
-     
+                    // Truck icon
 
-      // Invoice text and download icon
-      Expanded(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              ord != null ? ord['invoice'] ?? 'Invoice Number' : 'Loading...',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
+                    // Invoice text and download icon
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            ord != null
+                                ? ord['invoice'] ?? 'Invoice Number'
+                                : 'Loading...',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              final Uri url =
+                                  Uri.parse('$api/invoice/${ord['id']}/');
+                              if (!await launchUrl(url,
+                                  mode: LaunchMode.externalApplication)) {
+                                // Handle error
+                              }
+                            },
+                            icon: Icon(Icons.download,
+                                color: Colors.blue, size: 24),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              onPressed: () async {
-                final Uri url = Uri.parse('$api/invoice/${ord['id']}/');
-                if (!await launchUrl(url,
-                    mode: LaunchMode.externalApplication)) {
-                  // Handle error
-                }
-              },
-              icon: Icon(Icons.download, color: Colors.blue, size: 24),
-            ),
-          ],
-        ),
-      ),
-    ],
-  ),
-),
               grvCard(),
               Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -5426,7 +5520,9 @@ class _OrderReviewState extends State<OrderReview> {
                     for (var item in visibleItems)
                       GestureDetector(
                         onTap: () {
-                          showPopupDialog(context, item);
+                          if (canEditProductPopup()) {
+                            showPopupDialog(context, item);
+                          }
                         },
                         child: Card(
                           color: Colors.white,
@@ -5590,8 +5686,7 @@ class _OrderReviewState extends State<OrderReview> {
                                           if (dep != "BDM" && dep != "BDO")
                                             GestureDetector(
                                               onTap: () {
-                                                removeproduct(item["id"]);
-                                                fetchOrderItems();
+                                                removeproduct(item["id"], item);
                                               },
                                               child: Image.asset(
                                                   height: 25,
