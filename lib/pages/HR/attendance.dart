@@ -99,11 +99,7 @@ class _AttendanceSheetState extends State<AttendanceSheet> {
         ),
       );
 
-      
-            
-
-
-    if (response.statusCode == 200) {
+      if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Attendance updated successfully'),
