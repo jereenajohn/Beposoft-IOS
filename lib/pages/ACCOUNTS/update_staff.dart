@@ -135,6 +135,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
   DateTime selecteconf = DateTime.now();
   DateTime? selectedTerminationDate;
 
+  bool isManager = false;
+
   final DateFormat dateFormatter = DateFormat('yyyy-MM-dd');
 
   drower d = drower();
@@ -633,6 +635,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
             approvalstatus =
                 staffData['approval_status']?.toString() ?? "approved";
             selectedBloodGroup = staffData['blood_group']?.toString();
+            isManager = staffData['is_manager'] ?? false;
 
             selectedCountryId =
                 int.tryParse(staffData['country_code']?.toString() ?? '');
@@ -774,6 +777,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
         'termination_date': selectedTerminationDate != null
             ? dateFormatter.format(selectedTerminationDate!)
             : null,
+        'is_manager': isManager,
         'allocated_states': allocated_states,
         'name': name.text,
         'username': username.text,
@@ -2526,6 +2530,41 @@ class _Staff_UpdateState extends State<Staff_Update> {
                               children: [
                                 _buildDepartmentDropdown(),
                                 _buildManagerDropdown(),
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                        color: const Color(0xFFBFD7FF)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Checkbox(
+                                        value: isManager,
+                                        activeColor: Colors.blue,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            isManager = value ?? false;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Expanded(
+                                        child: Text(
+                                          "Is Manager",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 _buildWarehouseDropdown(),
                                 _buildStateSelector(),
                                 _buildFamilyDropdown(),

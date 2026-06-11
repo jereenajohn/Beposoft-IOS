@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 // import 'package:beposoft/pages/ACCOUNTS/call_log.dart';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/BDO/add_district.dart';
 import 'package:beposoft/pages/BDO/bdo_customer_list.dart';
 import 'package:beposoft/pages/BDO/bdo_order_list.dart';
@@ -69,158 +70,153 @@ class _bdo_dashbordState extends State<bdo_dashbord> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
+bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+    List<int> currentParts =
+        currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
- Future<bool> checkAppUpdate(BuildContext context) async {
-  final packageInfo = await PackageInfo.fromPlatform();
-  final currentVersion = packageInfo.version;
+    List<int> storeParts =
+        storeVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
-  try {
-    String? storeVersion;
-    Uri? storeUrl;
+    int maxLength = currentParts.length > storeParts.length
+        ? currentParts.length
+        : storeParts.length;
 
-    if (Platform.isAndroid) {
-      final response = await http.get(Uri.parse(
-        'https://play.google.com/store/apps/details?id=com.bepositive.beposoft&hl=en',
-      ));
+    while (currentParts.length < maxLength) {
+      currentParts.add(0);
+    }
+    while (storeParts.length < maxLength) {
+      storeParts.add(0);
+    }
 
-      if (response.statusCode == 200) {
-        final content = response.body;
-        final versionRegex = RegExp(r'\[\[\["([0-9.]+)"\]\]');
-        final match = versionRegex.firstMatch(content);
-
-        if (match != null) {
-          storeVersion = match.group(1);
-          storeUrl = Uri.parse(
-            'https://play.google.com/store/apps/details?id=com.bepositive.beposoft',
-          );
-        }
-      }
-    } else if (Platform.isIOS) {
-      final response = await http.get(
-        Uri.parse('https://itunes.apple.com/lookup?id=6748010646&country=in'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        if (data['resultCount'] != null &&
-            data['resultCount'] > 0 &&
-            data['results'] != null &&
-            data['results'] is List &&
-            data['results'].isNotEmpty) {
-          final appData = data['results'][0];
-          storeVersion = appData['version']?.toString();
-          storeUrl = Uri.parse(
-            'https://apps.apple.com/in/app/beposoft/id6748010646',
-          );
-        }
+    for (int i = 0; i < maxLength; i++) {
+      if (storeParts[i] > currentParts[i]) {
+        return true;
+      } else if (storeParts[i] < currentParts[i]) {
+        return false;
       }
     }
 
-    if (storeVersion != null &&
-        _isUpdateAvailable(currentVersion, storeVersion)) {
-      final result = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          titlePadding: const EdgeInsets.only(top: 20),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          title: Column(
-            children: [
-              Icon(
-                Icons.system_update,
-                size: 48,
-                color: Colors.green,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Update Available',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+    return false;
+  }
+ 
+   Future<bool> checkAppUpdate(BuildContext context) async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version;
+
+    try {
+      String? storeVersion;
+      Uri? storeUrl;
+
+      if (Platform.isAndroid) {
+        final response = await http.get(Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.bepositive.beposoft&hl=en',
+        ));
+
+        if (response.statusCode == 200) {
+          final content = response.body;
+          final versionRegex = RegExp(r'\[\[\["([0-9.]+)"\]\]');
+          final match = versionRegex.firstMatch(content);
+
+          if (match != null) {
+            storeVersion = match.group(1);
+            storeUrl = Uri.parse(
+              'https://play.google.com/store/apps/details?id=com.bepositive.beposoft',
+            );
+          }
+        }
+      } else if (Platform.isIOS) {
+        final response = await http.get(
+          Uri.parse('https://itunes.apple.com/lookup?id=6748010646&country=in'),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+
+          if (data['resultCount'] != null &&
+              data['resultCount'] > 0 &&
+              data['results'] != null &&
+              data['results'] is List &&
+              data['results'].isNotEmpty) {
+            final appData = data['results'][0];
+            storeVersion = appData['version']?.toString();
+            storeUrl = Uri.parse(
+              'https://apps.apple.com/in/app/beposoft/id6748010646',
+            );
+          }
+        }
+      }
+
+      if (storeVersion != null &&
+          _isUpdateAvailable(currentVersion, storeVersion)) {
+        final result = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            titlePadding: const EdgeInsets.only(top: 20),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            title: Column(
+              children: [
+                Icon(
+                  Icons.system_update,
+                  size: 48,
+                  color: Colors.green,
                 ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Update Available',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'A new version ($storeVersion) is available.\n\nYou are using $currentVersion.\n\nPlease update the app to continue enjoying the latest features and improvements.',
+              style: const TextStyle(fontSize: 16),
+            ),
+            actionsAlignment: MainAxisAlignment.spaceEvenly,
+            actions: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.open_in_new, size: 18),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                label: const Text("Update Now"),
+                onPressed: () async {
+                  if (storeUrl != null && await canLaunchUrl(storeUrl)) {
+                    await launchUrl(
+                      storeUrl,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                  Navigator.of(context).pop(false);
+                },
+              ),
+              TextButton(
+                child: const Text("Maybe Later"),
+                onPressed: () => Navigator.of(context).pop(true),
               ),
             ],
           ),
-          content: Text(
-            'A new version ($storeVersion) is available.\n\nYou are using $currentVersion.\n\nPlease update the app to continue enjoying the latest features and improvements.',
-            style: const TextStyle(fontSize: 16),
-          ),
-          actionsAlignment: MainAxisAlignment.spaceEvenly,
-          actions: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.open_in_new, size: 18),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              label: const Text("Update Now"),
-              onPressed: () async {
-                if (storeUrl != null && await canLaunchUrl(storeUrl)) {
-                  await launchUrl(
-                    storeUrl,
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-                Navigator.of(context).pop(false);
-              },
-            ),
-            TextButton(
-              child: const Text("Maybe Later"),
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-          ],
-        ),
-      );
+        );
 
-      return result == true;
+        return result == true;
+      }
+    } catch (e) {
+      // Optional: print(e);
     }
-  } catch (e) {
-    // Optional: print(e);
+
+    return true;
   }
-
-  return true;
-}
-
-bool _isUpdateAvailable(String currentVersion, String storeVersion) {
-  List<int> currentParts = currentVersion
-      .split('.')
-      .map((e) => int.tryParse(e) ?? 0)
-      .toList();
-
-  List<int> storeParts = storeVersion
-      .split('.')
-      .map((e) => int.tryParse(e) ?? 0)
-      .toList();
-
-  int maxLength =
-      currentParts.length > storeParts.length ? currentParts.length : storeParts.length;
-
-  while (currentParts.length < maxLength) {
-    currentParts.add(0);
-  }
-  while (storeParts.length < maxLength) {
-    storeParts.add(0);
-  }
-
-  for (int i = 0; i < maxLength; i++) {
-    if (storeParts[i] > currentParts[i]) {
-      return true;
-    } else if (storeParts[i] < currentParts[i]) {
-      return false;
-    }
-  }
-
-  return false;
-}
-
   Future<void> getcustomer() async {
     try {
       // final dep = await getdepFromPrefs();
@@ -549,7 +545,7 @@ bool _isUpdateAvailable(String currentVersion, String storeVersion) {
 
   drower d = drower();
 
-Widget _buildDropdownTile(
+ Widget _buildDropdownTile(
     BuildContext context, String title, List<String> options) {
   return ExpansionTile(
     backgroundColor: Colors.white,
@@ -575,7 +571,6 @@ Widget _buildDropdownTile(
     }).toList(),
   );
 }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -661,14 +656,24 @@ Widget _buildDropdownTile(
                 },
               ),
 
+              ListTile(
+                title: Text('Employee Leave Form'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
+                },
+              ),
+
               // _buildDropdownTile(context, 'Daily Sales Report (DSR)',
               //     ['Add Daily Sales', 'DSR List']),
 
               // _buildDropdownTile(context, 'Daily Sales Report (DSR)',
               //     ['Add DSR', 'View Sales Report List']),
 
-_buildDropdownTile(
+
+               _buildDropdownTile(
                   context, 'Create DSR', ['BDO ADD DSR','VIEW DSR LIST','BDO ADD CALL DURATION','VIEW CALL DURATION LIST']),
+
               // ListTile(
               //   title: Text('Categorywise Sales Report'),
               //   onTap: () {
@@ -679,7 +684,6 @@ _buildDropdownTile(
               //   },
               // ),
 
-              Divider(),
 
               Divider(),
               ListTile(

@@ -40,6 +40,8 @@ import 'package:beposoft/pages/ACCOUNTS/uploadbulkorders.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_staff.dart';
 import 'package:beposoft/pages/ADMIN/Categorywise_dispatched_details.dart';
 import 'package:beposoft/pages/ADMIN/OD_bank_monthly_details.dart';
+import 'package:beposoft/pages/ADMIN/add_attendance.dart';
+import 'package:beposoft/pages/ADMIN/add_team_staff.dart';
 import 'package:beposoft/pages/ADMIN/bdm_family_detailpage.dart';
 import 'package:beposoft/pages/ADMIN/bdo_statewise+details_page.dart';
 import 'package:beposoft/pages/ADMIN/categoryproductDetailspage.dart';
@@ -53,7 +55,9 @@ import 'package:beposoft/pages/ADMIN/family_detailed_summary_page.dart';
 
 import 'package:beposoft/pages/ADMIN/family_wise_analysis_details_page.dart';
 import 'package:beposoft/pages/ADMIN/sales_report_excel.dart';
+import 'package:beposoft/pages/ADMIN/salesteam_cd_reportpage.dart';
 import 'package:beposoft/pages/ADMIN/warehouse_summary.dart';
+import 'package:beposoft/pages/HR/staff_attendance.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_product_approval.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
@@ -180,6 +184,9 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   double todayTotalOrderAmount = 0.0;
   int todayTotalOrders = 0;
 
+  bool isManager = false;
+  int teamWiseTotalPresent = 0;
+
   // int getFamilyPresentCount(String familyName) {
   //   return familyAttendanceData.where((item) {
   //     final family =
@@ -230,6 +237,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     _getUsername(); // Get the username when the page loads
 
     final now = DateTime.now();
+    fetchTeamWiseAttendanceCount();
 
     selectedRange = DateTimeRange(
       start: DateTime(now.year, now.month, now.day, 0, 0, 0),
@@ -237,7 +245,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     );
 
     initdata();
-
+getProfile();
     getGrvList();
     fetchproformaData();
     getSalesReport();
@@ -285,6 +293,66 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     // fetchorders();
     await fetchReport();
   }
+
+  Future<void> fetchTeamWiseAttendanceCount() async {
+  try {
+    final token = await getTokenFromPrefs();
+
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    final response = await http.get(
+      Uri.parse('$api/api/staff/attendance/team/wise/count/').replace(
+        queryParameters: {
+          'start_date': today,
+          'end_date': today,
+        },
+      ),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final parsed = jsonDecode(response.body);
+      final summary = parsed['summary'] ?? {};
+
+      setState(() {
+        teamWiseTotalPresent = _asInt(summary['total_present']);
+      });
+
+      debugPrint("TODAY TOTAL PRESENT: $teamWiseTotalPresent");
+    }
+  } catch (e) {
+    debugPrint("TEAM WISE ATTENDANCE COUNT ERROR: $e");
+  }
+}
+
+  Future<void> getProfile() async {
+  try {
+    final token = await getTokenFromPrefs();
+
+    final response = await http.get(
+      Uri.parse('$api/api/profile/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final parsed = jsonDecode(response.body);
+
+      setState(() {
+        isManager = parsed['data']['is_manager'] ?? false;
+      });
+
+      debugPrint("IS MANAGER : $isManager");
+    }
+  } catch (e) {
+    debugPrint("PROFILE ERROR : $e");
+  }
+}
 
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -1506,7 +1574,8 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     return totals;
   }
 
-  Future<bool> checkAppUpdate(BuildContext context) async {
+  
+   Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
@@ -2323,7 +2392,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
         physics: const NeverScrollableScrollPhysics(),
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 0.80,
+        childAspectRatio: 0.70,
         children: [
           _buildDashboardCard(
             title: "Sales",
@@ -2416,11 +2485,11 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                 //   icon: Icons.cancel_rounded,
                 // ),
                 const SizedBox(height: 6),
-                _buildEmployeeColumnItem(
-                  title: "Present",
-                  value: "$totalFamilyPresentCount",
-                  icon: Icons.person_pin_circle_rounded,
-                ),
+                 _buildEmployeeColumnItem(
+  title: "Present",
+  value: "$teamWiseTotalPresent",
+  icon: Icons.person_pin_circle_rounded,
+),
               ],
             ),
             onTap: () {
@@ -2491,6 +2560,31 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
             lines: [
               "Ads & promotions",
               "Marketing overview",
+            ],
+            onTap: () {},
+          ),
+          _buildDashboardCard(
+            title: "Sales Team DSR",
+            value: "DSR",
+            lines: [
+              "Today's DSR",
+              "Team performance",
+            ],
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SalesTeamCdReportPage(),
+                ),
+              );
+            },
+          ),
+          _buildDashboardCard(
+            title: "Campaigns",
+            value: "Overview",
+            lines: [
+              "Active campaigns",
+              "Campaign performance",
             ],
             onTap: () {},
           ),
@@ -6133,6 +6227,41 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                       // Navigate to the Settings page or perform any other action
                     },
                   ),
+                  ListTile(
+                    title: Text('Staff Attendance'),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  HrTeamAttendanceScreen()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
+                  if (isManager)
+                   ListTile(
+                    title: Text('Add Team Staff'),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  StaffAttendanceTeamMemberScreen()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
+                  if (isManager)
+                   ListTile(
+                    title: Text('Add Attendance'),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  StaffMarkAttendanceScreen()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
 
                   //   ListTile(
                   //   leading: Icon(Icons.person),
@@ -6169,7 +6298,6 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                     'Order Items Excel Report',
                     'Shipping Address Excel Report',
                     'Daily Product Sold Report',
-                    'Sales Team DSR Report',
                     // 'All Division Product Sale Report',
                     // 'Cycling & Skating Monthly Excel',
                     // 'Cycling & Skating Daily Excel',

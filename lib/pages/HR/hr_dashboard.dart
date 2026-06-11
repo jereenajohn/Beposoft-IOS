@@ -8,7 +8,10 @@ import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/profilepage.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_staff.dart';
+import 'package:beposoft/pages/HR/EmployeeLeaveListPage.dart';
+import 'package:beposoft/pages/HR/add_teamlead.dart';
 import 'package:beposoft/pages/HR/attendance.dart';
+import 'package:beposoft/pages/HR/staff_attendance.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -46,7 +49,37 @@ class _HrDashboardState extends State<HrDashboard> {
     });
   }
 
- Future<bool> checkAppUpdate(BuildContext context) async {
+   bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+    List<int> currentParts =
+        currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    List<int> storeParts =
+        storeVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    int maxLength = currentParts.length > storeParts.length
+        ? currentParts.length
+        : storeParts.length;
+
+    while (currentParts.length < maxLength) {
+      currentParts.add(0);
+    }
+    while (storeParts.length < maxLength) {
+      storeParts.add(0);
+    }
+
+    for (int i = 0; i < maxLength; i++) {
+      if (storeParts[i] > currentParts[i]) {
+        return true;
+      } else if (storeParts[i] < currentParts[i]) {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+
+   Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
@@ -131,7 +164,7 @@ class _HrDashboardState extends State<HrDashboard> {
               ElevatedButton.icon(
                 icon: const Icon(Icons.open_in_new, size: 18),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -163,35 +196,6 @@ class _HrDashboardState extends State<HrDashboard> {
     }
 
     return true;
-  }
-
-   bool _isUpdateAvailable(String currentVersion, String storeVersion) {
-    List<int> currentParts =
-        currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-
-    List<int> storeParts =
-        storeVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-
-    int maxLength = currentParts.length > storeParts.length
-        ? currentParts.length
-        : storeParts.length;
-
-    while (currentParts.length < maxLength) {
-      currentParts.add(0);
-    }
-    while (storeParts.length < maxLength) {
-      storeParts.add(0);
-    }
-
-    for (int i = 0; i < maxLength; i++) {
-      if (storeParts[i] > currentParts[i]) {
-        return true;
-      } else if (storeParts[i] < currentParts[i]) {
-        return false;
-      }
-    }
-
-    return false;
   }
 
 Widget _buildDropdownTile(
@@ -317,6 +321,29 @@ Widget _buildDropdownTile(
               onTap: () {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (context) => EmployeeExitListPage()));
+              },
+            ),
+
+             ListTile(
+              title: Text('Employee Leave List'),
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => EmployeeLeaveListPage()));
+              },
+              
+            ),
+            ListTile(
+              title: Text('Add Manager'),
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => StaffAttendanceTeamScreen()));
+              },
+            ),
+            ListTile(
+              title: Text('Staff Attendance'),
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => HrTeamAttendanceScreen()));
               },
             ),
 

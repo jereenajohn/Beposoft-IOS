@@ -14,6 +14,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_district.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_purpose_of_payment.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supplier.dart';
+import 'package:beposoft/pages/ACCOUNTS/add_team.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_warehouse.dart';
 import 'package:beposoft/pages/ACCOUNTS/addrack.dart';
 import 'package:beposoft/pages/ACCOUNTS/all_users_categorywise_sales_report.dart';
@@ -32,8 +33,11 @@ import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/seller_purchase_invoice_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/status_wise_orders_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/performa_invoice_list.dart';
+import 'package:beposoft/pages/ACCOUNTS/team_wise_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/todays_orders_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/uploadbulkorders.dart';
+import 'package:beposoft/pages/ADMIN/add_attendance.dart';
+import 'package:beposoft/pages/ADMIN/add_team_staff.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_product_approval.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
@@ -72,11 +76,13 @@ class _admin_dashboardState extends State<admin_dashboard> {
   List<Map<String, dynamic>> shippedOrders = [];
 
   String? username = '';
+  bool isManager = false;
   @override
   void initState() {
     super.initState();
     _getUsername(); // Get the username when the page loads
     getGrvList();
+      getProfile();
     fetchproformaData();
     getSalesReport();
     fetchOrderData();
@@ -90,6 +96,33 @@ class _admin_dashboardState extends State<admin_dashboard> {
   int confirm = 0;
   int approvalcount = 0;
   int confirmcount = 0;
+
+  Future<void> getProfile() async {
+  try {
+    final token = await getTokenFromPrefs();
+
+    final response = await http.get(
+      Uri.parse('$api/api/profile/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final parsed = jsonDecode(response.body);
+
+      setState(() {
+        isManager = parsed['data']['is_manager'] ?? false;
+      });
+
+      debugPrint("IS MANAGER : $isManager");
+    }
+  } catch (e) {
+    debugPrint("PROFILE ERROR : $e");
+  }
+}
+
   Future<void> fetchOrderData() async {
     try {
       final token = await getTokenFromPrefs();
@@ -404,7 +437,37 @@ class _admin_dashboardState extends State<admin_dashboard> {
     });
   }
 
-  Future<bool> checkAppUpdate(BuildContext context) async {
+   bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+    List<int> currentParts =
+        currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    List<int> storeParts =
+        storeVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    int maxLength = currentParts.length > storeParts.length
+        ? currentParts.length
+        : storeParts.length;
+
+    while (currentParts.length < maxLength) {
+      currentParts.add(0);
+    }
+    while (storeParts.length < maxLength) {
+      storeParts.add(0);
+    }
+
+    for (int i = 0; i < maxLength; i++) {
+      if (storeParts[i] > currentParts[i]) {
+        return true;
+      } else if (storeParts[i] < currentParts[i]) {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+
+   Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
@@ -523,34 +586,6 @@ class _admin_dashboardState extends State<admin_dashboard> {
     return true;
   }
 
-  bool _isUpdateAvailable(String currentVersion, String storeVersion) {
-    List<int> currentParts =
-        currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-
-    List<int> storeParts =
-        storeVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-
-    int maxLength = currentParts.length > storeParts.length
-        ? currentParts.length
-        : storeParts.length;
-
-    while (currentParts.length < maxLength) {
-      currentParts.add(0);
-    }
-    while (storeParts.length < maxLength) {
-      storeParts.add(0);
-    }
-
-    for (int i = 0; i < maxLength; i++) {
-      if (storeParts[i] > currentParts[i]) {
-        return true;
-      } else if (storeParts[i] < currentParts[i]) {
-        return false;
-      }
-    }
-
-    return false;
-  }
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -585,7 +620,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
 
   drower d = drower();
 
-Widget _buildDropdownTile(
+ Widget _buildDropdownTile(
     BuildContext context, String title, List<String> options) {
   return ExpansionTile(
     backgroundColor: Colors.white,
@@ -611,13 +646,12 @@ Widget _buildDropdownTile(
     }).toList(),
   );
 }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.grey[200],
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.white,
@@ -634,28 +668,31 @@ Widget _buildDropdownTile(
           ],
         ),
         drawer: Drawer(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: <Widget>[
-              DrawerHeader(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        "lib/assets/appstore.png",
-                        width: 90,
-                        height: 90,
-                        fit: BoxFit.cover,
-                      ),
+            backgroundColor: Colors.white,
+            child: Container(
+              color: Colors.white,
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: <Widget>[
+               DrawerHeader(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
                     ),
-                  ],
-                ),
-              ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.asset(
+                            "lib/assets/appstore.png",
+                            width: 90,
+                            height: 90,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               // ListTile(
               //   leading: Icon(Icons.dashboard),
               //   title: Text('Dashboard'),
@@ -755,7 +792,7 @@ Widget _buildDropdownTile(
                   ['Add Transfer', 'Transfer List']),
 
               _buildDropdownTile(context, 'Daily Sales Reports',
-                  ['Add Team', 'Add Team Members', 'Team wise Report']),
+                  ['Add Team', 'Team wise Report']),
 
               ListTile(
                 leading: Icon(Icons.person),
@@ -959,6 +996,27 @@ Widget _buildDropdownTile(
               //     // Navigate to the Settings page or perform any other action
               //   },
               // ),
+
+              // ListTile(
+              //   leading: Icon(Icons.person),
+              //   title: Text('Add Team'),
+              //   onTap: () {
+              //     Navigator.push(context,
+              //         MaterialPageRoute(builder: (context) => AddTeam()));
+              //     // Navigate to the Settings page or perform any other action
+              //   },
+              // ),
+              // ListTile(
+              //   leading: Icon(Icons.person),
+              //   title: Text('Team wise Report'),
+              //   onTap: () {
+              //     Navigator.push(
+              //         context,
+              //         MaterialPageRoute(
+              //             builder: (context) => TeamWiseReport()));
+              //     // Navigate to the Settings page or perform any other action
+              //   },
+              // ),
               ListTile(
                 leading: Icon(Icons.person),
                 title: Text('Departments'),
@@ -1058,6 +1116,34 @@ Widget _buildDropdownTile(
                   // Navigate to the Settings page or perform any other action
                 },
               ),
+              if (isManager)
+  ListTile(
+    leading: const Icon(Icons.group_add),
+    title: const Text('Add Team Staff'),
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              StaffAttendanceTeamMemberScreen(),
+        ),
+      );
+    },
+  ),
+              if (isManager)
+  ListTile(
+    leading: const Icon(Icons.fact_check_outlined),
+    title: const Text('Add Attendance'),
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              const StaffMarkAttendanceScreen(),
+        ),
+      );
+    },
+  ),
               //  ListTile(
               //   leading: Icon(Icons.person),
               //   title: Text('Delivery Notes'),
@@ -1121,8 +1207,8 @@ Widget _buildDropdownTile(
                 },
               ),
 
-              // _buildDropdownTile(
-              //     context, 'BDO Daily Sales Report', ['BDO Call List']),
+              _buildDropdownTile(
+                  context, 'BDO Daily Sales Report', ['BDO Call List']),
 
               _buildDropdownTile(context, 'Reports', [
                 'Sales Report',
@@ -1147,7 +1233,7 @@ Widget _buildDropdownTile(
               _buildDropdownTile(context, 'Staff', [
                 'Add Staff',
                 'Staff',
-                 'Staff Exit Form',
+                'Staff Exit Form',
                 'Staff Exit List',
               ]),
               // _buildDropdownTile(context, 'Credit Note', [
@@ -1167,7 +1253,7 @@ Widget _buildDropdownTile(
               SizedBox(height: 50), // Add some space at the bottom
             ],
           ),
-        ),
+        ),),
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
