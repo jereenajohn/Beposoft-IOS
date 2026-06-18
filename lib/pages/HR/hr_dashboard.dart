@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
+import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/Staff_exit_form_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_staff.dart';
@@ -31,6 +32,9 @@ class _HrDashboardState extends State<HrDashboard> {
   void initState() {
     super.initState();
     _getUsername(); // Get the username when the page loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+  AuthStatusChecker.start(context);
+});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       checkAppUpdate(context);
     });
@@ -347,6 +351,13 @@ Widget _buildDropdownTile(
               },
             ),
 
+  ListTile(
+                title: Text('Employee Leave Form'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
+                },
+              ),
             
 
             

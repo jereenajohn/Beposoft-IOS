@@ -6,16 +6,18 @@ import 'package:beposoft/pages/ACCOUNTS/grv_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/performa_invoice_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_staff.dart';
+import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
 import 'package:beposoft/pages/BDM/approve_bdo__call_duration.dart';
 import 'package:beposoft/pages/BDM/bdm_customer_list.dart';
 import 'package:beposoft/pages/BDM/bdm_grv_list.dart';
 import 'package:beposoft/pages/BDM/bdm_order_list.dart';
 import 'package:beposoft/pages/BDM/bdm_staff_list.dart';
 import 'package:beposoft/pages/BDM/bdm_today_order_list.dart';
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
 import 'package:intl/intl.dart';
-
+import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
@@ -55,6 +57,8 @@ class _bdm_dashbordState extends State<bdm_dashbord> {
   bool isTeamSummaryLoading = false;
   String? selectedHourSlot;
   DateTime selectedTeamDate = DateTime.now();
+    bool isManager = false;
+
 
   String? username = '';
   int familyTotalBills = 0;
@@ -74,6 +78,9 @@ class _bdm_dashbordState extends State<bdm_dashbord> {
     fetchOrderData();
     getcustomer();
     fetchMyTeamDetailedSummary();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+  AuthStatusChecker.start(context);
+});
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       checkAppUpdate(context);
@@ -1267,6 +1274,8 @@ class _bdm_dashbordState extends State<bdm_dashbord> {
 
         setState(() {
           family = productsData['family'].toString() ?? '';
+                  isManager = parsed['data']['is_manager'] ?? false;
+
 
           getGrvList();
 
@@ -2259,6 +2268,32 @@ Widget _buildDropdownTile(
                     MaterialPageRoute(
                       builder: (context) => bdm_staff_list(
                         family: familyName,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+                ListTile(
+                title: Text('Employee Leave Form'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
+                },
+              ),
+
+               Divider(),
+                             if (isManager)
+
+              ListTile(
+                leading: Icon(Icons.person_2),
+                title: Text('Approve Leave Requests'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ManagerLeaveRequestsPage(
+                       
                       ),
                     ),
                   );

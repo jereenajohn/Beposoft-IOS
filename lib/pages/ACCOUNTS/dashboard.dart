@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:beposoft/pages/auth_status_checker.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/Bulk_Bepocart_Orders.dart';
 import 'package:beposoft/pages/ACCOUNTS/Create_Purchase_Product_List.dart';
 import 'package:beposoft/pages/ACCOUNTS/Today_shipped_orders.dart';
@@ -33,6 +35,7 @@ import 'package:beposoft/pages/ACCOUNTS/status_wise_orders_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/performa_invoice_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/todays_orders_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/uploadbulkorders.dart';
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_product_approval.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
 import 'package:intl/intl.dart';
@@ -82,6 +85,9 @@ class _admin_dashboardState extends State<dashboard> {
     getSalesReport();
     fetchOrderData();
     fetchshippedorders();
+       WidgetsBinding.instance.addPostFrameCallback((_) {
+      AuthStatusChecker.start(context);
+    });
   }
 
   int approval = 0;
@@ -1126,6 +1132,16 @@ _buildDropdownTile(context, 'Daily Sales Reports',
                 'Add Staff',
                 'Staff',
               ]),
+
+                 ListTile(
+                  title: Text('Employee Leave Form'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => EmployeeLeaveFormPage()));
+                  },
+                ),
               // _buildDropdownTile(context, 'Credit Note', [
               //   'Add Credit Note',
               //   'Credit Note List',

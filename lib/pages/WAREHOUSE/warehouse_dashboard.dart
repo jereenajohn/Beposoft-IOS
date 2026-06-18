@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
 import 'package:intl/intl.dart';
-
+import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
@@ -23,6 +24,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 class WarehouseDashboard extends StatefulWidget {
   @override
   State<WarehouseDashboard> createState() => _WarehouseDashboardState();
@@ -46,14 +48,17 @@ class _WarehouseDashboardState extends State<WarehouseDashboard> {
     fetchproformaData();
     getSalesReport();
     fetchOrderData();
-         WidgetsBinding.instance.addPostFrameCallback((_) {
-    checkAppUpdate(context);
-  });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AuthStatusChecker.start(context);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkAppUpdate(context);
+    });
   }
 
-int toprint=0;
-int packed=0;
- bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+  int toprint = 0;
+  int packed = 0;
+  bool _isUpdateAvailable(String currentVersion, String storeVersion) {
     List<int> currentParts =
         currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
@@ -82,8 +87,7 @@ int packed=0;
     return false;
   }
 
-
-   Future<bool> checkAppUpdate(BuildContext context) async {
+  Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
@@ -202,37 +206,35 @@ int packed=0;
     return true;
   }
 
- Future<void> fetchOrderData() async {
-  try {
-    final token = await getTokenFromPrefs();
-    var response = await http.get(
-      Uri.parse('$api/api/orders/'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+  Future<void> fetchOrderData() async {
+    try {
+      final token = await getTokenFromPrefs();
+      var response = await http.get(
+        Uri.parse('$api/api/orders/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        var productsData = parsed;
+        List<Map<String, dynamic>> orderList = [];
 
-    if (response.statusCode == 200) {
-      final parsed = jsonDecode(response.body);
-      var productsData = parsed;
-      List<Map<String, dynamic>> orderList = [];
+        for (var productData in productsData) {
+          String rawOrderDate = productData['order_date'];
+          String formattedOrderDate = rawOrderDate;
 
-      for (var productData in productsData) {
-        String rawOrderDate = productData['order_date'];
-        String formattedOrderDate = rawOrderDate;
+          try {
+            DateTime parsedOrderDate =
+                DateFormat('yyyy-MM-dd').parse(rawOrderDate);
+            formattedOrderDate = DateFormat('yyyy-MM-dd')
+                .format(parsedOrderDate); // Convert to desired format
+          } catch (e) {}
 
-        try {
-          DateTime parsedOrderDate = DateFormat('yyyy-MM-dd').parse(rawOrderDate);
-          formattedOrderDate = DateFormat('yyyy-MM-dd').format(parsedOrderDate); // Convert to desired format
-        } catch (e) {
-          
-        }
+          // Add to orderList if status is "Shipped" or "To "
 
-        // Add to orderList if status is "Shipped" or "To "
-       
           orderList.add({
             'id': productData['id'],
             'invoice': productData['invoice'],
@@ -275,28 +277,21 @@ int packed=0;
             'total_amount': productData['total_amount'],
             'order_date': formattedOrderDate, // Use the formatted string
           });
-           if (productData['status'] == 'To Print') {
+          if (productData['status'] == 'To Print') {
             toprint++;
-
-
+          } else if (productData['status'] == 'Packed') {
+            packed++;
+          }
         }
-        else if(productData['status'] == 'Packed'){
-          packed++;
-        }
+
+        setState(() {
+          orders = orderList;
+
+          filteredOrders = orderList;
+        });
       }
-
-
-      setState(() {
-        orders = orderList;
-        
-        filteredOrders = orderList;
-      });
-    }
-  } catch (error) {
-    
+    } catch (error) {}
   }
-}
-
 
   Future<void> getSalesReport() async {
     setState(() {});
@@ -372,8 +367,6 @@ int packed=0;
     }
   }
 
-
-
   Future<void> fetchproformaData() async {
     try {
       final token = await getTokenFromPrefs();
@@ -408,13 +401,8 @@ int packed=0;
           proforma = performaInvoiceList;
         });
         int proformalistcount = proforma.length;
-        
-      } else {
-        
-      }
-    } catch (error) {
-      
-    }
+      } else {}
+    } catch (error) {}
   }
 
 // Get token from SharedPreferences
@@ -460,7 +448,6 @@ int packed=0;
 
         // Get the count of grvlist
         int grvListCount = grvlist.length;
-        
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -478,62 +465,62 @@ int packed=0;
       );
     }
   }
- Future<String?> getusernameFromPrefs() async {
+
+  Future<String?> getusernameFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('username');
   }
+
   // Retrieve the username from SharedPreferences
   Future<void> _getUsername() async {
-          final name = await getusernameFromPrefs();
+    final name = await getusernameFromPrefs();
     setState(() {
-      username =name??
-          'Guest'; // Default to 'Guest' if no username
+      username = name ?? 'Guest'; // Default to 'Guest' if no username
     });
   }
 
- void logout(BuildContext context) async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  // await prefs.remove('userId');
-  // await prefs.remove('token');
-  // await prefs.remove('username');
-  // await prefs.remove('department');
-  // await prefs.remove('warehouse');
-  await Future.delayed(Duration(milliseconds: 100));
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(builder: (context) => login()),
-  );
-}
-
+  void logout(BuildContext context) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    // await prefs.remove('userId');
+    // await prefs.remove('token');
+    // await prefs.remove('username');
+    // await prefs.remove('department');
+    // await prefs.remove('warehouse');
+    await Future.delayed(Duration(milliseconds: 100));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => login()),
+    );
+  }
 
   drower d = drower();
 
-Widget _buildDropdownTile(
-    BuildContext context, String title, List<String> options) {
-  return ExpansionTile(
-    backgroundColor: Colors.white,
-    collapsedBackgroundColor: Colors.white,
-    iconColor: Colors.black,
-    collapsedIconColor: Colors.black,
-    title: Text(
-      title,
-      style: const TextStyle(color: Colors.black),
-    ),
-    children: options.map((option) {
-      return ListTile(
-        tileColor: Colors.white,
-        title: Text(
-          option,
-          style: const TextStyle(color: Colors.black),
-        ),
-        onTap: () {
-          Navigator.pop(context);
-          d.navigateToSelectedPage(context, option);
-        },
-      );
-    }).toList(),
-  );
-}
+  Widget _buildDropdownTile(
+      BuildContext context, String title, List<String> options) {
+    return ExpansionTile(
+      backgroundColor: Colors.white,
+      collapsedBackgroundColor: Colors.white,
+      iconColor: Colors.black,
+      collapsedIconColor: Colors.black,
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.black),
+      ),
+      children: options.map((option) {
+        return ListTile(
+          tileColor: Colors.white,
+          title: Text(
+            option,
+            style: const TextStyle(color: Colors.black),
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            d.navigateToSelectedPage(context, option);
+          },
+        );
+      }).toList(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -557,191 +544,199 @@ Widget _buildDropdownTile(
           ],
         ),
         drawer: Drawer(
-            backgroundColor: Colors.white,
-            child: Container(
-              color: Colors.white,
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: <Widget>[
-               DrawerHeader(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Image.asset(
-                            "lib/assets/appstore.png",
-                            width: 90,
-                            height: 90,
-                            fit: BoxFit.cover,
-                          ),
+          backgroundColor: Colors.white,
+          child: Container(
+            color: Colors.white,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                DrawerHeader(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Image.asset(
+                          "lib/assets/appstore.png",
+                          width: 90,
+                          height: 90,
+                          fit: BoxFit.cover,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-              ListTile(
-                leading: Icon(Icons.dashboard),
-                title: Text('Dashboard'),
-                onTap: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => WarehouseDashboard()));
-                },
-              ),
-             
-              Divider(),
-              
-              _buildDropdownTile(context, 'Delivery Note',
-                  ['Delivery Note List(All)','Delivery Note List(To Print)','Delivery Note List(Packing under Progress)','Delivery Note List(Packed)','Delivery Note List(Ready to ship)','Delivery Note List(Shipped)', 'Daily Goods Movement']),
-           
-
-
-
-              _buildDropdownTile(
-                  context, 'GRV', ['Create New GRV', 'GRVs List']),
-            
-              Divider(),
-             
-             
-              Divider(),
-             ListTile(
-  leading: const Icon(Icons.logout),
-  title: const Text('Logout'),
-  onTap: () async {
-    await logoutUser(context);
-  },
-),
-            ],
+                ),
+                ListTile(
+                  leading: Icon(Icons.dashboard),
+                  title: Text('Dashboard'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => WarehouseDashboard()));
+                  },
+                ),
+                Divider(),
+                _buildDropdownTile(context, 'Delivery Note', [
+                  'Delivery Note List(All)',
+                  'Delivery Note List(To Print)',
+                  'Delivery Note List(Packing under Progress)',
+                  'Delivery Note List(Packed)',
+                  'Delivery Note List(Ready to ship)',
+                  'Delivery Note List(Shipped)',
+                  'Daily Goods Movement'
+                ]),
+                _buildDropdownTile(
+                    context, 'GRV', ['Create New GRV', 'GRVs List']),
+                Divider(),
+                ListTile(
+                  leading: const Icon(Icons.people),
+                  title: const Text('Employee Leave Form'),
+                  onTap: () async {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => EmployeeLeaveFormPage()));
+                  },
+                ),
+                Divider(),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text('Logout'),
+                  onTap: () async {
+                    await logoutUser(context);
+                  },
+                ),
+              ],
+            ),
           ),
-        ),),
+        ),
         body: SafeArea(
-  child: Padding(
-    padding: const EdgeInsets.all(16.0),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Profile Section
-        Row(
-          children: [
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditProfileScreen(),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Profile Section
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EditProfileScreen(),
+                          ),
+                        );
+                      },
+                      child: CircleAvatar(
+                        radius: 25,
+                        backgroundImage: AssetImage(
+                            'lib/assets/female.jpeg'), // Replace with your new image
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Text(
+                      '$username',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: 10),
+
+                Expanded(
+                  child: ListView(
+                    children: [
+                      // Display the count of today's shipped orders in cards
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => WarehouseOrderView(
+                                      status: 'To Print',
+                                    )),
+                          );
+                        },
+                        child: _buildCard(Icons.local_shipping,
+                            'Waiting For Packing  ', toprint),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    WarehouseOrderView(status: 'Packed')),
+                          );
+                        },
+                        child: _buildCard(Icons.request_quote,
+                            'Waiting For Shipping', packed),
+                      ),
+                    ],
                   ),
-                );
-              },
-              child: CircleAvatar(
-                radius: 25,
-                backgroundImage: AssetImage(
-                    'lib/assets/female.jpeg'), // Replace with your new image
-              ),
-            ),
-            SizedBox(width: 16),
-            Text(
-              '$username',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-
-        SizedBox(height: 10),
-
-        Expanded(
-          child: ListView(
-            children: [
-              // Display the count of today's shipped orders in cards
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => WarehouseOrderView(status:'To Print' ,)),
-        );
-                },
-                child: _buildCard(
-                  Icons.local_shipping,
-                  'Waiting For Packing  ',
-                  toprint
                 ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => WarehouseOrderView(status:'Packed')),
-        );
-                  
-                },
-                child: _buildCard(
-                  Icons.request_quote, 
-                  'Waiting For Shipping', 
-                  packed
-                ),
-              ),
-              
-            ],
+              ],
+            ),
           ),
         ),
-      ],
-    ),
-  ),
-),
-
-
       ),
     );
   }
-Widget _buildCard(IconData icon, String title, [int count = 0]) {
-  return Container(
-    height: 120.0, // Set a fixed height for each card
-    margin: EdgeInsets.symmetric(vertical: 8.0),
-    child: Card(
-      elevation: 4.0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
-      child: Stack(
-        children: [
-          
-          Column(
-            children: [
-              SizedBox(height: 20,),
-              ListTile(
-                leading: Icon(icon, size: 40, color: Colors.blue),
-                title: Text(title, style: TextStyle(fontWeight: FontWeight.bold)),
-                onTap: () {
-                  // Handle item tap if needed
-                },
-              ),
-            ],
-          ),
-          if (count > 0) 
-            Positioned(
-              top: 8.0,
-              right: 8.0,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                decoration: BoxDecoration(
-                  color: Colors.grey,
-                  borderRadius: BorderRadius.circular(12.0),
+
+  Widget _buildCard(IconData icon, String title, [int count = 0]) {
+    return Container(
+      height: 120.0, // Set a fixed height for each card
+      margin: EdgeInsets.symmetric(vertical: 8.0),
+      child: Card(
+        elevation: 4.0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                SizedBox(
+                  height: 20,
                 ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                ListTile(
+                  leading: Icon(icon, size: 40, color: Colors.blue),
+                  title: Text(title,
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  onTap: () {
+                    // Handle item tap if needed
+                  },
+                ),
+              ],
+            ),
+            if (count > 0)
+              Positioned(
+                top: 8.0,
+                right: 8.0,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                  decoration: BoxDecoration(
+                    color: Colors.grey,
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
-
- 
+    );
+  }
 }

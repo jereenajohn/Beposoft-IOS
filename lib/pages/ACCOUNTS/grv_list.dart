@@ -121,6 +121,7 @@ class _GrvListState extends State<GrvList> {
               'status': productData['status'] ?? statusOptions[0],
               'order_date': productData['order_date'],
               'note': productData['note'],
+              'parcel_service_name': productData['parcel_service_name'],
               'updated_at': productData['updated_at'] ??
                   DateTime.now().toIso8601String().split('T')[0],
             });
@@ -139,6 +140,8 @@ class _GrvListState extends State<GrvList> {
               'status': productData['status'] ?? statusOptions[0],
               'order_date': productData['order_date'],
               'note': productData['note'],
+              'parcel_service_name':
+                  productData['parcel_service_name'] ?? 'No Parcel Service',
               'updated_at': productData['updated_at'] ??
                   DateTime.now().toIso8601String().split('T')[0],
             });
@@ -597,7 +600,26 @@ class _GrvListState extends State<GrvList> {
                                   ],
                                 ),
 
-                                 const Divider(height: 24),
+                                const Divider(height: 24),
+
+                                Row(
+                                  children: [
+                                    const Icon(Icons.local_shipping,
+                                        size: 18, color: Colors.blueAccent),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        "Parcel Service: ${item['parcel_service_name'] ?? 'No Parcel Service'}",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const Divider(height: 24),
 
                                 /// ❓ RETURN REASON
                                 Row(

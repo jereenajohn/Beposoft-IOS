@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
+import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/pages/ACCOUNTS/Bulk_Bepocart_Orders.dart';
 import 'package:beposoft/pages/ACCOUNTS/Today_shipped_orders.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_EMI.dart';
@@ -69,6 +72,9 @@ class _marketing_dashboardState extends State<marketing_dashboard> {
     getSalesReport();
     fetchOrderData();
     fetchshippedorders();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+  AuthStatusChecker.start(context);
+});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       checkAppUpdate(context);
     });
@@ -766,8 +772,30 @@ class _marketing_dashboardState extends State<marketing_dashboard> {
                     // Navigate to the Settings page or perform any other action
                   },
                 ),
-                ],
 
+                  Divider(),
+
+                  ListTile(
+                  leading: Icon(Icons.people),
+                  title: Text('Approve Leave Requests '),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => ManagerLeaveRequestsPage()));
+                    // Navigate to the Settings page or perform any other action
+                  },
+                ),
+
+                
+                ],
+  ListTile(
+                title: Text('Employee Leave Form'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
+                },
+              ),
                 Divider(),
                 ListTile(
                   leading: const Icon(Icons.logout),

@@ -4,11 +4,13 @@ import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/add_team_staff.dart';
+import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
+import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_request_list.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_product_approval.dart';
 import 'package:intl/intl.dart';
-
+import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
@@ -51,6 +53,9 @@ class _WarehouseAdminState extends State<WarehouseAdmin> {
     fetchproformaData();
     getSalesReport();
     fetchOrderData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+  AuthStatusChecker.start(context);
+});
      WidgetsBinding.instance.addPostFrameCallback((_) {
     checkAppUpdate(context);
   });
@@ -633,7 +638,25 @@ int packed=0;
                 },
               ),
               Divider(),
-             
+
+              if (isManager)
+              ListTile(
+                title: Text('Approve Leave Requests'),
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => ManagerLeaveRequestsPage()));
+                },
+              ),
+              Divider(),
+
+                ListTile(
+                title: Text('Employee Leave Form'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
+                },
+              ),
+
+              Divider(),
               ListTile(
                 leading: Icon(Icons.check_circle),
                 title: Text('Approve Products'),
