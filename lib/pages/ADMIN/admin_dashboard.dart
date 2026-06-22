@@ -15,6 +15,8 @@ import 'package:beposoft/pages/ACCOUNTS/add_purpose_of_payment.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supplier.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_team.dart';
+import 'package:beposoft/pages/ADMIN/add_staffwise_department.dart';
+import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/auth_status_checker.dart';
@@ -1135,7 +1137,17 @@ class _admin_dashboardState extends State<admin_dashboard> {
                     // Navigate to the Settings page or perform any other action
                   },
                 ),
-
+                  if (isManager)
+                  ListTile(
+                    title: Text('Add Attendance Department'),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => AttendanceDepartmentPage( baseUrl: api,)));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
              
                 if (isManager)
                   ListTile(
@@ -1189,6 +1201,9 @@ class _admin_dashboardState extends State<admin_dashboard> {
                             builder: (context) => EmployeeLeaveFormPage()));
                   },
                 ),
+
+               
+                
                 //  ListTile(
                 //   leading: Icon(Icons.person),
                 //   title: Text('Delivery Notes'),
@@ -1273,6 +1288,8 @@ class _admin_dashboardState extends State<admin_dashboard> {
                   'Damaged Stock',
                   'Finance Report',
                   'Actual Delivery Report',
+                                      'Order Comparison Report',
+
                 ]),
 
                 _buildDropdownTile(context, 'Staff', [
