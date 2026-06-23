@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:beposoft/Sales%20Directors/sd_add_attendance.dart';
+import 'package:beposoft/Sales%20Directors/sd_add_team_staffs.dart';
 import 'package:beposoft/Sales%20Directors/sd_confirm_call_duration.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
@@ -1370,8 +1372,7 @@ class _SdDashboardState extends State<SdDashboard> {
 
         setState(() {
           family = productsData['family'].toString() ?? '';
-                    isManager = parsed['data']['is_manager'] ?? false;
-
+          isManager = parsed['data']['is_manager'] ?? false;
 
           getGrvList();
 
@@ -2393,16 +2394,44 @@ class _SdDashboardState extends State<SdDashboard> {
                 // _buildDropdownTile(
                 //   context, 'BDO Daily Sales Report', ['DSR BDO List']),
 
- if (isManager)
+                // if (isManager)
+                //   ListTile(
+                //     leading: const Icon(Icons.fact_check_outlined),
+                //     title: const Text('Add Attendance'),
+                //     onTap: () {
+                //       Navigator.push(
+                //         context,
+                //         MaterialPageRoute(
+                //           builder: (context) =>
+                //               const StaffMarkAttendanceScreen(),
+                //         ),
+                //       );
+                //     },
+                //   ),
+                // Divider(),
+                if (isManager)
                   ListTile(
                     leading: const Icon(Icons.fact_check_outlined),
-                    title: const Text('Add Attendance'),
+                    title: const Text('SD Add Team Staff'),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const StaffMarkAttendanceScreen(),
+                          builder: (context) => const SDAllMembersPage(),
+                        ),
+                      );
+                    },
+                  ),
+                Divider(),
+                if (isManager)
+                  ListTile(
+                    leading: const Icon(Icons.fact_check_outlined),
+                    title: const Text('SD Add Attendance'),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const sdAllAttendanceAddPage(),
                         ),
                       );
                     },
