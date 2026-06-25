@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:beposoft/Sales%20Directors/sd_add_attendance.dart';
 import 'package:beposoft/Sales%20Directors/sd_add_team_staffs.dart';
+import 'package:beposoft/Sales%20Directors/sd_all_dsr_reportpage.dart';
 import 'package:beposoft/Sales%20Directors/sd_confirm_call_duration.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
@@ -2409,10 +2410,17 @@ class _SdDashboardState extends State<SdDashboard> {
                 //     },
                 //   ),
                 // Divider(),
+                _buildDropdownTile(context, 'BDO DSR', [
+                  'Add Team',
+                  'Add Team Members',
+                  // 'Add BDO Attendence',
+                  // 'Approve BDO Call Duration'
+                ]),
+                
                 if (isManager)
                   ListTile(
-                    leading: const Icon(Icons.fact_check_outlined),
-                    title: const Text('SD Add Team Staff'),
+                    leading: const Icon(Icons.people),
+                    title: const Text('Add Attendance Team'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -2422,11 +2430,11 @@ class _SdDashboardState extends State<SdDashboard> {
                       );
                     },
                   ),
-                Divider(),
+                
                 if (isManager)
                   ListTile(
                     leading: const Icon(Icons.fact_check_outlined),
-                    title: const Text('SD Add Attendance'),
+                    title: const Text('Add Attendance'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -2436,7 +2444,22 @@ class _SdDashboardState extends State<SdDashboard> {
                       );
                     },
                   ),
-                Divider(),
+
+                
+                if (isManager)
+                  ListTile(
+                    leading: const Icon(Icons.fact_check_outlined),
+                    title: const Text('Approve BDO Call Duration'),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SdAllDsrReportPage(),
+                        ),
+                      );
+                    },
+                  ),
+               
 
                 ListTile(
                   leading: const Icon(Icons.people),
@@ -2449,13 +2472,7 @@ class _SdDashboardState extends State<SdDashboard> {
                   },
                 ),
 
-                _buildDropdownTile(context, 'BDO DSR', [
-                  'Add Team',
-                  'Add Team Members',
-                  'Add BDO Attendence',
-                  'Approve BDO Call Duration'
-                ]),
-                Divider(),
+                
                 ListTile(
                   leading: Icon(Icons.person_2),
                   title: Text('Staff'),

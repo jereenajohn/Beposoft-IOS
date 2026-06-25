@@ -22,6 +22,9 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
   List<Map<String, dynamic>> failureLogs = [];
   List<String> failedStockProducts = [];
 
+  int? userId;
+  String? userDiv;
+
   bool isLoading = false;
   String loadingText = "Processing orders...";
   String searchTerm = "";
@@ -29,6 +32,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
   @override
   void initState() {
     super.initState();
+    fetchProfile();
     fetchStates();
   }
 
@@ -37,16 +41,63 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
     return prefs.getString('token');
   }
 
-  String cleanPhone(dynamic phone) {
-    var value = phone?.toString().trim() ?? "";
+  Map<String, String> authHeaders(String? token) {
+    return {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
+  }
 
-    if (value.startsWith("+91")) {
-      value = value.substring(3);
-    } else if (value.startsWith("91") && value.length > 10) {
+  Future<void> fetchProfile() async {
+    try {
+      final token = await gettokenFromPrefs();
+
+      final response = await http.get(
+        Uri.parse('$api/api/profile/'),
+        headers: authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final profile = data['data'] ?? {};
+
+        if (!mounted) return;
+        setState(() {
+          final id = profile['id'];
+          userId = id is int ? id : int.tryParse(id?.toString() ?? '');
+          userDiv = profile['family_name']?.toString();
+        });
+      } else {
+        showSnackBar('Failed to load profile', isError: true);
+      }
+    } catch (e) {
+      debugPrint('fetchProfile error: $e');
+      showSnackBar('Failed to load profile', isError: true);
+    }
+  }
+
+  void showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String cleanPhone(dynamic phone) {
+    var value = phone?.toString().trim() ?? '';
+
+    if (value.isEmpty) return '';
+
+    value = value.replaceFirst(RegExp(r'\.0$'), '');
+    value = value.replaceAll(RegExp(r'\D'), '');
+
+    if (value.startsWith('91') && value.length > 10) {
       value = value.substring(2);
     }
-
-    value = value.replaceAll(RegExp(r'\D'), '');
 
     if (value.length > 10) {
       value = value.substring(value.length - 10);
@@ -55,18 +106,33 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
     return value;
   }
 
-  int getStateId(dynamic provinceName) {
-    final province = provinceName?.toString().trim().toLowerCase() ?? "";
+  String normalizeStateName(dynamic value) {
+    return value
+        ?.toString()
+        .toLowerCase()
+        .replaceAll('&', 'and')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim() ??
+        '';
+  }
 
-    if (province.isEmpty) return 14;
+  int getStateId(dynamic provinceName) {
+    final normalized = normalizeStateName(provinceName);
+
+    if (normalized.isEmpty) return 14;
 
     for (final state in states) {
-      final name = state["name"]?.toString().trim().toLowerCase() ?? "";
-      final provinceValue =
-          state["province"]?.toString().trim().toLowerCase() ?? "";
+      final stateName = normalizeStateName(state['name']);
+      final stateProvince = normalizeStateName(state['province']);
 
-      if (name == province || provinceValue == province) {
-        final id = state["id"];
+      if (stateName == normalized || stateProvince == normalized) {
+        final id = state['id'];
+        return id is int ? id : int.tryParse(id.toString()) ?? 14;
+      }
+
+      if (['jk', 'jandk', 'jammu and kashmir', 'jammu kashmir'].contains(normalized) &&
+          stateName == 'jammu kashmir') {
+        final id = state['id'];
         return id is int ? id : int.tryParse(id.toString()) ?? 14;
       }
     }
@@ -214,10 +280,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final response = await http.get(
         Uri.parse('$api/api/states/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
       );
 
       if (response.statusCode == 200) {
@@ -247,10 +310,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final response = await http.get(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
       );
 
       if (response.statusCode != 200) return null;
@@ -292,10 +352,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final response = await http.get(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
       );
 
       if (response.statusCode != 200) return null;
@@ -386,6 +443,11 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
           ) ??
           0;
 
+      final codeCharge = double.tryParse(
+            getValue(row, ["Total", "total", "code_charge"], "0").toString(),
+          ) ??
+          0;
+
       final paymentStatus = getValue(
         row,
         ["Financial Status", "Payment Status", "payment_status"],
@@ -404,6 +466,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
           "name": orderName,
           "email": email,
           "shippingCharge": shippingCharge,
+          "codeCharge": codeCharge,
           "createdAt": getValue(
             row,
             ["Created at", "Order Date", "Date"],
@@ -628,6 +691,14 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
         throw Exception("No valid rows found in uploaded file");
       }
 
+      if (userId == null) {
+        await fetchProfile();
+      }
+
+      if (userId == null) {
+        throw Exception('User profile not loaded. Please login again.');
+      }
+
       final orders = convertRowsToOrders(rows);
 
       if (orders.isEmpty) {
@@ -792,10 +863,10 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final body = {
         "name": name.isNotEmpty ? name : "Unknown Customer",
-        "manager": 103,
+        "manager": userId,
         "state": stateId,
         "phone": cleanPhone(phone),
-        "alt_phone": "",
+        "alt_phone": "7025400833",
         "email": email.isNotEmpty ? email : "no-email@example.com",
         "address": address,
         "zip_code": zipcode,
@@ -805,10 +876,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final response = await http.post(
         Uri.parse('$api/api/add/customer/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
         body: jsonEncode(body),
       );
 
@@ -863,10 +931,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final response = await http.post(
         Uri.parse('$api/api/add/customer/address/$customerId/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
         body: jsonEncode(body),
       );
 
@@ -964,6 +1029,40 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
     }
   }
 
+  String mapPaymentMethod(dynamic method) {
+    if (method == null) return 'Net Banking';
+
+    final value = method.toString().toLowerCase();
+
+    if (value.contains('razorpay')) return '1 Razorpay';
+    if (value.contains('credit')) return 'Credit Card';
+    if (value.contains('debit')) return 'Debit Card';
+    if (value.contains('paypal')) return 'PayPal';
+    if (value.contains('cod') || value.contains('cash on delivery')) {
+      return 'Cash on Delivery (COD)';
+    }
+    if (value.contains('bank') || value.contains('net banking')) {
+      return 'Net Banking';
+    }
+
+    return 'Net Banking';
+  }
+
+  String formatExcelDate(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) {
+      return DateTime.now().toIso8601String().split('T')[0];
+    }
+
+    final numericValue = num.tryParse(value.toString());
+    if (numericValue != null) {
+      final excelEpoch = DateTime.utc(1899, 12, 30);
+      final date = excelEpoch.add(Duration(milliseconds: (numericValue * 86400000).round()));
+      return date.toIso8601String().split('T')[0];
+    }
+
+    return value.toString().split(' ').first;
+  }
+
   Future<void> createOrder({
     required Map<String, dynamic> order,
     required int customerId,
@@ -984,24 +1083,33 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final totalAmount = productAmount + shippingCharge;
 
-      final paymentMethod = order["paymentGatewayNames"] is List &&
+      final rawPaymentMethod = order["paymentGatewayNames"] is List &&
               order["paymentGatewayNames"].isNotEmpty
-          ? order["paymentGatewayNames"][0].toString()
+          ? order["paymentGatewayNames"][0]
           : "N/A";
 
+      final paymentMethod = mapPaymentMethod(rawPaymentMethod);
+      final codeCharge =
+          double.tryParse(order["codeCharge"]?.toString() ?? "0") ?? 0;
+
       final today = DateTime.now().toIso8601String().split("T")[0];
+      final excelOrderDate = formatExcelDate(order["createdAt"]);
+      final shouldUseExcelDate = userDiv?.toLowerCase() == 'bepocart';
 
       final body = {
-        "manage_staff": 103,
+        "manage_staff": userId,
         "company": 5,
         "customer": customerId,
         "billing_address": addressId,
-        "order_date": today,
+        "order_date": shouldUseExcelDate ? excelOrderDate : today,
+        "billing_date": today,
         "family": 3,
         "state": shippingStateId,
         "payment_status": mapPaymentStatus(order["displayFinancialStatus"]),
         "total_amount": totalAmount.toString(),
         "shipping_charge": shippingCharge.toString(),
+        "code_charge": paymentMethod == "Cash on Delivery (COD)" ? "0" : codeCharge.toString(),
+        "cod_amount": paymentMethod == "Cash on Delivery (COD)" ? codeCharge.toString() : "0",
         "bank": 8,
         "payment_method": paymentMethod,
         "warehouses": 1,
@@ -1011,10 +1119,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
       final response = await http.post(
         Uri.parse('$api/api/order/create/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
         body: jsonEncode(body),
       );
 
@@ -1104,15 +1209,21 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
           double.tryParse(order["shippingCharge"]?.toString() ?? "0") ?? 0;
 
       final totalAmount = (productAmount + shippingCharge).toStringAsFixed(2);
+      final rawPaymentMethod = order["paymentGatewayNames"] is List &&
+              order["paymentGatewayNames"].isNotEmpty
+          ? order["paymentGatewayNames"][0]
+          : "N/A";
+      final paymentMethod = mapPaymentMethod(rawPaymentMethod);
+      final codeCharge =
+          double.tryParse(order["codeCharge"]?.toString() ?? "0") ?? 0;
 
       final response = await http.put(
         Uri.parse('$api/api/shipping/$orderId/order/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders(token),
         body: jsonEncode({
           "total_amount": totalAmount,
+          "code_charge": paymentMethod == "Cash on Delivery (COD)" ? "0" : codeCharge.toString(),
+          "cod_amount": paymentMethod == "Cash on Delivery (COD)" ? codeCharge.toString() : "0",
         }),
       );
 
@@ -1456,7 +1567,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
+                      backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -1897,6 +2008,11 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
   }
 
   Widget _reasonCell(Map<String, dynamic> log) {
+    final backendError = log['backendError']?.toString() ?? '';
+    final reasonText = backendError.isNotEmpty
+        ? "${log['reason']}\n\n$backendError"
+        : log['reason'].toString();
+
     return Container(
       width: 300,
       decoration: BoxDecoration(
@@ -1929,7 +2045,7 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              log["reason"].toString(),
+              reasonText,
               style: const TextStyle(
                 color: Color(0xFF991B1B),
                 fontWeight: FontWeight.w800,
