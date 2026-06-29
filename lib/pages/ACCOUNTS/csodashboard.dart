@@ -124,6 +124,7 @@ class _cso_dashboardState extends State<cso_dashboard> {
       checkAppUpdate(context);
     });
   }
+
   bool _isUpdateAvailable(String currentVersion, String storeVersion) {
     List<int> currentParts =
         currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
@@ -152,6 +153,7 @@ class _cso_dashboardState extends State<cso_dashboard> {
 
     return false;
   }
+
   Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
@@ -1594,6 +1596,8 @@ class _cso_dashboardState extends State<cso_dashboard> {
           _buildDropdownTile(context, 'Reports', [
             'Sales Report Summary',
             'Sales Report',
+            'Credit Sales Report',
+            'COD Sales Report',
             'Product Stock Report',
             'Family Wise Excel Report',
             'Product Sale Report',

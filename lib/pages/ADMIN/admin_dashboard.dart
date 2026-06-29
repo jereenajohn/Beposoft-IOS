@@ -122,7 +122,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
 
         setState(() {
           isManager = parsed['data']['is_manager'] ?? false;
-        }); 
+        });
 
         debugPrint("IS MANAGER : $isManager");
       }
@@ -801,18 +801,20 @@ class _admin_dashboardState extends State<admin_dashboard> {
                 _buildDropdownTile(context, 'Daily Sales Reports',
                     ['Add Team', 'Team wise Report']),
 
-                       if (isManager)
+                if (isManager)
                   ListTile(
                     title: Text('Add Attendance Department'),
                     onTap: () {
                       Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (context) => AttendanceDepartmentPage( baseUrl: api,)));
+                              builder: (context) => AttendanceDepartmentPage(
+                                    baseUrl: api,
+                                  )));
                       // Navigate to the Settings page or perform any other action
                     },
                   ),
-             
+
                 if (isManager)
                   ListTile(
                     leading: const Icon(Icons.group_add),
@@ -856,7 +858,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
                     },
                   ),
 
-                     ListTile(
+                ListTile(
                   title: Text('Employee Leave Form'),
                   onTap: () {
                     Navigator.push(
@@ -865,8 +867,6 @@ class _admin_dashboardState extends State<admin_dashboard> {
                             builder: (context) => EmployeeLeaveFormPage()));
                   },
                 ),
-
-               
 
                 ListTile(
                   leading: Icon(Icons.person),
@@ -1121,7 +1121,6 @@ class _admin_dashboardState extends State<admin_dashboard> {
                   },
                 ),
 
-                
                 ListTile(
                   leading: Icon(Icons.person),
                   title: Text('Supervisors'),
@@ -1204,10 +1203,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
                     // Navigate to the Settings page or perform any other action
                   },
                 ),
-                
 
-               
-                
                 //  ListTile(
                 //   leading: Icon(Icons.person),
                 //   title: Text('Delivery Notes'),
@@ -1292,8 +1288,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
                   'Damaged Stock',
                   'Finance Report',
                   'Actual Delivery Report',
-                                      'Order Comparison Report',
-
+                  'Order Comparison Report',
                 ]),
 
                 _buildDropdownTile(context, 'Staff', [

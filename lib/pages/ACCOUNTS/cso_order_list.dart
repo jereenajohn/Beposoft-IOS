@@ -54,6 +54,9 @@ class _CsoOrderListState extends State<CsoOrderList> {
   bool hasNextPage = true;
   int totalPages = 1;
   int pageSize = 20; // DRF default page size
+  String? selectedStaff;
+
+  List<Map<String, dynamic>> sta = [];
 
   DateTime? selectedDate; // For single date filter
   DateTime? startDate; // For date range filter
@@ -109,6 +112,7 @@ class _CsoOrderListState extends State<CsoOrderList> {
   void initState() {
     super.initState();
     fetchOrderData();
+    getstaff();
   }
 
   Future<String?> getTokenFromPrefs() async {
@@ -119,6 +123,39 @@ class _CsoOrderListState extends State<CsoOrderList> {
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
+  }
+
+  Future<void> getstaff() async {
+    try {
+      final token = await getTokenFromPrefs();
+
+      final response = await http.get(
+        Uri.parse('$api/api/staffs/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        final productsData = parsed['data'] ?? [];
+
+        final stafflist = productsData.map<Map<String, dynamic>>((item) {
+          return {
+            'id': item['id'],
+            'name': item['name'],
+            'family_name': item['family_name'],
+          };
+        }).toList();
+
+        setState(() {
+          sta = stafflist;
+        });
+      }
+    } catch (error) {
+      debugPrint('Staff fetch error: $error');
+    }
   }
 
   Future<void> fetchOrderData() async {
@@ -135,6 +172,9 @@ class _CsoOrderListState extends State<CsoOrderList> {
               : null,
           'end_date': endDate != null
               ? DateFormat('yyyy-MM-dd').format(endDate!)
+              : null,
+          'staff': selectedStaff != null && selectedStaff!.isNotEmpty
+              ? selectedStaff
               : null,
         }..removeWhere((key, value) => value == null || value.isEmpty),
       );
@@ -158,31 +198,29 @@ class _CsoOrderListState extends State<CsoOrderList> {
 
         List<Map<String, dynamic>> newOrders = [];
 
-      for (var orderData in ordersData) {
-  // Hide Bepocart family orders
-  if ((orderData['family_name'] ?? '')
-          .toString()
-          .toLowerCase() ==
-      'bepocart') {
-    continue;
-  }
+        for (var orderData in ordersData) {
+          // Hide Bepocart family orders
+          if ((orderData['family_name'] ?? '').toString().toLowerCase() ==
+              'bepocart') {
+            continue;
+          }
 
-  if (widget.status == null || widget.status == orderData['status']) {
-    newOrders.add({
-      'id': orderData['id'],
-      'invoice': orderData['invoice'],
-      'manage_staff': orderData['manage_staff'],
-      'customer': orderData['customer'],
-      'warehouse': orderData['warehouse_data'],
-      'status': orderData['status'],
-      'total_amount': orderData['total_amount'],
-      'order_date': orderData['order_date'],
-      'items': orderData['items'] ?? [],
-      'billing_address': orderData['billing_address'] ?? {},
-      'bank': orderData['bank'] ?? {},
-    });
-  }
-}
+          if (widget.status == null || widget.status == orderData['status']) {
+            newOrders.add({
+              'id': orderData['id'],
+              'invoice': orderData['invoice'],
+              'manage_staff': orderData['manage_staff'],
+              'customer': orderData['customer'],
+              'warehouse': orderData['warehouse_data'],
+              'status': orderData['status'],
+              'total_amount': orderData['total_amount'],
+              'order_date': orderData['order_date'],
+              'items': orderData['items'] ?? [],
+              'billing_address': orderData['billing_address'] ?? {},
+              'bank': orderData['bank'] ?? {},
+            });
+          }
+        }
 
         setState(() {
           orders = newOrders;
@@ -603,13 +641,12 @@ class _CsoOrderListState extends State<CsoOrderList> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }else if (dep == "CEO") {
+    } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -784,31 +821,79 @@ class _CsoOrderListState extends State<CsoOrderList> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: DropdownButtonFormField<String>(
-                value: selectedStatus,
-                decoration: InputDecoration(
-                  labelText: "Filter by Status",
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30)),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    selectedStatus = value!;
-                    currentPage = 1;
-                  });
-                  fetchOrderData();
-                },
-                items: orderStatuses.map((status) {
-                  return DropdownMenuItem<String>(
-                    value: status,
-                    child: Text(status),
-                  );
-                }).toList(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedStatus,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: "Status",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStatus = value!;
+                          currentPage = 1;
+                        });
+                        fetchOrderData();
+                      },
+                      items: orderStatuses.map((status) {
+                        return DropdownMenuItem<String>(
+                          value: status,
+                          child: Text(
+                            status,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedStaff,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: "Staff",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStaff = value;
+                          currentPage = 1;
+                        });
+                        fetchOrderData();
+                      },
+                      items: sta.map((staff) {
+                        return DropdownMenuItem<String>(
+                          value: staff['name'].toString(),
+                          child: Text(
+                            staff['name'].toString(),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
             ),
-            // Search Bar
+            SizedBox(
+              height: 10,
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextField(
@@ -826,7 +911,6 @@ class _CsoOrderListState extends State<CsoOrderList> {
                 onChanged: _filterOrders,
               ),
             ),
-
             SizedBox(height: 10),
             buildPagination(),
             SizedBox(height: 10),
