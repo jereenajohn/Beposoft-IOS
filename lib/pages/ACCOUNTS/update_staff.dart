@@ -189,7 +189,18 @@ class _Staff_UpdateState extends State<Staff_Update> {
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
-    } else if (depValue == "SD") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (depValue == "SD") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => SdDashboard()),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:beposoft/loginpage.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
@@ -289,6 +290,18 @@ class cod_transferState extends State<cod_transfer> {
             builder: (context) =>
                 ceo_dashboard()), // Replace AnotherPage with your target page
       );
+    }
+    else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
     } else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
@@ -344,7 +357,18 @@ class cod_transferState extends State<cod_transfer> {
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "CEO") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

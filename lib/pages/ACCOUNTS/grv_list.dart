@@ -326,7 +326,18 @@ class _GrvListState extends State<GrvList> {
             builder: (context) =>
                 WarehouseDashboard()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "CEO") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -423,7 +434,18 @@ class _GrvListState extends State<GrvList> {
                       builder: (context) =>
                           ceo_dashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "CSO") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CSO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

@@ -69,7 +69,18 @@ class _order_productsState extends State<order_products> {
             builder: (context) =>
                 SdDashboard()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -466,7 +477,18 @@ class _order_productsState extends State<order_products> {
                       builder: (context) =>
                           SdDashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "BDM") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

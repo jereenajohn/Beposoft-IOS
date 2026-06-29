@@ -8,6 +8,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoice_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_recipt.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
@@ -342,7 +343,18 @@ class _recipt_ReportState extends State<recipt_Report> {
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -416,7 +428,18 @@ else if (dep == "Warehouse Admin") {
                     context,
                     MaterialPageRoute(
                         builder: (context) => WarehouseDashboard()));
-              } else if (dep == "Warehouse Admin") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "Warehouse Admin") {
                 Navigator.pushReplacement(context,
                     MaterialPageRoute(builder: (context) => WarehouseAdmin()));
               } else {

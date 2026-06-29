@@ -231,7 +231,18 @@ class _EmployeeExitListPageState extends State<EmployeeExitListPage> {
         MaterialPageRoute(builder: (context) => SdDashboard()),
       );
     } 
-
+else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
     else if (dep == "HR") {
       Navigator.pushReplacement(
         context,

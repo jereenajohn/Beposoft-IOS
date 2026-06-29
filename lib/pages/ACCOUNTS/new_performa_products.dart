@@ -929,6 +929,17 @@ class _CreatePerformaProduct_ListState
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
       );
+    }else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
     }
         else if (dep == "SD") {
       Navigator.pushReplacement(
@@ -1014,7 +1025,18 @@ class _CreatePerformaProduct_ListState
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              }
+              }else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
                   else if (dep == "SD") {
       Navigator.pushReplacement(
         context,

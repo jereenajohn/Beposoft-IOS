@@ -576,7 +576,18 @@ class _OrderListState extends State<OrderList> {
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -672,7 +683,18 @@ class _OrderListState extends State<OrderList> {
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "CEO") {
+              }else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    } else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
@@ -356,7 +357,18 @@ class _FinancialReportState extends State<FinancialReport> {
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "warehouse") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -424,7 +436,18 @@ class _FinancialReportState extends State<FinancialReport> {
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "warehouse") {
+              }else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    } else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

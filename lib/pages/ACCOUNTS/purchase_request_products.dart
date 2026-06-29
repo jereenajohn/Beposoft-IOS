@@ -1037,7 +1037,18 @@ class _request_order_productsState extends State<request_order_products> {
             builder: (context) =>
                 WarehouseDashboard()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "CEO") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -1122,7 +1133,18 @@ class _request_order_productsState extends State<request_order_products> {
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "CEO") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

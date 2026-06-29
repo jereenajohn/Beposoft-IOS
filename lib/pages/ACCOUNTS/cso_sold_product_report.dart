@@ -274,7 +274,18 @@ class _cso_Sold_pro_reportState extends State<cso_Sold_pro_report> {
             builder: (context) =>
                 WarehouseDashboard()), // Replace AnotherPage with your target page
       );
-    } else if(dep=="CEO" ){
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if(dep=="CEO" ){
    Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
@@ -340,7 +351,18 @@ else if (dep == "CSO") {
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "warehouse") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

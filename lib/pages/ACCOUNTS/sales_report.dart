@@ -8,6 +8,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoice_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoicereportstaffwise.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
@@ -687,7 +688,16 @@ class _Sales_ReportState extends State<Sales_Report> {
             builder: (context) =>
                 WarehouseDashboard()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "CEO") {
+    } 
+    
+     else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          cso_dashboard()), // Replace AnotherPage with your target page
+                );
+              }else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -770,7 +780,16 @@ class _Sales_ReportState extends State<Sales_Report> {
                       builder: (context) =>
                           ceo_dashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "COO") {
+              }
+              else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          cso_dashboard()), // Replace AnotherPage with your target page
+                );
+              }
+               else if (dep == "COO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

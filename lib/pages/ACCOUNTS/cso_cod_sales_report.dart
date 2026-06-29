@@ -370,6 +370,18 @@ List<Map<String, dynamic>> filterReportBystate({
               );
 
   }
+  else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
   else if(dep=="BDM" ){
     Navigator.pushReplacement(
                 context,
@@ -440,7 +452,19 @@ List<Map<String, dynamic>> filterReportBystate({
           context,
           MaterialPageRoute(builder: (context) => ceo_dashboard()),
         );
-      } else if (dep == "CSO") {
+      } 
+      else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CSO") {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => cso_dashboard()),

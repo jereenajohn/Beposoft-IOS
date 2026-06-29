@@ -524,7 +524,18 @@ Future<void> fetchOrderData() async {
               MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
             );
 
-}
+}else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
 else if(dep=="BDM" ){
    Navigator.pushReplacement(
               context,
@@ -640,6 +651,18 @@ else if(dep=="Marketing" ){
               MaterialPageRoute(builder: (context) => marketing_dashboard()), // Replace AnotherPage with your target page
             );
 }
+else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
 else if(dep=="Warehouse Admin" ){
    Navigator.pushReplacement(
               context,

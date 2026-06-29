@@ -627,7 +627,18 @@ if (selectedBloodGroup.trim().isNotEmpty) {
         context,
         MaterialPageRoute(builder: (context) => SdDashboard()),
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),

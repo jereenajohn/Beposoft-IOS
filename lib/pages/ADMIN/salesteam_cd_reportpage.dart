@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
@@ -131,7 +132,18 @@ class _SalesTeamCdReportPageState extends State<SalesTeamCdReportPage> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    } else if (dep == "ADMIN") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "ADMIN") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => admin_dashboard()),

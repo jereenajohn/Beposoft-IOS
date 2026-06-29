@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:beposoft/loginpage.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
@@ -500,7 +501,14 @@ class _add_addressState extends State<add_address> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    } else if (dep == "Warehouse Admin") {
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
+     else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => WarehouseAdmin()),

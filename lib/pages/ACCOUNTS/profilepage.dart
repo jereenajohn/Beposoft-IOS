@@ -172,6 +172,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         context,
         MaterialPageRoute(builder: (context) => WarehouseDashboard()),
       );
+    }else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
     } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,

@@ -261,7 +261,18 @@ class _Delivery_ReportState extends State<Delivery_Report> {
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "warehouse") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

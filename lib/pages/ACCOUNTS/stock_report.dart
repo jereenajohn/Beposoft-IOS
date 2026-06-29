@@ -244,7 +244,18 @@ Future<String?> getdepFromPrefs() async {
               MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
             );
 
-}
+}else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
 else if(dep=="BDM" ){
    Navigator.pushReplacement(
               context,

@@ -1041,6 +1041,18 @@ class _EmployeeExitFormPageState extends State<EmployeeExitFormPage> {
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
     } 
+    else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
     else if (dep == "SD") {
       Navigator.pushReplacement(
         context,

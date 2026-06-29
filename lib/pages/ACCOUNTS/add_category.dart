@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:beposoft/loginpage.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_category.dart';
@@ -201,6 +202,12 @@ else if(dep=="COO" ){
 }
 
 
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
 else if(dep=="Warehouse Admin" ){
    Navigator.pushReplacement(
               context,

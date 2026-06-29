@@ -743,6 +743,18 @@ DateTime?  _parseReportDate(dynamic v) {
                 ceo_dashboard()), // Replace AnotherPage with your target page
       );
     }
+    else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
      else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
@@ -807,7 +819,18 @@ DateTime?  _parseReportDate(dynamic v) {
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
               } 
-              
+              else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
                else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,

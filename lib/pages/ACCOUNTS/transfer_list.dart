@@ -8,6 +8,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoice_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_bank_transfer.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_bankrecipt.dart';
@@ -369,7 +370,18 @@ Future<void> _navigateBack() async {
               MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
             );
 
-}
+}else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
 else if(dep=="BDM" ){
    Navigator.pushReplacement(
               context,
@@ -440,7 +452,18 @@ else if(dep=="BDM" ){
               context,
               MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
             );
-}
+}else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }
 else if(dep=="warehouse" ){
    Navigator.pushReplacement(
               context,

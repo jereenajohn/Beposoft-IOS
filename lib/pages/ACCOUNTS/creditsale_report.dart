@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:beposoft/pages/ACCOUNTS/creditsale_date_report.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
@@ -321,7 +322,19 @@ class _Creditsalereport2State extends State<Creditsalereport2> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    } else if (dep == "Warehouse Admin") {
+    } 
+    else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => WarehouseAdmin()),
@@ -377,7 +390,18 @@ class _Creditsalereport2State extends State<Creditsalereport2> {
                   context,
                   MaterialPageRoute(builder: (context) => ceo_dashboard()),
                 );
-              } else {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => dashboard()),

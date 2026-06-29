@@ -45,7 +45,18 @@ Future<void> _navigateBack() async {
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -134,7 +145,18 @@ else if(dep=="COO" ){
                         builder: (context) =>
                             bdm_dashbord()), // Replace AnotherPage with your target page
                   );
-                } else if (dep == "warehouse") {
+                } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "warehouse") {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(

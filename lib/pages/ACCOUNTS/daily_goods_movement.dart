@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:beposoft/loginpage.dart';
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dgm.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
@@ -352,7 +353,18 @@ class _dailygoodspageState extends State<daily_goods_movement> {
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "warehouse") {
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -738,7 +750,18 @@ class _dailygoodspageState extends State<daily_goods_movement> {
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "CEO") {
+              } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ceo_dashboard()),
+      );
+    }
+    else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => cso_dashboard()),
+      );
+    }else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

@@ -483,7 +483,7 @@ Future<void> updateproduct( var productId) async {
     final token = await getTokenFromPrefs();
 
     var response = await http.put(
-      Uri.parse('$api/api/product/update/${productId}/'),
+      Uri.parse('$api/api/product/confirmation/${productId}/'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -494,6 +494,8 @@ Future<void> updateproduct( var productId) async {
         },
       ),
     );
+
+    print(response.body);
   
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
