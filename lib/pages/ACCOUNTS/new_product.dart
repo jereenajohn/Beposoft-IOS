@@ -79,8 +79,12 @@ class _new_productState extends State<new_product> {
   }
 
   String? selectedUsability;
-  List<String> usabilityOptions = ["usable", "damaged", "partially_damaged"];
-
+List<String> usabilityOptions = [
+  "usable",
+  "damaged",
+  "partially_damaged",
+  "liquidation_stock",
+];
   List<String> type = ["single", 'variant'];
   List<String> purchasetype = ["International", 'Local'];
   List<Map<String, dynamic>> allRacks = []; // Holds full rack list from API
