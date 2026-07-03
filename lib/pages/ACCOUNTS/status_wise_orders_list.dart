@@ -49,7 +49,7 @@ class _OrderList2State extends State<OrderList2> {
   List<Map<String, dynamic>> orders = [];
   List<Map<String, dynamic>> filteredOrders = [];
   String searchQuery = '';
-
+int waitingForConfirmationCount = 0;
   DateTime? selectedDate; // For single date filter
   DateTime? startDate; // For date range filter
   DateTime? endDate; // For date range filter
@@ -117,6 +117,7 @@ void _filterOrdersByStatus(String status) {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
+ 
  
 Future<void> fetchOrderData() async {
   try {

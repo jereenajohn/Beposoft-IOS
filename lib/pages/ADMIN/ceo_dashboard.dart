@@ -107,7 +107,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   List<Map<String, dynamic>> Finance = [];
   List<dynamic> internalTransfers = [];
   Map<String, dynamic> salesReturnGrandTotal = {};
-bool salesReturnLoading = false;
+  bool salesReturnLoading = false;
   double todayCredit = 0.0;
   double todayDebit = 0.0;
   double openingBalance = 0.0;
@@ -127,6 +127,7 @@ bool salesReturnLoading = false;
   bool bdmOverallLoading = false;
   String selectedBdmReportDate = "";
   bool dbrLoading = true;
+  int waitingForConfirmationCount = 0;
 
   bool isBankReportLoading = true;
   String monthlyExpenseFrom = "";
@@ -284,6 +285,7 @@ bool salesReturnLoading = false;
     fetchBeposoftSummary();
     fetchDashboardInventorySummary();
     fetchSalesTeamCdTotalsForCeo();
+    fetchWaitingForConfirmationCount();
 
     //   fetchInternalTransfersData(
     // getdgnvd);
@@ -315,6 +317,39 @@ bool salesReturnLoading = false;
     await getsalescount();
     // fetchorders();
     await fetchReport();
+  }
+
+  Future<void> fetchWaitingForConfirmationCount() async {
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.isEmpty) return;
+
+      final uri = Uri.parse('$api/api/orders/').replace(
+        queryParameters: {
+          'status': 'Waiting For Confirmation',
+        },
+      );
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+
+        if (!mounted) return;
+
+        setState(() {
+          waitingForConfirmationCount = _asInt(parsed['count']);
+        });
+      }
+    } catch (e) {
+      debugPrint("WAITING FOR CONFIRMATION COUNT ERROR: $e");
+    }
   }
 
   Future<void> fetchTeamWiseAttendanceCount() async {
@@ -444,6 +479,7 @@ bool salesReturnLoading = false;
       Future(() => fetchBdmOverallFamilyReport()),
       Future(() => getstaff()),
       Future(() => fetchGrvSummary()),
+      Future(() => fetchWaitingForConfirmationCount()),
       Future(() => fetchOrdersSummaryFamilyData()),
       Future(() => getdgm()),
       Future(() => fetchFamilySummaryTeamCards()),
@@ -492,53 +528,54 @@ bool salesReturnLoading = false;
     }
   }
 
-Future<void> fetchGrvSummary() async {
-  try {
-    final token = await getTokenFromPrefs();
+  Future<void> fetchGrvSummary() async {
+    try {
+      final token = await getTokenFromPrefs();
 
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    final uri = Uri.parse('$api/api/grv/family/payment/summary/').replace(
-      queryParameters: {
-        'start_date': today,
-        'end_date': today,
-      },
-    );
+      final uri = Uri.parse('$api/api/grv/family/payment/summary/').replace(
+        queryParameters: {
+          'start_date': today,
+          'end_date': today,
+        },
+      );
 
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      setState(() {
-        salesReturnGrandTotal = Map<String, dynamic>.from(
-          decoded['grand_total'] ?? {},
-        );
-        salesReturnLoading = false;
-      });
-    } else {
+        setState(() {
+          salesReturnGrandTotal = Map<String, dynamic>.from(
+            decoded['grand_total'] ?? {},
+          );
+          salesReturnLoading = false;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          salesReturnGrandTotal = {};
+          salesReturnLoading = false;
+        });
+      }
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         salesReturnGrandTotal = {};
         salesReturnLoading = false;
       });
     }
-  } catch (e) {
-    if (!mounted) return;
-    setState(() {
-      salesReturnGrandTotal = {};
-      salesReturnLoading = false;
-    });
   }
-}
+
   String _formatDashboardAmount(dynamic value) {
     final double amount = _asDouble(value);
     final double absAmount = amount.abs();
@@ -2500,7 +2537,6 @@ Future<void> fetchGrvSummary() async {
     final totalStaffs = _asInt(staffSummary['total_staffs']);
     final activeStaffs = _asInt(staffSummary['active_staffs']);
     final deactiveStaffs = _asInt(staffSummary['deactive_staffs']);
-    
 
     final totalFamilyPresentCount = familySummaryTeamCards.fold<int>(
       0,
@@ -2514,14 +2550,14 @@ Future<void> fetchGrvSummary() async {
         ? salesTeamCdTeamTotals
         : salesTeamCdTeamTotals.take(1).toList();
 
-        final salesReturnPaid = _asMap(salesReturnGrandTotal['paid']);
-final salesReturnCod = _asMap(salesReturnGrandTotal['COD']);
+    final salesReturnPaid = _asMap(salesReturnGrandTotal['paid']);
+    final salesReturnCod = _asMap(salesReturnGrandTotal['COD']);
 
-final todayCodReturnCount = _asInt(salesReturnCod['grv_count']);
-final todayCodReturnAmount = _asDouble(salesReturnCod['order_amount']);
+    final todayCodReturnCount = _asInt(salesReturnCod['grv_count']);
+    final todayCodReturnAmount = _asDouble(salesReturnCod['order_amount']);
 
-final todayCashReturnCount = _asInt(salesReturnPaid['grv_count']);
-final todayCashReturnAmount = _asDouble(salesReturnPaid['order_amount']);
+    final todayCashReturnCount = _asInt(salesReturnPaid['grv_count']);
+    final todayCashReturnAmount = _asDouble(salesReturnPaid['order_amount']);
 
     // final withInternalTransfer = _asMap(todayData['with_internal_transfer']);
     // final financeOpeningBalance =
@@ -2752,11 +2788,27 @@ final todayCashReturnAmount = _asDouble(salesReturnPaid['order_amount']);
                     style: TextStyle(color: Colors.white, fontSize: 12),
                   )
                 : Column(
-                    children: departmentAttendanceCards.map((item) {
+                    children:
+                        departmentAttendanceCards.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final item = entry.value;
+
+                      final originalName = item['title'].toString();
+                      final displayName = index == 1
+                          ? originalName
+                              .substring(
+                                  0,
+                                  originalName.length >= 3
+                                      ? 3
+                                      : originalName.length)
+                              .toUpperCase()
+                          : _teamShortName(originalName);
+
                       return _buildattendanceTeamContainer(
-                          teamName: _teamShortName(item['title'].toString()),
-                          present: item['present'],
-                          absent: item['absent']);
+                        teamName: displayName,
+                        present: item['present'],
+                        absent: item['absent'],
+                      );
                     }).toList(),
                   ),
             // : Column(
@@ -7204,12 +7256,11 @@ final todayCashReturnAmount = _asDouble(salesReturnPaid['order_amount']);
                                   size: 28),
                               SizedBox(width: 7),
                               Text(
-                                "$confirmcount - Waiting for Approval",
-                                style: TextStyle(
+                                "$waitingForConfirmationCount - Waiting for Confirmation",
+                                style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
-                                  color:
-                                      const Color.fromARGB(255, 255, 255, 255),
+                                  color: Colors.white,
                                 ),
                               ),
                             ],

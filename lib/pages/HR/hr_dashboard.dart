@@ -33,8 +33,8 @@ class _HrDashboardState extends State<HrDashboard> {
     super.initState();
     _getUsername(); // Get the username when the page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-  AuthStatusChecker.start(context);
-});
+      AuthStatusChecker.start(context);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       checkAppUpdate(context);
     });
@@ -53,7 +53,7 @@ class _HrDashboardState extends State<HrDashboard> {
     });
   }
 
-   bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+  bool _isUpdateAvailable(String currentVersion, String storeVersion) {
     List<int> currentParts =
         currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
@@ -82,8 +82,7 @@ class _HrDashboardState extends State<HrDashboard> {
     return false;
   }
 
-
-   Future<bool> checkAppUpdate(BuildContext context) async {
+  Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
@@ -202,32 +201,32 @@ class _HrDashboardState extends State<HrDashboard> {
     return true;
   }
 
-Widget _buildDropdownTile(
-    BuildContext context, String title, List<String> options) {
-  return ExpansionTile(
-    backgroundColor: Colors.white,
-    collapsedBackgroundColor: Colors.white,
-    iconColor: Colors.black,
-    collapsedIconColor: Colors.black,
-    title: Text(
-      title,
-      style: const TextStyle(color: Colors.black),
-    ),
-    children: options.map((option) {
-      return ListTile(
-        tileColor: Colors.white,
-        title: Text(
-          option,
-          style: const TextStyle(color: Colors.black),
-        ),
-        onTap: () {
-          Navigator.pop(context);
-          d.navigateToSelectedPage(context, option);
-        },
-      );
-    }).toList(),
-  );
-}
+  Widget _buildDropdownTile(
+      BuildContext context, String title, List<String> options) {
+    return ExpansionTile(
+      backgroundColor: Colors.white,
+      collapsedBackgroundColor: Colors.white,
+      iconColor: Colors.black,
+      collapsedIconColor: Colors.black,
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.black),
+      ),
+      children: options.map((option) {
+        return ListTile(
+          tileColor: Colors.white,
+          title: Text(
+            option,
+            style: const TextStyle(color: Colors.black),
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            d.navigateToSelectedPage(context, option);
+          },
+        );
+      }).toList(),
+    );
+  }
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -263,124 +262,141 @@ Widget _buildDropdownTile(
         ),
       ),
       drawer: Drawer(
-            backgroundColor: Colors.white,
-            child: Container(
-              color: Colors.white,
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: <Widget>[
-               DrawerHeader(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
+        backgroundColor: Colors.white,
+        child: Container(
+          color: Colors.white,
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: <Widget>[
+              DrawerHeader(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.asset(
+                        "lib/assets/appstore.png",
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Image.asset(
-                            "lib/assets/appstore.png",
-                            width: 90,
-                            height: 90,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-            ListTile(
-              leading: Icon(Icons.dashboard),
-              title: Text('Dashboard'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => HrDashboard()));
-              },
-            ),
-            Divider(),
-            ListTile(
-              title: Text('Staffs'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => staff_list()));
-              },
-            ),
-            ListTile(
-              title: Text('Add Staff'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => add_staff()));
-              },
-            ),
-
-            ListTile(
-              title: Text('Add Staff Exit Form'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => EmployeeExitFormPage()));
-              },
-            ),
-
-             ListTile(
-              title: Text('Staff Exit Form List'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => EmployeeExitListPage()));
-              },
-            ),
-
-             ListTile(
-              title: Text('Employee Leave List'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => EmployeeLeaveListPage()));
-              },
-              
-            ),
-            ListTile(
-              title: Text('Add Manager'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => StaffAttendanceTeamScreen()));
-              },
-            ),
-            ListTile(
-              title: Text('Staff Attendance'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => HrTeamAttendanceScreen()));
-              },
-            ),
-
-  ListTile(
-                title: Text('Employee Leave Form'),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.dashboard),
+                title: Text('Dashboard'),
                 onTap: () {
                   Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
+                      MaterialPageRoute(builder: (context) => HrDashboard()));
                 },
               ),
-            
+               _buildDropdownTile(context, 'Attendance', [
+                    'Add Department & Managers',
+                    'Add Dept-wise Staffs',
+                    'Add Attendance',
+                    'View Attendance',
+                    // 'Employee Leave Requests',
+                    // 'View Leave List',
+                  ]),
+              // Divider(),
+              ListTile(
+                title: Text('Staffs'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => staff_list()));
+                },
+              ),
+              ListTile(
+                title: Text('Add Staff'),
+                onTap: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => add_staff()));
+                },
+              ),
 
-            
+              ListTile(
+                title: Text('Add Staff Exit Form'),
+                onTap: () {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => EmployeeExitFormPage()));
+                },
+              ),
 
-            // Divider(),
-            // ListTile(
-            //   leading: Icon(Icons.chat),
-            //   title: Text('Chat'),
-            //   onTap: () {
-            //     Navigator.pop(context); // Close the drawer
-            //   },
-            // ),
-            Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Logout'),
-              onTap: () async {
-                await logoutUser(context);
-              },
-            ),
-          ],
+              ListTile(
+                title: Text('Staff Exit Form List'),
+                onTap: () {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => EmployeeExitListPage()));
+                },
+              ),
+
+              ListTile(
+                title: Text('Employee Leave List'),
+                onTap: () {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => EmployeeLeaveListPage()));
+                },
+              ),
+              // ListTile(
+              //   title: Text('Add Manager'),
+              //   onTap: () {
+              //     Navigator.push(
+              //         context,
+              //         MaterialPageRoute(
+              //             builder: (context) => StaffAttendanceTeamScreen()));
+              //   },
+              // ),
+              // ListTile(
+              //   title: Text('Staff Attendance'),
+              //   onTap: () {
+              //     Navigator.push(
+              //         context,
+              //         MaterialPageRoute(
+              //             builder: (context) => HrTeamAttendanceScreen()));
+              //   },
+              // ),
+
+              ListTile(
+                title: Text('Employee Leave Form'),
+                onTap: () {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => EmployeeLeaveFormPage()));
+                },
+              ),
+
+              // Divider(),
+              // ListTile(
+              //   leading: Icon(Icons.chat),
+              //   title: Text('Chat'),
+              //   onTap: () {
+              //     Navigator.pop(context); // Close the drawer
+              //   },
+              // ),
+              Divider(),
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Logout'),
+                onTap: () async {
+                  await logoutUser(context);
+                },
+              ),
+            ],
+          ),
         ),
-      ),),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

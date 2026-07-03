@@ -1126,7 +1126,7 @@ class _OrderComparisonReportPageState extends State<OrderComparisonReportPage> {
     tooltip: 'Back',
     onPressed: _navigateBack,
     icon: const Icon(Icons.arrow_back_ios_new_rounded),
-  ),
+  ),    
   title: const Text(
     'Order Comparison Report',
     style: TextStyle(fontWeight: FontWeight.w900),
