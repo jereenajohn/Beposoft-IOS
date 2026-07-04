@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/auth_status_checker.dart';
@@ -705,6 +706,19 @@ class _marketing_dashboardState extends State<marketing_dashboard> {
                 //         MaterialPageRoute(builder: (context) => Graph()));
                 //   },
                 // ),
+                    ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text('Add Attendance'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => StaffSelfAttendanceScreen()));
+                    // Navigate to the Settings page or perform any other action
+                  },
+                ),
+
+
 
                 _buildDropdownTile(context, 'Customers', [
                   'Add Customer',

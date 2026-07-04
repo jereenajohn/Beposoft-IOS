@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:beposoft/pages/ACCOUNTS/add_district.dart';
+import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 // import 'package:beposoft/pages/ACCOUNTS/call_log.dart';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
@@ -638,6 +639,18 @@ bool _isUpdateAvailable(String currentVersion, String storeVersion) {
               //         MaterialPageRoute(builder: (context) => CallLog()));
               //   },
               // ),
+    ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text('Add Attendance'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => StaffSelfAttendanceScreen()));
+                    // Navigate to the Settings page or perform any other action
+                  },
+                ),
+
 
               Divider(),
               _buildDropdownTile(context, 'Customers', [

@@ -22,12 +22,16 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
   String selectedStatus = 'present';
 
   int? editingAttendanceId;
+  int? loggedInUserId;
+  bool isManager = false;
 
   bool isLoading = false;
   bool isMemberLoading = false;
   bool isSaving = false;
+  bool isProfileLoading = false;
 
-  TextEditingController attendanceTimeController = TextEditingController();
+  final TextEditingController attendanceTimeController =
+      TextEditingController();
 
   DateTime attendanceViewDate = DateTime.now();
 
@@ -45,15 +49,61 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
   void initState() {
     super.initState();
     attendanceTimeController.clear();
-    getMembersForDropdown();
-    getMyTeamAttendance();
+    refreshAll();
   }
 
   @override
-void dispose() {
-  attendanceTimeController.dispose();
-  super.dispose();
-}
+  void dispose() {
+    attendanceTimeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> refreshAll() async {
+    await getProfile();
+    await getMembersForDropdown();
+    await getMyTeamAttendance();
+  }
+
+  Future<void> getProfile() async {
+    try {
+      setState(() => isProfileLoading = true);
+
+      final token = await gettokenFromPrefs();
+
+      final response = await http.get(
+        Uri.parse('$api/api/profile/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      debugPrint("PROFILE STATUS: ${response.statusCode}");
+      debugPrint("PROFILE RESPONSE: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        final data = parsed['data'] ?? {};
+
+        setState(() {
+          loggedInUserId = int.tryParse('${data['id']}');
+          isManager = data['is_manager'] ?? false;
+        });
+
+        debugPrint("LOGGED USER ID: $loggedInUserId");
+        debugPrint("IS MANAGER: $isManager");
+      } else {
+        showMsg("Failed to fetch profile");
+      }
+    } catch (e) {
+      debugPrint("PROFILE ERROR: $e");
+      showMsg("Failed to fetch profile");
+    } finally {
+      if (mounted) {
+        setState(() => isProfileLoading = false);
+      }
+    }
+  }
 
   Future<void> getMembersForDropdown() async {
     try {
@@ -120,6 +170,9 @@ void dispose() {
         },
       );
 
+      debugPrint("TEAM ATTENDANCE STATUS: ${response.statusCode}");
+      debugPrint("TEAM ATTENDANCE RESPONSE: ${response.body}");
+
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         final results = parsed['results'];
@@ -148,6 +201,11 @@ void dispose() {
                   'team_name': team['team_name'] ?? '',
                   'team_leader_name': team['team_leader_name'] ?? '',
                   'attendance_time': attendance['attendance_time'],
+                  'approval_status':
+                      attendance['approval_status'] ?? 'pending',
+                  'approved_by': attendance['approved_by'],
+                  'approved_by_name': attendance['approved_by_name'],
+                  'approved_at': attendance['approved_at'],
                 });
               }
             }
@@ -157,6 +215,8 @@ void dispose() {
         setState(() {
           selectedDateAttendance = dateAttendanceList;
         });
+      } else {
+        showMsg("Failed to fetch attendance");
       }
     } catch (e) {
       debugPrint("Fetch team attendance error: $e");
@@ -173,6 +233,7 @@ void dispose() {
       showMsg("Select member");
       return;
     }
+
     if (attendanceTimeController.text.trim().isEmpty) {
       showMsg("Choose reporting time");
       return;
@@ -199,7 +260,7 @@ void dispose() {
       final body = {
         "staff": selectedMember!['member'],
         "attendance_date": todayDate,
-        "attendance_time": attendanceTimeController.text,
+        "attendance_time": attendanceTimeController.text.trim(),
         "status": selectedStatus,
       };
 
@@ -211,6 +272,9 @@ void dispose() {
         },
         body: jsonEncode(body),
       );
+
+      debugPrint("MARK ATTENDANCE STATUS: ${response.statusCode}");
+      debugPrint("MARK ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         showMsg("Attendance marked successfully");
@@ -255,10 +319,12 @@ void dispose() {
       showMsg("Select member");
       return;
     }
+
     if (attendanceTimeController.text.trim().isEmpty) {
       showMsg("Choose reporting time");
       return;
     }
+
     try {
       setState(() => isSaving = true);
 
@@ -267,7 +333,7 @@ void dispose() {
       final body = {
         "staff": selectedMember!['member'],
         "attendance_date": todayDate,
-        "attendance_time": attendanceTimeController.text,
+        "attendance_time": attendanceTimeController.text.trim(),
         "status": selectedStatus,
       };
 
@@ -279,6 +345,9 @@ void dispose() {
         },
         body: jsonEncode(body),
       );
+
+      debugPrint("UPDATE ATTENDANCE STATUS: ${response.statusCode}");
+      debugPrint("UPDATE ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
         showMsg("Attendance updated successfully");
@@ -305,6 +374,63 @@ void dispose() {
     }
   }
 
+  Future<void> updateApprovalStatus(
+    Map<String, dynamic> item,
+    String approvalStatus,
+  ) async {
+    if (loggedInUserId == null) {
+      showMsg("Logged-in user id not found");
+      return;
+    }
+
+    if (item['id'] == null) {
+      showMsg("Attendance id not found");
+      return;
+    }
+
+    try {
+      setState(() => isSaving = true);
+
+      final token = await gettokenFromPrefs();
+
+      final body = {
+        "staff": item['staff'],
+        "attendance_date": item['attendance_date'],
+        "attendance_time": item['attendance_time'],
+        "status": item['status'],
+        "approval_status": approvalStatus,
+        "approved_by": loggedInUserId,
+        "approved_at": DateTime.now().toIso8601String(),
+      };
+
+      final response = await http.put(
+        Uri.parse('$api/api/staff/attendance/edit/${item['id']}/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      debugPrint("APPROVAL UPDATE STATUS: ${response.statusCode}");
+      debugPrint("APPROVAL UPDATE RESPONSE: ${response.body}");
+
+      if (response.statusCode == 200) {
+        showMsg("Attendance $approvalStatus successfully");
+        await refreshAll();
+      } else {
+        showMsg("Failed: ${response.body}");
+      }
+    } catch (e) {
+      debugPrint("Approval update error: $e");
+      showMsg("Failed to update approval status");
+    } finally {
+      if (mounted) {
+        setState(() => isSaving = false);
+      }
+    }
+  }
+
   Future<void> pickAttendanceViewDate() async {
     final pickedDate = await showDatePicker(
       context: context,
@@ -322,16 +448,12 @@ void dispose() {
     }
   }
 
-  Future<void> refreshAll() async {
-    await getMembersForDropdown();
-    await getMyTeamAttendance();
-  }
-
   void cancelEdit() {
     setState(() {
       selectedMember = null;
       selectedStatus = 'present';
       editingAttendanceId = null;
+      attendanceTimeController.clear();
     });
   }
 
@@ -355,6 +477,8 @@ void dispose() {
   }
 
   void showMsg(String msg) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
@@ -383,6 +507,59 @@ void dispose() {
         return const Color(0xfff59e0b);
       default:
         return const Color(0xff64748b);
+    }
+  }
+
+  String getApprovalLabel(String status) {
+    switch (status) {
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
+      case 'pending':
+        return 'Pending';
+      default:
+        return 'Pending';
+    }
+  }
+
+  Color getApprovalColor(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color.fromARGB(255, 44, 168, 235);
+      case 'rejected':
+        return const Color(0xffdc2626);
+      case 'pending':
+        return const Color(0xfff59e0b);
+      default:
+        return const Color(0xfff59e0b);
+    }
+  }
+
+  IconData getApprovalIcon(String status) {
+    switch (status) {
+      case 'approved':
+        return Icons.verified;
+      case 'rejected':
+        return Icons.cancel;
+      case 'pending':
+        return Icons.hourglass_top_rounded;
+      default:
+        return Icons.hourglass_top_rounded;
+    }
+  }
+
+  Future<void> pickAttendanceTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        attendanceTimeController.text =
+            "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
+      });
     }
   }
 
@@ -441,272 +618,276 @@ void dispose() {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            editingAttendanceId == null
-                ? "Mark Team Attendance"
-                : "Update Team Attendance",
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Color(0xff111827),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xfff8fafc),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xffe5e7eb)),
-            ),
-            child: Row(
+      child: isProfileLoading
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.calendar_today_outlined,
-                  size: 18,
-                  color: Color(0xff64748b),
+                Text(
+                  editingAttendanceId == null
+                      ? "Mark Team Attendance"
+                      : "Update Team Attendance",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xff111827),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Posting Date: $todayDate",
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xff334155),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff8fafc),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xffe5e7eb)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 18,
+                        color: Color(0xff64748b),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Posting Date: $todayDate",
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xff334155),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                isMemberLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : DropdownSearch<Map<String, dynamic>>(
+                        selectedItem: selectedMember,
+                        items: teamMembers,
+                        compareFn: (item, selectedItem) {
+                          return item['member'] == selectedItem['member'];
+                        },
+                        filterFn: (member, filter) {
+                          final name = (member['member_name'] ?? '')
+                              .toString()
+                              .toLowerCase();
+                          final team = (member['team_name'] ?? '')
+                              .toString()
+                              .toLowerCase();
+                          final search = filter.toLowerCase();
+
+                          return name.contains(search) ||
+                              team.contains(search);
+                        },
+                        itemAsString: (member) {
+                          if (member.isEmpty) return "";
+                          return "${member['member_name']} - ${member['team_name']}";
+                        },
+                        popupProps: PopupProps.menu(
+                          showSearchBox: true,
+                          constraints: const BoxConstraints(maxHeight: 420),
+                          menuProps: MenuProps(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          searchFieldProps: TextFieldProps(
+                            decoration: InputDecoration(
+                              hintText: "Search member",
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              filled: true,
+                              fillColor: const Color(0xfff8fafc),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                          itemBuilder: (context, member, isSelected) {
+                            return ListTile(
+                              dense: true,
+                              leading: const CircleAvatar(
+                                radius: 16,
+                                backgroundColor: Color(0xffeff6ff),
+                                child: Icon(
+                                  Icons.person_outline,
+                                  size: 17,
+                                  color: Color(0xff2563eb),
+                                ),
+                              ),
+                              title: Text(
+                                member['member_name'] ?? '',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              subtitle: Text(
+                                member['team_name'] ?? '',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            );
+                          },
+                        ),
+                        dropdownDecoratorProps: DropDownDecoratorProps(
+                          dropdownSearchDecoration: InputDecoration(
+                            labelText: "Select Member",
+                            prefixIcon: const Icon(Icons.person_outline),
+                            filled: true,
+                            fillColor: const Color(0xfff8fafc),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedMember = value;
+                          });
+                        },
+                      ),
+                const SizedBox(height: 14),
+                const Text(
+                  "Attendance Status",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xff111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatusOption(
+                        'present',
+                        Icons.check_circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildStatusOption(
+                        'absent',
+                        Icons.cancel,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildStatusOption(
+                        'half_day',
+                        Icons.timelapse_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Reporting Time",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xff111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: attendanceTimeController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    hintText: "Choose reporting time",
+                    prefixIcon: const Icon(Icons.access_time),
+                    filled: true,
+                    fillColor: const Color(0xfff8fafc),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onTap: pickAttendanceTime,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: isSaving
+                        ? null
+                        : editingAttendanceId == null
+                            ? markAttendance
+                            : updateAttendance,
+                    icon: isSaving
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            editingAttendanceId == null
+                                ? Icons.save_outlined
+                                : Icons.check_circle_outline,
+                            size: 18,
+                          ),
+                    label: Text(
+                      isSaving
+                          ? "Saving..."
+                          : editingAttendanceId == null
+                              ? "Submit Attendance"
+                              : "Update Attendance",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff2563eb),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          isMemberLoading
-              ? const Center(child: CircularProgressIndicator())
-              : DropdownSearch<Map<String, dynamic>>(
-                  selectedItem: selectedMember,
-                  items: teamMembers,
-                  compareFn: (item, selectedItem) {
-                    return item['member'] == selectedItem['member'];
-                  },
-                  filterFn: (member, filter) {
-                    final name =
-                        (member['member_name'] ?? '').toString().toLowerCase();
-                    final team =
-                        (member['team_name'] ?? '').toString().toLowerCase();
-                    final search = filter.toLowerCase();
-
-                    return name.contains(search) || team.contains(search);
-                  },
-                  itemAsString: (member) {
-                    if (member.isEmpty) return "";
-                    return "${member['member_name']} - ${member['team_name']}";
-                  },
-                  popupProps: PopupProps.menu(
-                    showSearchBox: true,
-                    constraints: const BoxConstraints(maxHeight: 420),
-                    menuProps: MenuProps(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    searchFieldProps: TextFieldProps(
-                      decoration: InputDecoration(
-                        hintText: "Search member",
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        filled: true,
-                        fillColor: const Color(0xfff8fafc),
-                        border: OutlineInputBorder(
+                if (editingAttendanceId != null) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: cancelEdit,
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text("Cancel Edit"),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xffef4444),
+                        side: const BorderSide(color: Color(0xfffecaca)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
-                    itemBuilder: (context, member, isSelected) {
-                      return ListTile(
-                        dense: true,
-                        leading: const CircleAvatar(
-                          radius: 16,
-                          backgroundColor: Color(0xffeff6ff),
-                          child: Icon(
-                            Icons.person_outline,
-                            size: 17,
-                            color: Color(0xff2563eb),
-                          ),
-                        ),
-                        title: Text(
-                          member['member_name'] ?? '',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                        subtitle: Text(
-                          member['team_name'] ?? '',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      );
-                    },
                   ),
-                  dropdownDecoratorProps: DropDownDecoratorProps(
-                    dropdownSearchDecoration: InputDecoration(
-                      labelText: "Select Member",
-                      prefixIcon: const Icon(Icons.person_outline),
-                      filled: true,
-                      fillColor: const Color(0xfff8fafc),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedMember = value;
-                    });
-                  },
-                ),
-          const SizedBox(height: 14),
-          const Text(
-            "Attendance Status",
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: Color(0xff111827),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatusOption('present', Icons.check_circle),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildStatusOption('absent', Icons.cancel),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildStatusOption(
-                  'half_day',
-                  Icons.timelapse_outlined,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Reporting Time",
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: Color(0xff111827),
-            ),
-          ),
-          const SizedBox(height: 8),
-       TextFormField(
-  controller: attendanceTimeController,
-  readOnly: true,
-  decoration: InputDecoration(
-    hintText: "Choose reporting time",
-    prefixIcon: const Icon(Icons.access_time),
-    filled: true,
-    fillColor: const Color(0xfff8fafc),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-  ),
-  onTap: () async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        attendanceTimeController.text =
-            "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
-      });
-    }
-  },
-),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: isSaving
-                  ? null
-                  : editingAttendanceId == null
-                      ? markAttendance
-                      : updateAttendance,
-              icon: isSaving
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Icon(
-                      editingAttendanceId == null
-                          ? Icons.save_outlined
-                          : Icons.check_circle_outline,
-                      size: 18,
-                    ),
-              label: Text(
-                isSaving
-                    ? "Saving..."
-                    : editingAttendanceId == null
-                        ? "Submit Attendance"
-                        : "Update Attendance",
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xff2563eb),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-          if (editingAttendanceId != null) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: cancelEdit,
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text("Cancel Edit"),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xffef4444),
-                  side: const BorderSide(color: Color(0xfffecaca)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                ],
+                const SizedBox(height: 10),
+                Text(
+                  "${teamMembers.length} members available",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xff64748b),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            "${teamMembers.length} members available",
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xff64748b),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -758,6 +939,24 @@ void dispose() {
     );
   }
 
+  Widget _buildApprovalChip(String approvalStatus) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: getApprovalColor(approvalStatus).withOpacity(0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        getApprovalLabel(approvalStatus),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: getApprovalColor(approvalStatus),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSelectedDateAttendanceCard() {
     return Container(
       width: double.infinity,
@@ -795,13 +994,18 @@ void dispose() {
                     )
                   : Column(
                       children: selectedDateAttendance.map<Widget>((item) {
+                        final approvalStatus =
+                            item['approval_status'] ?? 'pending';
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: const Color(0xfff8fafc),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xffe5e7eb)),
+                            border: Border.all(
+                              color: const Color(0xffe5e7eb),
+                            ),
                           ),
                           child: Row(
                             children: [
@@ -841,6 +1045,8 @@ void dispose() {
                                         color: Color(0xff64748b),
                                       ),
                                     ),
+                                    const SizedBox(height: 4),
+                                    _buildApprovalChip(approvalStatus),
                                   ],
                                 ),
                               ),
@@ -856,13 +1062,94 @@ void dispose() {
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  InkWell(
-                                    onTap: () => startEditAttendance(item),
-                                    child: const Icon(
-                                      Icons.edit_outlined,
-                                      color: Color(0xff2563eb),
-                                      size: 20,
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => startEditAttendance(item),
+                                        child: const Icon(
+                                          Icons.edit_outlined,
+                                          color: Color(0xff2563eb),
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                    PopupMenuButton<String>(
+  enabled: !isSaving,
+  onSelected: (value) {
+    updateApprovalStatus(item, value);
+  },
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+  ),
+  itemBuilder: (_) => const [
+    PopupMenuItem(
+      value: "approved",
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green),
+          SizedBox(width: 10),
+          Text("Approve"),
+        ],
+      ),
+    ),
+    PopupMenuItem(
+      value: "rejected",
+      child: Row(
+        children: [
+          Icon(Icons.cancel, color: Colors.red),
+          SizedBox(width: 10),
+          Text("Reject"),
+        ],
+      ),
+    ),
+    PopupMenuItem(
+      value: "pending",
+      child: Row(
+        children: [
+          Icon(Icons.hourglass_empty, color: Colors.orange),
+          SizedBox(width: 10),
+          Text("Pending"),
+        ],
+      ),
+    ),
+  ],
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(
+      color: getApprovalColor(approvalStatus).withOpacity(0.10),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: getApprovalColor(approvalStatus).withOpacity(0.45),
+      ),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.admin_panel_settings_rounded,
+          size: 16,
+          color: getApprovalColor(approvalStatus),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          "Approval",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: getApprovalColor(approvalStatus),
+          ),
+        ),
+        Icon(
+          Icons.arrow_drop_down,
+          size: 16,
+          color: getApprovalColor(approvalStatus),
+        ),
+      ],
+    ),
+  ),
+),
+                                    ],
                                   ),
                                 ],
                               ),

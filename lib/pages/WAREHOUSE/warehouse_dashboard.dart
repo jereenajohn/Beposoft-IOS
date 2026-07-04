@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
@@ -579,6 +580,19 @@ class _WarehouseDashboardState extends State<WarehouseDashboard> {
                             builder: (context) => WarehouseDashboard()));
                   },
                 ),
+                    ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text('Add Attendance'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => StaffSelfAttendanceScreen()));
+                    // Navigate to the Settings page or perform any other action
+                  },
+                ),
+
+
                 Divider(),
                 _buildDropdownTile(context, 'Delivery Note', [
                   'Delivery Note List(All)',
