@@ -1558,6 +1558,7 @@ class _cso_dashboardState extends State<cso_dashboard> {
           _buildDropdownTile(context, 'BDO DSR', [
             'Add Team',
             'Add Team Members',
+            'View All Team Members',
           ]),
           // if (isManager)
             ListTile(

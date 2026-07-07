@@ -1297,7 +1297,7 @@ Future<void> updateApprovalStatus(dynamic item, String approvalStatus) async {
         ),
         const SizedBox(width: 5),
         Text(
-          "Approval",
+approvalStatus[0].toUpperCase() + approvalStatus.substring(1),
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,

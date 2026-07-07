@@ -844,6 +844,7 @@ class _admin_dashboardState extends State<dashboard> {
                   'Orders List',
                   'Invoice Created',
                   'Invoice Approved',
+                  'Pre Booked',
                   'Waiting For Confirmation',
                   'To Print',
                   'Packing Under Progress',

@@ -640,7 +640,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
       ),
       children: options.map((option) {
         return ListTile(
-          tileColor: Colors.white,
+          tileColor: Colors.white, 
           title: Text(
             option,
             style: const TextStyle(color: Colors.black),
@@ -847,6 +847,7 @@ class _admin_dashboardState extends State<admin_dashboard> {
                   'Orders List',
                   'Invoice Created',
                   'Invoice Approved',
+                  'Pre Booked',
                   'Waiting For Confirmation',
                   'To Print',
                   'Packing Under Progress',

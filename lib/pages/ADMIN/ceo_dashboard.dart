@@ -2630,6 +2630,17 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     final dgmWeightFieldKg =
         _asDouble(dgmCurrentMonthSummary['total_weight_field_kg']);
 
+        final paymentSummary = _asMap(productsData?['payment_status_summary']);
+
+final todayPayment = _asMap(paymentSummary['today']);
+final monthPayment = _asMap(paymentSummary['month']);
+
+final todayPaid = _asMap(todayPayment['paid']);
+final todayCod = _asMap(todayPayment['COD']);
+
+final monthPaid = _asMap(monthPayment['paid']);
+final monthCod = _asMap(monthPayment['COD']);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
       child: GridView.count(
@@ -2640,23 +2651,23 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
         mainAxisSpacing: 10,
         childAspectRatio: 0.72,
         children: [
-          _buildDashboardCard(
-            title: "Sales",
-            value: _formatDashboardAmount(
-              productsData?['month_total_amount'],
-            ),
-            lines: [
-              "Today's Invoices: ${_asInt(productsData?['today_count'])}",
-              "Volume: ${_formatDashboardAmount(productsData?['today_total_amount'])}",
-              "Total Invoices: ${_asInt(productsData?['month_count'])}",
-            ],
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SalesReportExcel()),
-              );
-            },
-          ),
+_buildDashboardCard(
+  title: "Sales",
+value: "M.Total- ${_formatDashboardAmount(productsData?['month_total_amount'])}",
+  lines: [
+    "MT. Invoices: ${_asInt(productsData?['month_count'])}",
+    "T Paid: ${_asInt(todayPaid['count'])} | ${_formatDashboardAmount(todayPaid['total'])}",
+    "T. COD: ${_asInt(todayCod['count'])} | ${_formatDashboardAmount(todayCod['total'])}",
+    "M. Paid: ${_asInt(monthPaid['count'])} | ${_formatDashboardAmount(monthPaid['total'])}",
+    "M. COD: ${_asInt(monthCod['count'])} | ${_formatDashboardAmount(monthCod['total'])}",
+  ],
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SalesReportExcel()),
+    );
+  },
+),
           _buildDashboardCard(
             title: "Finance",
             valueLabel: "TCB",
@@ -6390,6 +6401,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                     'Orders List',
                     'Invoice Created',
                     'Invoice Approved',
+                    'Pre Booked',
                     'Waiting For Confirmation',
                     'To Print',
                     'Packing Under Progress',
@@ -6417,7 +6429,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                       ['Add Transfer', 'Transfer List']),
 
                   _buildDropdownTile(context, 'Daily Sales Reports',
-                      ['Add Team', 'Team wise Report']),
+                      ['Add Team', 'Team wise Report', 'View All Team Members']),
 
                   _buildDropdownTile(context, 'Attendance', [
                     'Add Department & Managers',

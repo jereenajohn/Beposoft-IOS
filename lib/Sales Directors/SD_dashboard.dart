@@ -2440,6 +2440,9 @@ class _SdDashboardState extends State<SdDashboard> {
                 _buildDropdownTile(context, 'BDO DSR', [
                   'Add Team',
                   'Add Team Members',
+                  'View All Team Members',
+
+
                   // 'Add BDO Attendence',
                   // 'Approve BDO Call Duration'
                 ]),

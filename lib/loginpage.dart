@@ -38,6 +38,7 @@ class _loginState extends State<login> {
   TextEditingController password = TextEditingController();
 
   bool isLoading = false;
+  bool isPasswordVisible = false;
 
   final LocalAuthentication auth = LocalAuthentication();
 
@@ -412,17 +413,18 @@ class _loginState extends State<login> {
       onTap: biometricLogin,
       borderRadius: BorderRadius.circular(50),
       child: Container(
-padding: const EdgeInsets.all(0),
-       decoration: BoxDecoration(
-  shape: BoxShape.circle,
-  color: Colors.white,
-  boxShadow: [
-    BoxShadow(
-color: Colors.black.withOpacity(0.12),      blurRadius: 12,
-      offset: const Offset(0, 5),
-    ),
-  ],
-),
+        padding: const EdgeInsets.all(0),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: const BoxDecoration(
@@ -508,10 +510,24 @@ color: Colors.black.withOpacity(0.12),      blurRadius: 12,
                   TextField(
                     controller: password,
                     cursorColor: logoCyan,
-                    obscureText: true,
+                    obscureText: !isPasswordVisible,
                     decoration: _inputDecoration(
                       label: 'Password',
                       icon: Icons.lock,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: logoCyan,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            isPasswordVisible = !isPasswordVisible;
+                          });
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 30),

@@ -13,6 +13,7 @@ import 'package:beposoft/pages/ACCOUNTS/cso_staff.dart';
 import 'package:beposoft/pages/ACCOUNTS/dailyproductcategorywisecyclingskating.dart';
 import 'package:beposoft/pages/ACCOUNTS/ordercomparison_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
+import 'package:beposoft/pages/ACCOUNTS/view_all_team_members.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/add_staffwise_department.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
@@ -227,7 +228,12 @@ class drower {
         );
         break;
 
-      //
+       case 'View All Team Members':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ViewAllTeamMembers()),
+        );
+        break;
 
       case 'Add Team':
         Navigator.push(
@@ -490,6 +496,15 @@ class drower {
           MaterialPageRoute(
               builder: (context) => OrderList2(
                     status: 'Waiting For Confirmation',
+                  )),
+        );
+        break;
+          case 'Pre Booked':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => OrderList2(
+                    status: 'Pre Booked',
                   )),
         );
         break;
@@ -1126,7 +1141,12 @@ class drower {
           MaterialPageRoute(builder: (context) => AddTeamMembers()),
         );
         break;
-
+       case 'View All Team Members':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ViewAllTeamMembers()),
+        );
+        break;
       case 'Approve BDO Call Duration':
         Navigator.push(
           context,

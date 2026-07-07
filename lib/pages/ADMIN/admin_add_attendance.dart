@@ -36,7 +36,7 @@ class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
   DateTime? startDate;
   DateTime? endDate;
   int? loggedInUserId;
-bool isManager = false;
+  bool isManager = false;
 
   String teamName = "All Teams";
   String teamLeaderName = "All Team Leaders";
@@ -77,7 +77,7 @@ bool isManager = false;
 
     await Future.wait([
       fetchTeams(),
-       getProfile(),
+      getProfile(),
       fetchAttendance(),
     ]);
 
@@ -92,70 +92,72 @@ bool isManager = false;
   }
 
   Future<void> updateApprovalStatus(dynamic item, String approvalStatus) async {
-  if (loggedInUserId == null) {
-    showError("Logged-in user not found");
-    return;
-  }
+    if (loggedInUserId == null) {
+      showError("Logged-in user not found");
+      return;
+    }
 
-  try {
-    setState(() => editLoading = true);
+    try {
+      setState(() => editLoading = true);
 
-    final token = await getToken();
-    if (token == null) throw Exception("Token missing");
+      final token = await getToken();
+      if (token == null) throw Exception("Token missing");
 
-    final payload = {
-      "staff": item["staff"],
-      "attendance_date": item["attendance_date"],
-      "attendance_time": item["attendance_time"],
-      "status": item["status"],
-      "approval_status": approvalStatus,
-      "approved_by": loggedInUserId,
-      "approved_at": DateTime.now().toIso8601String(),
-    };
+      final payload = {
+        "staff": item["staff"],
+        "attendance_date": item["attendance_date"],
+        "attendance_time": item["attendance_time"],
+        "status": item["status"],
+        "approval_status": approvalStatus,
+        "approved_by": loggedInUserId,
+        "approved_at": DateTime.now().toIso8601String(),
+      };
 
-    final response = await http.put(
-      Uri.parse("${baseUrl}staff/attendance/edit/${item["id"]}/"),
-      headers: authHeaders(token),
-      body: jsonEncode(payload),
-    );
+      final response = await http.put(
+        Uri.parse("${baseUrl}staff/attendance/edit/${item["id"]}/"),
+        headers: authHeaders(token),
+        body: jsonEncode(payload),
+      );
 
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      showSuccess("Attendance $approvalStatus");
-      await fetchAttendance();
-    } else {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        showSuccess("Attendance $approvalStatus");
+        await fetchAttendance();
+      } else {
+        showError("Approval update failed");
+      }
+    } catch (e) {
       showError("Approval update failed");
-    }
-  } catch (e) {
-    showError("Approval update failed");
-  } finally {
-    if (mounted) {
-      setState(() => editLoading = false);
+    } finally {
+      if (mounted) {
+        setState(() => editLoading = false);
+      }
     }
   }
-}
-Future<void> getProfile() async {
-  try {
-    final token = await getToken();
-    if (token == null) throw Exception("Token missing");
 
-    final response = await http.get(
-      Uri.parse("${baseUrl}profile/"),
-      headers: authHeaders(token),
-    );
+  Future<void> getProfile() async {
+    try {
+      final token = await getToken();
+      if (token == null) throw Exception("Token missing");
 
-    if (response.statusCode == 200) {
-      final parsed = jsonDecode(response.body);
-      final data = parsed["data"] ?? {};
+      final response = await http.get(
+        Uri.parse("${baseUrl}profile/"),
+        headers: authHeaders(token),
+      );
 
-      setState(() {
-        loggedInUserId = int.tryParse("${data["id"]}");
-        isManager = data["is_manager"] ?? false;
-      });
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        final data = parsed["data"] ?? {};
+
+        setState(() {
+          loggedInUserId = int.tryParse("${data["id"]}");
+          isManager = data["is_manager"] ?? false;
+        });
+      }
+    } catch (e) {
+      debugPrint("PROFILE ERROR: $e");
     }
-  } catch (e) {
-    debugPrint("PROFILE ERROR: $e");
   }
-}
+
   Map<String, String> authHeaders(String token) {
     return {
       "Authorization": "Bearer $token",
@@ -590,67 +592,68 @@ Future<void> getProfile() async {
     return prefs.getString('department');
   }
 
- Future<void> _navigateBack() async {
+  Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
-   if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
-
-}
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if (dep == "COO") {
+    if (dep == "BDO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdo_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "BDM") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdm_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "warehouse") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseDashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-
-else if(dep=="HR" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => HrDashboard()), // Replace AnotherPage with your target page
-            );
-}
-
-
-
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-}else {
+    } else if (dep == "CEO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                HrDashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "Warehouse Admin") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseAdmin()), // Replace AnotherPage with your target page
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => dashboard()),
@@ -662,12 +665,11 @@ else if(dep=="Warehouse Admin" ){
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
-      
       appBar: AppBar(
-          leading: IconButton(
-    icon: const Icon(Icons.arrow_back_rounded),
-    onPressed: _navigateBack,
-  ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _navigateBack,
+        ),
         title: const Text(
           "Daily Attendance",
           style: TextStyle(fontWeight: FontWeight.w800),
@@ -1144,186 +1146,188 @@ else if(dep=="Warehouse Admin" ){
     );
   }
 
-Widget buildAttendanceRow(dynamic item, int index) {
-  final approvalStatus = item["approval_status"]?.toString() ?? "pending";
+  Widget buildAttendanceRow(dynamic item, int index) {
+    final approvalStatus = item["approval_status"]?.toString() ?? "pending";
 
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    child: Column(
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 17,
-              backgroundColor: const Color(0xFFEFF6FF),
-              child: Text(
-                "${index + 1}",
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: const Color(0xFFEFF6FF),
+                child: Text(
+                  "${index + 1}",
+                  style: const TextStyle(
+                    color: Color(0xFF2563EB),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  item["staff_name"]?.toString() ?? "-",
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              buildStatusBadge(item["status"]?.toString()),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(
+                Icons.access_time_rounded,
+                size: 17,
+                color: Color(0xFF64748B),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                item["attendance_time"]?.toString() ?? "--:--",
                 style: const TextStyle(
-                  color: Color(0xFF2563EB),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF334155),
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                item["staff_name"]?.toString() ?? "-",
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w900,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  item["attendance_date"]?.toString() ?? "-",
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF334155)),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            buildStatusBadge(item["status"]?.toString()),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            const Icon(
-              Icons.access_time_rounded,
-              size: 17,
-              color: Color(0xFF64748B),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              item["attendance_time"]?.toString() ?? "--:--",
-              style: const TextStyle(
-                color: Color(0xFF334155),
-                fontWeight: FontWeight.w800,
+              IconButton(
+                tooltip: "Edit",
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                onPressed: () {
+                  selectedTeam = null;
+                  editStaff = null;
+                  editStatus = null;
+                  editDate = null;
+                  editTime = null;
+                  openEditModal(item["id"]);
+                },
+                icon: const Icon(
+                  Icons.edit_rounded,
+                  size: 20,
+                  color: Color(0xFFB45309),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                item["attendance_date"]?.toString() ?? "-",
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFF334155)),
-              ),
-            ),
-            IconButton(
-              tooltip: "Edit",
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-              onPressed: () {
-                selectedTeam = null;
-                editStaff = null;
-                editStatus = null;
-                editDate = null;
-                editTime = null;
-                openEditModal(item["id"]);
-              },
-              icon: const Icon(
-                Icons.edit_rounded,
-                size: 20,
-                color: Color(0xFFB45309),
-              ),
-            ),
-            PopupMenuButton<String>(
-              enabled: !editLoading,
-              onSelected: (value) {
-                updateApprovalStatus(item, value);
-              },
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: "approved",
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green),
-                      SizedBox(width: 10),
-                      Text("Approve"),
-                    ],
+              PopupMenuButton<String>(
+                enabled: !editLoading,
+                onSelected: (value) {
+                  updateApprovalStatus(item, value);
+                },
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: "approved",
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green),
+                        SizedBox(width: 10),
+                        Text("Approve"),
+                      ],
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: "rejected",
-                  child: Row(
-                    children: [
-                      Icon(Icons.cancel, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text("Reject"),
-                    ],
+                  PopupMenuItem(
+                    value: "rejected",
+                    child: Row(
+                      children: [
+                        Icon(Icons.cancel, color: Colors.red),
+                        SizedBox(width: 10),
+                        Text("Reject"),
+                      ],
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: "pending",
-                  child: Row(
-                    children: [
-                      Icon(Icons.hourglass_empty, color: Colors.orange),
-                      SizedBox(width: 10),
-                      Text("Pending"),
-                    ],
+                  PopupMenuItem(
+                    value: "pending",
+                    child: Row(
+                      children: [
+                        Icon(Icons.hourglass_empty, color: Colors.orange),
+                        SizedBox(width: 10),
+                        Text("Pending"),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: approvalStatus == "approved"
-                      ? Colors.green.shade50
-                      : approvalStatus == "rejected"
-                          ? Colors.red.shade50
-                          : Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
+                ],
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
                     color: approvalStatus == "approved"
-                        ? Colors.green
+                        ? Colors.green.shade50
                         : approvalStatus == "rejected"
-                            ? Colors.red
-                            : Colors.orange,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.admin_panel_settings_rounded,
-                      size: 16,
+                            ? Colors.red.shade50
+                            : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
                       color: approvalStatus == "approved"
                           ? Colors.green
                           : approvalStatus == "rejected"
                               ? Colors.red
                               : Colors.orange,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      "Approval",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings_rounded,
+                        size: 16,
                         color: approvalStatus == "approved"
                             ? Colors.green
                             : approvalStatus == "rejected"
                                 ? Colors.red
                                 : Colors.orange,
                       ),
-                    ),
-                    Icon(
-                      Icons.arrow_drop_down,
-                      size: 16,
-                      color: approvalStatus == "approved"
-                          ? Colors.green
-                          : approvalStatus == "rejected"
-                              ? Colors.red
-                              : Colors.orange,
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        approvalStatus[0].toUpperCase() +
+                            approvalStatus.substring(1),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: approvalStatus == "approved"
+                              ? Colors.green
+                              : approvalStatus == "rejected"
+                                  ? Colors.red
+                                  : Colors.orange,
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        size: 16,
+                        color: approvalStatus == "approved"
+                            ? Colors.green
+                            : approvalStatus == "rejected"
+                                ? Colors.red
+                                : Colors.orange,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget buildStatusBadge(String? status) {
     Color bg;

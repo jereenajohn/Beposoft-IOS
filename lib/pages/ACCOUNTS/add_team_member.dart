@@ -63,13 +63,12 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
     }
   }
 
-   Future<String?> getdepFromPrefs() async {
+  Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
 
-
-   Future<void> _navigateBack() async {
+  Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
     if (!mounted) return;
 
@@ -83,33 +82,27 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
         context,
         MaterialPageRoute(builder: (context) => SdDashboard()),
       );
-    } 
-    
-    else if (dep == "CEO") {
+    } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "ADMIN") {
+    } else if (dep == "ADMIN") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => admin_dashboard()),
       );
-    } 
-    else if (dep == "COO") {
+    } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }
-     else if (dep == "BDM") {
+    } else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
@@ -131,7 +124,6 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
       );
     }
   }
-
 
   Future<String?> gettokenFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -488,6 +480,60 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
     }
   }
 
+  Future<void> deleteMember(int memberId) async {
+    try {
+      final token = await gettokenFromPrefs();
+      if (token == null) {
+        throw Exception("Token not found");
+      }
+
+      final response = await http.delete(
+        Uri.parse('$api/api/sales/team/members/edit/$memberId/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final parsed = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        await getMembers();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text(parsed["message"] ?? "Team member deleted successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              parsed["message"] ??
+                  parsed["detail"] ??
+                  parsed["error"] ??
+                  "Failed to delete team member",
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Delete member error: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Something went wrong"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> updateMember(int memberId) async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -757,7 +803,7 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
                       Icons.more_vert,
                       color: Color(0xFF0F172A),
                     ),
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == "edit") {
                         Future.delayed(const Duration(milliseconds: 100),
                             () async {
@@ -775,6 +821,8 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
                             await getMembers();
                           }
                         });
+                      } else if (value == "delete") {
+                        await deleteMember(member["id"]);
                       }
                     },
                     itemBuilder: (context) => const [
@@ -785,6 +833,20 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
                             Icon(Icons.edit_outlined, size: 20),
                             SizedBox(width: 10),
                             Text("Edit"),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: "delete",
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline,
+                                size: 20, color: Colors.red),
+                            SizedBox(width: 10),
+                            Text(
+                              "Delete",
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ],
                         ),
                       ),
@@ -810,12 +872,12 @@ class _AddTeamMembersState extends State<AddTeamMembers> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black87),
-            onPressed: () async {
-              await _navigateBack();
-            },
-          ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () async {
+            await _navigateBack();
+          },
+        ),
         elevation: 0,
         backgroundColor: Colors.white,
         centerTitle: true,
