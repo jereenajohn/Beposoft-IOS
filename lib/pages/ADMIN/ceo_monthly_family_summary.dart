@@ -576,7 +576,7 @@ class _ceo_family_summary_monthlyState
                               }
                             },
                             child: Card(
-                              color: Colors.white,
+                              color: Colors.white, 
                               elevation: 4,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -705,7 +705,7 @@ class _ceo_family_summary_monthlyState
                     final creditOrderCount =
                         monthSummary['credit']?['count'] ?? 0;
                     final creditTotalAmount =
-                        monthSummary['credit']?['total'] ?? 0.0;
+                        monthSummary['credit']?['total'] ?? 0.0;    
 
                     final grandTotalOrders =
                         (productsData?['month_count'] ?? 0);
