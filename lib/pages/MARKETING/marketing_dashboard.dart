@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ACCOUNTS/mailboxpage..dart';
 import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
+import 'package:beposoft/pages/MARKETING/bepocart_new_order_list.dart';
 import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/pages/ACCOUNTS/Bulk_Bepocart_Orders.dart';
 import 'package:beposoft/pages/ACCOUNTS/Today_shipped_orders.dart';
@@ -113,7 +114,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {  
+  void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
@@ -912,8 +913,13 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                 //         MaterialPageRoute(builder: (context) => Graph()));
                 //   },
                 // ),
+                _buildDropdownTile(context, 'Customers', [
+                  'Add Customer',
+                  'Customers',
+                ]),
+
                 ListTile(
-                  leading: Icon(Icons.person),
+                  leading: Icon(Icons.fingerprint),
                   title: Text('Add Attendance'),
                   onTap: () {
                     Navigator.push(
@@ -924,28 +930,37 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                   },
                 ),
 
+                // ListTile(
+                //   leading: Icon(Icons.mail_outline),
+                //   title: const Text('Send Mail'),
+                //   onTap: () async {
+                //     Navigator.pop(context);
+
+                //     await Navigator.push<void>(
+                //       context,
+                //       MaterialPageRoute(
+                //         builder: (_) => const StaffMailPage(),
+                //       ),
+                //     );
+
+                //     if (!mounted) return;
+
+                //     await fetchInboxMailCount();
+                //   },
+                // ),
+
                 ListTile(
-                  title: const Text('Send Mail'),
-                  onTap: () async {
-                    Navigator.pop(context);
-
-                    await Navigator.push<void>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const StaffMailPage(),
-                      ),
-                    );
-
-                    if (!mounted) return;
-
-                    await fetchInboxMailCount();
+                  leading: const Icon(Icons.receipt_long),
+                  title: Text('Bepocart Order List'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => MyFamilyOrderList()));
+                    // Navigate to the Settings page or perform any other action
                   },
                 ),
-
-                _buildDropdownTile(context, 'Customers', [
-                  'Add Customer',
-                  'Customers',
-                ]),
+                // Divider(),
 
                 // ListTile(
                 //   leading: Icon(Icons.dashboard),
@@ -956,21 +971,21 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                 //   },
                 // ),
 
-                _buildDropdownTile(context, 'Orders', [
-                  'New Orders',
-                  'Orders List',
-                  'Invoice Created',
-                  'Invoice Approved',
-                  'Pre Booked',
-                  'Waiting For Confirmation',
-                  'To Print',
-                  'Packing Under Progress',
-                  'Packed',
-                  'Ready to ship',
-                  'Shipped',
-                  'Invoice Rejected'
-                ]),
-                Divider(),
+                // _buildDropdownTile(context, 'Orders', [
+                //   'New Orders',
+                //   'Bepocart Orders List',
+                //   'Invoice Created',
+                //   'Invoice Approved',
+                //   'Pre Booked',
+                //   'Waiting For Confirmation',
+                //   'To Print',
+                //   'Packing Under Progress',
+                //   'Packed',
+                //   'Ready to ship',
+                //   'Shipped',
+                //   'Invoice Rejected'
+                // ]),
+                // Divider(),
                 ListTile(
                   leading: Icon(Icons.add_shopping_cart),
                   title: Text('Bulk Order Creation'),
@@ -983,9 +998,8 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                   },
                 ),
 
-                Divider(),
                 ListTile(
-                  leading: Icon(Icons.add_shopping_cart),
+                  leading: Icon(Icons.upload_file),
                   title: Text('Bulk Order Creation Excel'),
                   onTap: () {
                     Navigator.push(
@@ -998,7 +1012,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                 if (isManager) ...[
                   Divider(),
                   ListTile(
-                    leading: Icon(Icons.person_add),
+                    leading: Icon(Icons.group_add),
                     title: Text('Add Team Staff '),
                     onTap: () {
                       Navigator.push(
@@ -1011,7 +1025,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                   ),
                   Divider(),
                   ListTile(
-                    leading: Icon(Icons.people),
+                    leading: Icon(Icons.fact_check),
                     title: Text('Add Attendance '),
                     onTap: () {
                       Navigator.push(
@@ -1024,7 +1038,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                   ),
                   Divider(),
                   ListTile(
-                    leading: Icon(Icons.people),
+                    leading: Icon(Icons.approval),
                     title: Text('Approve Leave Requests '),
                     onTap: () {
                       Navigator.push(
@@ -1037,6 +1051,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                   ),
                 ],
                 ListTile(
+                  leading: const Icon(Icons.event_note),
                   title: Text('Employee Leave Form'),
                   onTap: () {
                     Navigator.push(
@@ -1047,7 +1062,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                 ),
                 Divider(),
                 ListTile(
-                  leading: const Icon(Icons.logout),
+                  leading: const Icon(Icons.logout_rounded),
                   title: const Text('Logout'),
                   onTap: () async {
                     await logoutUser(context);
