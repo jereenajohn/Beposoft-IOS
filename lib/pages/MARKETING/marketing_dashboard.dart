@@ -56,7 +56,7 @@ class marketing_dashboard extends StatefulWidget {
 
 class _marketing_dashboardState extends State<marketing_dashboard>
     with WidgetsBindingObserver {
-        List<String> statusOptions = ["pending", "approved", "rejected"];
+  List<String> statusOptions = ["pending", "approved", "rejected"];
   List<Map<String, dynamic>> grvlist = [];
   List<Map<String, dynamic>> proforma = [];
   List<Map<String, dynamic>> salesReportList = [];
@@ -64,179 +64,174 @@ class _marketing_dashboardState extends State<marketing_dashboard>
   List<Map<String, dynamic>> filteredOrders = [];
   List<Map<String, dynamic>> shippedOrders = [];
   int inboxMailCount = 0;
-Timer? mailCountTimer;
-      String profileImage = '';
-bool isFetchingInboxMailCount = false;
-
-
+  Timer? mailCountTimer;
+  String profileImage = '';
+  bool isFetchingInboxMailCount = false;
 
   String? username = '';
   bool isManager = false;
-@override
-void initState() {
-  super.initState();
+  @override
+  void initState() {
+    super.initState();
 
-  WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addObserver(this);
 
-  _getUsername();
-  getGrvList();
-  getProfile();
-  fetchproformaData();
-  getSalesReport();
-  fetchOrderData();
-  fetchshippedorders();
-  fetchInboxMailCount();
-
-  mailCountTimer = Timer.periodic(
-    const Duration(seconds: 15),
-    (_) {
-      if (mounted) {
-        fetchInboxMailCount();
-      }
-    },
-  );
-
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!mounted) return;
-    AuthStatusChecker.start(context);
-  });
-
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!mounted) return;
-    checkAppUpdate(context);
-  });
-}
-
-@override
-void dispose() {
-  WidgetsBinding.instance.removeObserver(this);
-  mailCountTimer?.cancel();
-  super.dispose();
-}
-@override
-void didChangeAppLifecycleState(AppLifecycleState state) {
-  super.didChangeAppLifecycleState(state);
-
-  if (state == AppLifecycleState.resumed) {
+    _getUsername();
+    getGrvList();
+    getProfile();
+    fetchproformaData();
+    getSalesReport();
+    fetchOrderData();
+    fetchshippedorders();
     fetchInboxMailCount();
-  }
-}
-Future<void> fetchInboxMailCount() async {
-  if (isFetchingInboxMailCount) return;
 
-  isFetchingInboxMailCount = true;
-
-  try {
-    final String? token = await getTokenFromPrefs();
-
-    if (token == null || token.trim().isEmpty) {
-      return;
-    }
-
-    final Uri uri = Uri.parse(
-      '$api/api/internal/mails/',
-    ).replace(
-      queryParameters: {
-        'type': 'inbox',
-        'read_status': 'unread',
-        'page': '1',
-      },
-    );
-
-    final http.Response response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode != 200) {
-      debugPrint(
-        'MAIL COUNT REQUEST FAILED: '
-        '${response.statusCode} ${response.body}',
-      );
-      return;
-    }
-
-    final dynamic decoded = jsonDecode(response.body);
-
-    int newUnreadCount = 0;
-
-    if (decoded is Map<String, dynamic>) {
-      final dynamic results = decoded['results'];
-      final dynamic data = decoded['data'];
-
-      final dynamic rawUnreadCount =
-          decoded['unread_count'] ??
-          (results is Map ? results['unread_count'] : null) ??
-          (data is Map ? data['unread_count'] : null);
-
-      final dynamic rawFilteredCount =
-          decoded['count'] ??
-          (results is Map ? results['count'] : null) ??
-          (data is Map ? data['count'] : null);
-
-      if (rawUnreadCount != null) {
-        newUnreadCount =
-            rawUnreadCount is int
-                ? rawUnreadCount
-                : int.tryParse(rawUnreadCount.toString()) ?? 0;
-      } else if (rawFilteredCount != null) {
-        newUnreadCount =
-            rawFilteredCount is int
-                ? rawFilteredCount
-                : int.tryParse(rawFilteredCount.toString()) ?? 0;
-      } else {
-        dynamic mailList;
-
-        if (results is Map && results['data'] is List) {
-          mailList = results['data'];
-        } else if (data is Map && data['data'] is List) {
-          mailList = data['data'];
-        } else if (results is List) {
-          mailList = results;
-        } else if (data is List) {
-          mailList = data;
+    mailCountTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) {
+        if (mounted) {
+          fetchInboxMailCount();
         }
+      },
+    );
 
-        if (mailList is List) {
-          newUnreadCount = mailList.where((dynamic mail) {
-            if (mail is! Map) return false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      AuthStatusChecker.start(context);
+    });
 
-            if (mail.containsKey('is_read')) {
-              return mail['is_read'] != true;
-            }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      checkAppUpdate(context);
+    });
+  }
 
-            if (mail.containsKey('read')) {
-              return mail['read'] != true;
-            }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    mailCountTimer?.cancel();
+    super.dispose();
+  }
 
-            final dynamic readAt = mail['read_at'];
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {  
+    super.didChangeAppLifecycleState(state);
 
-            return readAt == null ||
-                readAt.toString().trim().isEmpty;
-          }).length;
+    if (state == AppLifecycleState.resumed) {
+      fetchInboxMailCount();
+    }
+  }
+
+  Future<void> fetchInboxMailCount() async {
+    if (isFetchingInboxMailCount) return;
+
+    isFetchingInboxMailCount = true;
+
+    try {
+      final String? token = await getTokenFromPrefs();
+
+      if (token == null || token.trim().isEmpty) {
+        return;
+      }
+
+      final Uri uri = Uri.parse(
+        '$api/api/internal/mails/',
+      ).replace(
+        queryParameters: {
+          'type': 'inbox',
+          'read_status': 'unread',
+          'page': '1',
+        },
+      );
+
+      final http.Response response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint(
+          'MAIL COUNT REQUEST FAILED: '
+          '${response.statusCode} ${response.body}',
+        );
+        return;
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+
+      int newUnreadCount = 0;
+
+      if (decoded is Map<String, dynamic>) {
+        final dynamic results = decoded['results'];
+        final dynamic data = decoded['data'];
+
+        final dynamic rawUnreadCount = decoded['unread_count'] ??
+            (results is Map ? results['unread_count'] : null) ??
+            (data is Map ? data['unread_count'] : null);
+
+        final dynamic rawFilteredCount = decoded['count'] ??
+            (results is Map ? results['count'] : null) ??
+            (data is Map ? data['count'] : null);
+
+        if (rawUnreadCount != null) {
+          newUnreadCount = rawUnreadCount is int
+              ? rawUnreadCount
+              : int.tryParse(rawUnreadCount.toString()) ?? 0;
+        } else if (rawFilteredCount != null) {
+          newUnreadCount = rawFilteredCount is int
+              ? rawFilteredCount
+              : int.tryParse(rawFilteredCount.toString()) ?? 0;
+        } else {
+          dynamic mailList;
+
+          if (results is Map && results['data'] is List) {
+            mailList = results['data'];
+          } else if (data is Map && data['data'] is List) {
+            mailList = data['data'];
+          } else if (results is List) {
+            mailList = results;
+          } else if (data is List) {
+            mailList = data;
+          }
+
+          if (mailList is List) {
+            newUnreadCount = mailList.where((dynamic mail) {
+              if (mail is! Map) return false;
+
+              if (mail.containsKey('is_read')) {
+                return mail['is_read'] != true;
+              }
+
+              if (mail.containsKey('read')) {
+                return mail['read'] != true;
+              }
+
+              final dynamic readAt = mail['read_at'];
+
+              return readAt == null || readAt.toString().trim().isEmpty;
+            }).length;
+          }
         }
       }
-    }
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (inboxMailCount != newUnreadCount) {
-      setState(() {
-        inboxMailCount = newUnreadCount;
-      });
+      if (inboxMailCount != newUnreadCount) {
+        setState(() {
+          inboxMailCount = newUnreadCount;
+        });
+      }
+    } catch (error, stackTrace) {
+      debugPrint('MAIL COUNT ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      isFetchingInboxMailCount = false;
     }
-  } catch (error, stackTrace) {
-    debugPrint('MAIL COUNT ERROR: $error');
-    debugPrintStack(stackTrace: stackTrace);
-  } finally {
-    isFetchingInboxMailCount = false;
   }
-}
 
- Future<void> getProfile() async {
+  Future<void> getProfile() async {
     try {
       final token = await getTokenFromPrefs();
 
@@ -264,13 +259,14 @@ Future<void> fetchInboxMailCount() async {
       debugPrint("PROFILE ERROR : $e");
     }
   }
-    String getProfileImageUrl() {
+
+  String getProfileImageUrl() {
     if (profileImage.trim().isEmpty) return '';
     if (profileImage.startsWith('http')) return profileImage;
     return '$api$profileImage';
   }
 
- bool _isUpdateAvailable(String currentVersion, String storeVersion) {
+  bool _isUpdateAvailable(String currentVersion, String storeVersion) {
     List<int> currentParts =
         currentVersion.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
@@ -299,8 +295,7 @@ Future<void> fetchInboxMailCount() async {
     return false;
   }
 
-
-   Future<bool> checkAppUpdate(BuildContext context) async {
+  Future<bool> checkAppUpdate(BuildContext context) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
@@ -418,7 +413,6 @@ Future<void> fetchInboxMailCount() async {
 
     return true;
   }
-
 
   int approval = 0;
   int confirm = 0;
@@ -824,64 +818,65 @@ Future<void> fetchInboxMailCount() async {
           elevation: 0,
           backgroundColor: Colors.white,
           // leading: Icon(Icons.arrow_back, color: Colors.black),
-        actions: [
-  Padding(
-    padding: const EdgeInsets.only(right: 12),
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          icon: const Icon(
-            Icons.mail_outline_rounded,
-            color: Colors.black,
-            size: 28,
-          ),
-        onPressed: () async {
-  await Navigator.push<void>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const StaffMailPage(),
-    ),
-  );
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.mail_outline_rounded,
+                      color: Colors.black,
+                      size: 28,
+                    ),
+                    onPressed: () async {
+                      await Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const StaffMailPage(),
+                        ),
+                      );
 
-  if (!mounted) return;
+                      if (!mounted) return;
 
-  await fetchInboxMailCount();
-},
-        ),
-
-        if (inboxMailCount > 0)
-          Positioned(
-            right: 4,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 2,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              constraints: const BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
-              child: Text(
-                inboxMailCount > 99 ? '99+' : inboxMailCount.toString(),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
+                      await fetchInboxMailCount();
+                    },
+                  ),
+                  if (inboxMailCount > 0)
+                    Positioned(
+                      right: 4,
+                      top: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          inboxMailCount > 99
+                              ? '99+'
+                              : inboxMailCount.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-          ),
-      ],
-    ),
-  ),
-],
+          ],
         ),
         drawer: Drawer(
           backgroundColor: Colors.white,
@@ -917,7 +912,7 @@ Future<void> fetchInboxMailCount() async {
                 //         MaterialPageRoute(builder: (context) => Graph()));
                 //   },
                 // ),
-                    ListTile(
+                ListTile(
                   leading: Icon(Icons.person),
                   title: Text('Add Attendance'),
                   onTap: () {
@@ -929,23 +924,23 @@ Future<void> fetchInboxMailCount() async {
                   },
                 ),
 
-ListTile(
-  title: const Text('Send Mail'),
-  onTap: () async {
-    Navigator.pop(context);
+                ListTile(
+                  title: const Text('Send Mail'),
+                  onTap: () async {
+                    Navigator.pop(context);
 
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const StaffMailPage(),
-      ),
-    );
+                    await Navigator.push<void>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const StaffMailPage(),
+                      ),
+                    );
 
-    if (!mounted) return;
+                    if (!mounted) return;
 
-    await fetchInboxMailCount();
-  },
-),
+                    await fetchInboxMailCount();
+                  },
+                ),
 
                 _buildDropdownTile(context, 'Customers', [
                   'Add Customer',
@@ -961,7 +956,20 @@ ListTile(
                 //   },
                 // ),
 
-                _buildDropdownTile(context, 'Orders', ['New Orders', 'Orders']),
+                _buildDropdownTile(context, 'Orders', [
+                  'New Orders',
+                  'Orders List',
+                  'Invoice Created',
+                  'Invoice Approved',
+                  'Pre Booked',
+                  'Waiting For Confirmation',
+                  'To Print',
+                  'Packing Under Progress',
+                  'Packed',
+                  'Ready to ship',
+                  'Shipped',
+                  'Invoice Rejected'
+                ]),
                 Divider(),
                 ListTile(
                   leading: Icon(Icons.add_shopping_cart),
@@ -975,7 +983,7 @@ ListTile(
                   },
                 ),
 
-                 Divider(),
+                Divider(),
                 ListTile(
                   leading: Icon(Icons.add_shopping_cart),
                   title: Text('Bulk Order Creation Excel'),
@@ -988,55 +996,55 @@ ListTile(
                   },
                 ),
                 if (isManager) ...[
-                 Divider(),
-                ListTile(
-                  leading: Icon(Icons.person_add),
-                  title: Text('Add Team Staff '),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => StaffAttendanceTeamMemberScreen()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-                
-                 Divider(),
-                ListTile(
-                  leading: Icon(Icons.people),
-                  title: Text('Add Attendance '),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => StaffMarkAttendanceScreen()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-
                   Divider(),
-
                   ListTile(
-                  leading: Icon(Icons.people),
-                  title: Text('Approve Leave Requests '),
+                    leading: Icon(Icons.person_add),
+                    title: Text('Add Team Staff '),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  StaffAttendanceTeamMemberScreen()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
+                  Divider(),
+                  ListTile(
+                    leading: Icon(Icons.people),
+                    title: Text('Add Attendance '),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  StaffMarkAttendanceScreen()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
+                  Divider(),
+                  ListTile(
+                    leading: Icon(Icons.people),
+                    title: Text('Approve Leave Requests '),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  ManagerLeaveRequestsPage()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
+                ],
+                ListTile(
+                  title: Text('Employee Leave Form'),
                   onTap: () {
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) => ManagerLeaveRequestsPage()));
-                    // Navigate to the Settings page or perform any other action
+                            builder: (context) => EmployeeLeaveFormPage()));
                   },
                 ),
-
-                
-                ],
-  ListTile(
-                title: Text('Employee Leave Form'),
-                onTap: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => EmployeeLeaveFormPage()));
-                },
-              ),
                 Divider(),
                 ListTile(
                   leading: const Icon(Icons.logout),

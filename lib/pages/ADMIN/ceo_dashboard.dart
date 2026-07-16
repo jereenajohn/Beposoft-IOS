@@ -10,6 +10,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_category.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_country_code.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_currency.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_daily_sales_report.dart';
+import 'package:beposoft/pages/ACCOUNTS/add_main_category.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_purpose_of_payment.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
@@ -97,7 +98,8 @@ class ceo_dashboard extends StatefulWidget {
   State<ceo_dashboard> createState() => _ceo_dashboardState();
 }
 
-class _ceo_dashboardState extends State<ceo_dashboard> {
+class _ceo_dashboardState extends State<ceo_dashboard>
+    with WidgetsBindingObserver {
   List<String> statusOptions = ["pending", "approved", "rejected"];
   final _currency =
       NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
@@ -109,13 +111,15 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   List<Map<String, dynamic>> shippedOrders = [];
   List<Map<String, dynamic>> Finance = [];
   List<dynamic> internalTransfers = [];
-  Map<String, dynamic> salesReturnGrandTotal = {};
+  Map<String, dynamic> todaySalesReturnGrandTotal = {};
+  Map<String, dynamic> monthSalesReturnGrandTotal = {};
   bool salesReturnLoading = false;
   double todayCredit = 0.0;
   double todayDebit = 0.0;
   double openingBalance = 0.0;
   double monthAverage = 0.0;
   double closingBalance = 0.0;
+  bool isFetchingInboxMailCount = false;
   var department;
   double dbrOpeningBalanceTotal = 0;
   double dbrTodayCreditTotal = 0;
@@ -144,6 +148,9 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
 
   Map<String, dynamic> cyclingInventorySummary = {};
   Map<String, dynamic> skatingInventorySummary = {};
+
+  List<Map<String, dynamic>> mainCategoryInventorySummary = [];
+  bool mainCategoryInventoryLoading = false;
   Map<String, double> expenseTypeWiseTotals =
       {}; // will store totals grouped by expense_type
   Map<String, dynamic>? productsData;
@@ -268,6 +275,7 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _getUsername(); // Get the username when the page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AuthStatusChecker.start(context);
@@ -280,10 +288,14 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
       end: DateTime(now.year, now.month, now.day, 23, 59, 59),
     );
     fetchInboxMailCount();
-
-    mailCountTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      fetchInboxMailCount();
-    });
+    mailCountTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) {
+        if (mounted) {
+          fetchInboxMailCount();
+        }
+      },
+    );
     initdata();
     getProfile();
     getGrvList();
@@ -306,7 +318,8 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     fetchWaitingForConfirmationCount();
     getProfile();
     fetchInventoryAmountSummary();
-    fetchFamilyWiseInventorySummary();
+    // fetchFamilyWiseInventorySummary();
+    fetchMainCategoryInventorySummary();
 
     //   fetchInternalTransfersData(
     // getdgnvd);
@@ -333,7 +346,17 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      fetchInboxMailCount();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     mailCountTimer?.cancel();
     super.dispose();
   }
@@ -346,111 +369,215 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     await fetchReport();
   }
 
-  Future<void> fetchFamilyWiseInventorySummary() async {
+  Future<void> fetchMainCategoryInventorySummary() async {
     if (!mounted) return;
 
     setState(() {
-      familyInventoryLoading = true;
+      mainCategoryInventoryLoading = true;
     });
 
     try {
       final String? token = await getTokenFromPrefs();
 
-      if (token == null || token.isEmpty) {
+      if (token == null || token.trim().isEmpty) {
         if (!mounted) return;
-
         setState(() {
-          cyclingInventorySummary = {};
-          skatingInventorySummary = {};
-          familyInventoryLoading = false;
+          mainCategoryInventorySummary = [];
+          mainCategoryInventoryLoading = false;
         });
-
         return;
       }
 
       final Uri uri = Uri.parse(
-        '$api/api/products/family/wise/summary/',
+        '$api/api/products/main/category/wise/summary/',
       );
-
-      debugPrint('FAMILY INVENTORY SUMMARY URL: $uri');
 
       final http.Response response = await http.get(
         uri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
       );
 
-      debugPrint(
-        'FAMILY INVENTORY SUMMARY STATUS: '
-        '${response.statusCode}',
-      );
-
-      debugPrint(
-        'FAMILY INVENTORY SUMMARY BODY: '
-        '${response.body}',
-      );
-
-      if (!mounted) return;
-
       if (response.statusCode != 200) {
-        setState(() {
-          cyclingInventorySummary = {};
-          skatingInventorySummary = {};
-          familyInventoryLoading = false;
-        });
+        debugPrint(
+          'MAIN CATEGORY INVENTORY SUMMARY FAILED: '
+          '${response.statusCode} ${response.body}',
+        );
 
+        if (!mounted) return;
+        setState(() {
+          mainCategoryInventorySummary = [];
+          mainCategoryInventoryLoading = false;
+        });
         return;
       }
 
       final dynamic decoded = jsonDecode(response.body);
+      final List<dynamic> rawResults =
+          decoded is Map && decoded['results'] is List
+              ? List<dynamic>.from(decoded['results'])
+              : <dynamic>[];
 
-      final List<dynamic> results = decoded is Map && decoded['results'] is List
-          ? List<dynamic>.from(decoded['results'])
-          : <dynamic>[];
-
-      Map<String, dynamic> cyclingData = {};
-      Map<String, dynamic> skatingData = {};
-
-      for (final dynamic item in results) {
+      final List<Map<String, dynamic>> parsedResults = [];
+      for (final dynamic item in rawResults) {
         if (item is! Map) continue;
 
-        final Map<String, dynamic> family = Map<String, dynamic>.from(item);
+        final Map<String, dynamic> category = Map<String, dynamic>.from(item);
 
-        final String familyName =
-            (family['family_name'] ?? '').toString().trim().toLowerCase();
+        final String categoryName = (category['main_category_name'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
 
-        if (familyName == 'cycling') {
-          cyclingData = family;
-        } else if (familyName == 'skating') {
-          skatingData = family;
+        // Show only these categories
+        if (!(categoryName == 'CYCLING' ||
+            categoryName == 'SKATING' ||
+            categoryName == 'SUPER BABY')) {
+          continue;
         }
+
+        parsedResults.add({
+          'main_category_id': category['main_category_id'],
+          'main_category_name': categoryName,
+          'product_count': _asInt(category['product_count']),
+          'total_selling_value': _asDouble(category['total_selling_value']),
+        });
       }
 
-      setState(() {
-        cyclingInventorySummary = cyclingData;
-        skatingInventorySummary = skatingData;
-        familyInventoryLoading = false;
-      });
-    } catch (e, stackTrace) {
-      debugPrint(
-        'FAMILY INVENTORY SUMMARY ERROR: $e',
-      );
-
-      debugPrintStack(
-        stackTrace: stackTrace,
+      parsedResults.sort(
+        (a, b) => a['main_category_name'].toString().toLowerCase().compareTo(
+              b['main_category_name'].toString().toLowerCase(),
+            ),
       );
 
       if (!mounted) return;
 
       setState(() {
-        cyclingInventorySummary = {};
-        skatingInventorySummary = {};
-        familyInventoryLoading = false;
+        mainCategoryInventorySummary = parsedResults;
+        mainCategoryInventoryLoading = false;
+      });
+    } catch (error, stackTrace) {
+      debugPrint(
+        'MAIN CATEGORY INVENTORY SUMMARY ERROR: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+      setState(() {
+        mainCategoryInventorySummary = [];
+        mainCategoryInventoryLoading = false;
       });
     }
   }
+
+  // Future<void> fetchFamilyWiseInventorySummary() async {
+  //   if (!mounted) return;
+
+  //   setState(() {
+  //     familyInventoryLoading = true;
+  //   });
+
+  //   try {
+  //     final String? token = await getTokenFromPrefs();
+
+  //     if (token == null || token.isEmpty) {
+  //       if (!mounted) return;
+
+  //       setState(() {
+  //         cyclingInventorySummary = {};
+  //         skatingInventorySummary = {};
+  //         familyInventoryLoading = false;
+  //       });
+
+  //       return;
+  //     }
+
+  //     final Uri uri = Uri.parse(
+  //       '$api/api/products/main/category/wise/summary/',
+  //     );
+
+  //     debugPrint('FAMILY INVENTORY SUMMARY URL: $uri');
+
+  //     final http.Response response = await http.get(
+  //       uri,
+  //       headers: {
+  //         'Authorization': 'Bearer $token',
+  //         'Content-Type': 'application/json',
+  //       },
+  //     );
+
+  //     debugPrint(
+  //       'FAMILY INVENTORY SUMMARY STATUS: '
+  //       '${response.statusCode}',
+  //     );
+
+  //     debugPrint(
+  //       'FAMILY INVENTORY SUMMARY BODY: '
+  //       '${response.body}',
+  //     );
+
+  //     if (!mounted) return;
+
+  //     if (response.statusCode != 200) {
+  //       setState(() {
+  //         cyclingInventorySummary = {};
+  //         skatingInventorySummary = {};
+  //         familyInventoryLoading = false;
+  //       });
+
+  //       return;
+  //     }
+
+  //     final dynamic decoded = jsonDecode(response.body);
+
+  //     final List<dynamic> results = decoded is Map && decoded['results'] is List
+  //         ? List<dynamic>.from(decoded['results'])
+  //         : <dynamic>[];
+
+  //     Map<String, dynamic> cyclingData = {};
+  //     Map<String, dynamic> skatingData = {};
+
+  //     for (final dynamic item in results) {
+  //       if (item is! Map) continue;
+
+  //       final Map<String, dynamic> family = Map<String, dynamic>.from(item);
+
+  //       final String familyName =
+  //           (family['family_name'] ?? '').toString().trim().toLowerCase();
+
+  //       if (familyName == 'cycling') {
+  //         cyclingData = family;
+  //       } else if (familyName == 'skating') {
+  //         skatingData = family;
+  //       }
+  //     }
+
+  //     setState(() {
+  //       cyclingInventorySummary = cyclingData;
+  //       skatingInventorySummary = skatingData;
+  //       familyInventoryLoading = false;
+  //     });
+  //   } catch (e, stackTrace) {
+  //     debugPrint(
+  //       'FAMILY INVENTORY SUMMARY ERROR: $e',
+  //     );
+
+  //     debugPrintStack(
+  //       stackTrace: stackTrace,
+  //     );
+
+  //     if (!mounted) return;
+
+  //     setState(() {
+  //       cyclingInventorySummary = {};
+  //       skatingInventorySummary = {};
+  //       familyInventoryLoading = false;
+  //     });
+  //   }
+  // }
 
   Future<void> fetchInventoryAmountSummary() async {
     if (!mounted) return;
@@ -597,43 +724,112 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   }
 
   Future<void> fetchInboxMailCount() async {
+    if (isFetchingInboxMailCount) return;
+
+    isFetchingInboxMailCount = true;
+
     try {
-      final token = await getTokenFromPrefs();
+      final String? token = await getTokenFromPrefs();
 
-      if (token == null || token.isEmpty) return;
+      if (token == null || token.trim().isEmpty) {
+        return;
+      }
 
-      final response = await http.get(
-        Uri.parse('$api/api/internal/mails/?type=inbox&page=1'),
+      final Uri uri = Uri.parse(
+        '$api/api/internal/mails/',
+      ).replace(
+        queryParameters: {
+          'type': 'inbox',
+          'read_status': 'unread',
+          'page': '1',
+        },
+      );
+
+      final http.Response response = await http.get(
+        uri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
+      if (response.statusCode != 200) {
+        debugPrint(
+          'MAIL COUNT REQUEST FAILED: '
+          '${response.statusCode} ${response.body}',
+        );
+        return;
+      }
 
-        int count = 0;
+      final dynamic decoded = jsonDecode(response.body);
 
-        if (decoded['count'] != null) {
-          count = decoded['count'];
-        } else if (decoded['results'] is Map &&
-            decoded['results']['data'] is List) {
-          count = decoded['results']['data'].length;
-        } else if (decoded['data'] is List) {
-          count = decoded['data'].length;
-        } else if (decoded['results'] is List) {
-          count = decoded['results'].length;
-        }
+      int newUnreadCount = 0;
 
-        if (mounted && count != inboxMailCount) {
-          setState(() {
-            inboxMailCount = count;
-          });
+      if (decoded is Map<String, dynamic>) {
+        final dynamic results = decoded['results'];
+        final dynamic data = decoded['data'];
+
+        final dynamic rawUnreadCount = decoded['unread_count'] ??
+            (results is Map ? results['unread_count'] : null) ??
+            (data is Map ? data['unread_count'] : null);
+
+        final dynamic rawFilteredCount = decoded['count'] ??
+            (results is Map ? results['count'] : null) ??
+            (data is Map ? data['count'] : null);
+
+        if (rawUnreadCount != null) {
+          newUnreadCount = rawUnreadCount is int
+              ? rawUnreadCount
+              : int.tryParse(rawUnreadCount.toString()) ?? 0;
+        } else if (rawFilteredCount != null) {
+          newUnreadCount = rawFilteredCount is int
+              ? rawFilteredCount
+              : int.tryParse(rawFilteredCount.toString()) ?? 0;
+        } else {
+          dynamic mailList;
+
+          if (results is Map && results['data'] is List) {
+            mailList = results['data'];
+          } else if (data is Map && data['data'] is List) {
+            mailList = data['data'];
+          } else if (results is List) {
+            mailList = results;
+          } else if (data is List) {
+            mailList = data;
+          }
+
+          if (mailList is List) {
+            newUnreadCount = mailList.where((dynamic mail) {
+              if (mail is! Map) return false;
+
+              if (mail.containsKey('is_read')) {
+                return mail['is_read'] != true;
+              }
+
+              if (mail.containsKey('read')) {
+                return mail['read'] != true;
+              }
+
+              final dynamic readAt = mail['read_at'];
+
+              return readAt == null || readAt.toString().trim().isEmpty;
+            }).length;
+          }
         }
       }
-    } catch (e) {
-      debugPrint('MAIL COUNT ERROR: $e');
+
+      if (!mounted) return;
+
+      if (inboxMailCount != newUnreadCount) {
+        setState(() {
+          inboxMailCount = newUnreadCount;
+        });
+      }
+    } catch (error, stackTrace) {
+      debugPrint('MAIL COUNT ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      isFetchingInboxMailCount = false;
     }
   }
 
@@ -801,12 +997,14 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
       Future(() => fetchshippedorders()),
       Future(() => getexpenselist()),
       Future(() => getFinancialReport()),
+      Future(() => fetchInboxMailCount()),
       Future(() => getFinance_without_transfer()),
       Future(() => getTodayODReportTotals()),
       Future(() => getCategoryWiseProducts()),
       Future(() => fetchBdmOverallFamilyReport()),
       Future(() => fetchInventoryAmountSummary()),
-      Future(() => fetchFamilyWiseInventorySummary()),
+      // Future(() => fetchFamilyWiseInventorySummary()),
+      Future(() => fetchMainCategoryInventorySummary()),
       Future(() => getstaff()),
       Future(() => fetchGrvSummary()),
       Future(() => fetchWaitingForConfirmationCount()),
@@ -859,48 +1057,125 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
   }
 
   Future<void> fetchGrvSummary() async {
+    if (!mounted) return;
+
+    setState(() {
+      salesReturnLoading = true;
+    });
+
     try {
-      final token = await getTokenFromPrefs();
+      final String? token = await getTokenFromPrefs();
 
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      if (token == null || token.trim().isEmpty) {
+        if (!mounted) return;
 
-      final uri = Uri.parse('$api/api/grv/family/payment/summary/').replace(
+        setState(() {
+          todaySalesReturnGrandTotal = {};
+          monthSalesReturnGrandTotal = {};
+          salesReturnLoading = false;
+        });
+
+        return;
+      }
+
+      final DateTime now = DateTime.now();
+
+      final String today = DateFormat('yyyy-MM-dd').format(now);
+
+      final String monthStart = DateFormat('yyyy-MM-dd').format(
+        DateTime(now.year, now.month, 1),
+      );
+
+      final Uri todayUri = Uri.parse(
+        '$api/api/grv/family/payment/summary/',
+      ).replace(
         queryParameters: {
           'start_date': today,
           'end_date': today,
         },
       );
 
-      final response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
+      final Uri monthUri = Uri.parse(
+        '$api/api/grv/family/payment/summary/',
+      ).replace(
+        queryParameters: {
+          'start_date': monthStart,
+          'end_date': today,
         },
       );
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
+      debugPrint('TODAY GRV SUMMARY URL: $todayUri');
+      debugPrint('MONTH GRV SUMMARY URL: $monthUri');
 
-        if (!mounted) return;
+      final List<http.Response> responses = await Future.wait([
+        http.get(
+          todayUri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+        http.get(
+          monthUri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      ]);
 
-        setState(() {
-          salesReturnGrandTotal = Map<String, dynamic>.from(
-            decoded['grand_total'] ?? {},
+      final http.Response todayResponse = responses[0];
+      final http.Response monthResponse = responses[1];
+
+      Map<String, dynamic> todayGrandTotal = {};
+      Map<String, dynamic> monthGrandTotal = {};
+
+      if (todayResponse.statusCode == 200) {
+        final dynamic decoded = jsonDecode(todayResponse.body);
+
+        if (decoded is Map && decoded['grand_total'] is Map) {
+          todayGrandTotal = Map<String, dynamic>.from(
+            decoded['grand_total'],
           );
-          salesReturnLoading = false;
-        });
+        }
       } else {
-        if (!mounted) return;
-        setState(() {
-          salesReturnGrandTotal = {};
-          salesReturnLoading = false;
-        });
+        debugPrint(
+          'TODAY GRV SUMMARY FAILED: '
+          '${todayResponse.statusCode} ${todayResponse.body}',
+        );
       }
-    } catch (e) {
+
+      if (monthResponse.statusCode == 200) {
+        final dynamic decoded = jsonDecode(monthResponse.body);
+
+        if (decoded is Map && decoded['grand_total'] is Map) {
+          monthGrandTotal = Map<String, dynamic>.from(
+            decoded['grand_total'],
+          );
+        }
+      } else {
+        debugPrint(
+          'MONTH GRV SUMMARY FAILED: '
+          '${monthResponse.statusCode} ${monthResponse.body}',
+        );
+      }
+
       if (!mounted) return;
+
       setState(() {
-        salesReturnGrandTotal = {};
+        todaySalesReturnGrandTotal = todayGrandTotal;
+        monthSalesReturnGrandTotal = monthGrandTotal;
+        salesReturnLoading = false;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('GRV SUMMARY ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      setState(() {
+        todaySalesReturnGrandTotal = {};
+        monthSalesReturnGrandTotal = {};
         salesReturnLoading = false;
       });
     }
@@ -2650,6 +2925,60 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     );
   }
 
+  Widget _buildInventorySummaryLine({
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 28,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.22),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.88),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 0,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                value,
+                maxLines: 1,
+                softWrap: false,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget buildInfoRowWhite(
     String label,
     String value, {
@@ -2880,15 +3209,6 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
         ? salesTeamCdTeamTotals
         : salesTeamCdTeamTotals.take(1).toList();
 
-    final salesReturnPaid = _asMap(salesReturnGrandTotal['paid']);
-    final salesReturnCod = _asMap(salesReturnGrandTotal['COD']);
-
-    final todayCodReturnCount = _asInt(salesReturnCod['grv_count']);
-    final todayCodReturnAmount = _asDouble(salesReturnCod['order_amount']);
-
-    final todayCashReturnCount = _asInt(salesReturnPaid['grv_count']);
-    final todayCashReturnAmount = _asDouble(salesReturnPaid['order_amount']);
-
     // final withInternalTransfer = _asMap(todayData['with_internal_transfer']);
     // final financeOpeningBalance =
     //     _asDouble(withInternalTransfer['open_balance']);
@@ -2897,7 +3217,37 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     // final financeDebit = _asDouble(withInternalTransfer['debit']);
     // final financeClosingBalance =
     //     _asDouble(withInternalTransfer['closing_balance']);
+    final Map<String, dynamic> todaySalesReturnPaid =
+        _asMap(todaySalesReturnGrandTotal['paid']);
 
+    final Map<String, dynamic> todaySalesReturnCod =
+        _asMap(todaySalesReturnGrandTotal['COD']);
+
+    final int todayCodReturnCount = _asInt(todaySalesReturnCod['grv_count']);
+
+    final double todayCodReturnAmount =
+        _asDouble(todaySalesReturnCod['order_amount']);
+
+    final int todayCashReturnCount = _asInt(todaySalesReturnPaid['grv_count']);
+
+    final double todayCashReturnAmount =
+        _asDouble(todaySalesReturnPaid['order_amount']);
+
+    final Map<String, dynamic> monthSalesReturnPaid =
+        _asMap(monthSalesReturnGrandTotal['paid']);
+
+    final Map<String, dynamic> monthSalesReturnCod =
+        _asMap(monthSalesReturnGrandTotal['COD']);
+
+    final int monthCodReturnCount = _asInt(monthSalesReturnCod['grv_count']);
+
+    final double monthCodReturnAmount =
+        _asDouble(monthSalesReturnCod['order_amount']);
+
+    final int monthCashReturnCount = _asInt(monthSalesReturnPaid['grv_count']);
+
+    final double monthCashReturnAmount =
+        _asDouble(monthSalesReturnPaid['order_amount']);
     final currentMonthData = _asMap(bankSummary['current_month_data']);
 
     final todayBank = _asMap(todayData['with_internal_transfer']);
@@ -2912,16 +3262,16 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     final monthClosingBalance = _asDouble(currentMonthBank['closing_balance']);
     final dac = todayCredit - todayDebit;
     final mac = monthCredit - monthDebit;
-    final grvReturnSummary = _asMap(productsData?['grv_return_summary']);
+    // final grvReturnSummary = _asMap(productsData?['grv_return_summary']);
 
-    final grvToday = _asMap(grvReturnSummary['today']);
-    final grvMonth = _asMap(grvReturnSummary['month']);
+    // final grvToday = _asMap(grvReturnSummary['today']);
+    // final grvMonth = _asMap(grvReturnSummary['month']);
 
-    final todayCodReturn = _asMap(grvToday['cod_return']);
-    final todayCashReturn = _asMap(grvToday['cash_return']);
+    // final todayCodReturn = _asMap(grvToday['cod_return']);
+    // final todayCashReturn = _asMap(grvToday['cash_return']);
 
-    final monthCodReturn = _asMap(grvMonth['cod_return']);
-    final monthCashReturn = _asMap(grvMonth['cash_return']);
+    // final monthCodReturn = _asMap(grvMonth['cod_return']);
+    // final monthCashReturn = _asMap(grvMonth['cash_return']);
 
     // final todayCodReturnCount = _asInt(todayCodReturn['invoice_count']);
     // final todayCodReturnAmount = _asDouble(todayCodReturn['total']);
@@ -2929,11 +3279,11 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
     // final todayCashReturnCount = _asInt(todayCashReturn['invoice_count']);
     // final todayCashReturnAmount = _asDouble(todayCashReturn['total']);
 
-    final monthCodReturnCount = _asInt(monthCodReturn['invoice_count']);
-    final monthCodReturnAmount = _asDouble(monthCodReturn['total']);
+    // final monthCodReturnCount = _asInt(monthCodReturn['invoice_count']);
+    // final monthCodReturnAmount = _asDouble(monthCodReturn['total']);
 
-    final monthCashReturnCount = _asInt(monthCashReturn['invoice_count']);
-    final monthCashReturnAmount = _asDouble(monthCashReturn['total']);
+    // final monthCashReturnCount = _asInt(monthCashReturn['invoice_count']);
+    // final monthCashReturnAmount = _asDouble(monthCashReturn['total']);
 
     final purchaseSummary = _asMap(beposoftSummary['purchase_summary']);
     final purchaseCount = _asInt(purchaseSummary['total_count']);
@@ -3218,52 +3568,70 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
           ),
           _buildDashboardCard(
             title: "Sales Return",
-            value: "",
+            value: salesReturnLoading ? "Loading..." : "",
             lines: const [],
-            bottomTopSpacing: 10,
-            bottom: Column(
-              children: [
-                _buildDashboardLineItem(
-                  title: "Today COD SR INV",
-                  value: "$todayCodReturnCount",
-                ),
-                const SizedBox(height: 8),
-                _buildDashboardLineItem(
-                  title: "Amount",
-                  value: _formatDashboardAmount(todayCodReturnAmount),
-                ),
-                const SizedBox(height: 8),
-                _buildDashboardLineItem(
-                  title: "Today Cash SR INV",
-                  value: "$todayCashReturnCount",
-                ),
-                const SizedBox(height: 8),
-                _buildDashboardLineItem(
-                  title: "Amount",
-                  value: _formatDashboardAmount(todayCashReturnAmount),
-                ),
-                // const SizedBox(height: 8),
-                // _buildDashboardLineItem(
-                //   title: "Monthly COD Return COUNT",
-                //   value: "$monthCodReturnCount",
-                // ),
-                // const SizedBox(height: 6),
-                // _buildDashboardLineItem(
-                //   title: "Amount",
-                //   value: _formatDashboardAmount(monthCodReturnAmount),
-                // ),
-                // const SizedBox(height: 8),
-                // _buildDashboardLineItem(
-                //   title: "Monthly Cash Return COUNT",
-                //   value: "$monthCashReturnCount",
-                // ),
-                // const SizedBox(height: 6),
-                // _buildDashboardLineItem(
-                //   title: "Amount",
-                //   value: _formatDashboardAmount(monthCashReturnAmount),
-                // ),
-              ],
-            ),
+            bottomTopSpacing: 4,
+            bottom: salesReturnLoading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      _buildDashboardLineItem(
+                        title: "Today COD SR INV",
+                        value: "$todayCodReturnCount",
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "Amount",
+                        value: _formatDashboardAmount(
+                          todayCodReturnAmount,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "Today Cash SR INV",
+                        value: "$todayCashReturnCount",
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "Amount",
+                        value: _formatDashboardAmount(
+                          todayCashReturnAmount,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "M.COD SR INV",
+                        value: "$monthCodReturnCount",
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "Amount",
+                        value: _formatDashboardAmount(
+                          monthCodReturnAmount,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "M.Cash SR INV",
+                        value: "$monthCashReturnCount",
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDashboardLineItem(
+                        title: "Amount",
+                        value: _formatDashboardAmount(
+                          monthCashReturnAmount,
+                        ),
+                      ),
+                    ],
+                  ),
             onTap: () {
               Navigator.push(
                 context,
@@ -3312,27 +3680,54 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                   : "M.Amount: ${_formatDashboardAmount(
                       monthInventory['total_amount'],
                     )}",
-              // familyInventoryLoading
-              //     ? "Cycling Products: Loading..."
-              //     : "Cycling Products: ${_asInt(
-              //         cyclingInventorySummary['product_count'],
-              //       )}",
-              // familyInventoryLoading
-              //     ? "Cycling Value: Loading..."
-              //     : "Cycling Value: ${_formatDashboardAmount(
-              //         cyclingInventorySummary['total_selling_value'],
-              //       )}",
-              // familyInventoryLoading
-              //     ? "Skating Products: Loading..."
-              //     : "Skating Products: ${_asInt(
-              //         skatingInventorySummary['product_count'],
-              //       )}",
-              // familyInventoryLoading
-              //     ? "Skating Value: Loading..."
-              //     : "Skating Value: ${_formatDashboardAmount(
-              //         skatingInventorySummary['total_selling_value'],
-              //       )}",
             ],
+            bottomTopSpacing: 6,
+            bottom: mainCategoryInventoryLoading
+                ? _buildDashboardLineItem(
+                    title: "Main Categories",
+                    value: "Loading...",
+                  )
+                : mainCategoryInventorySummary.isEmpty
+                    ? _buildDashboardLineItem(
+                        title: "Main Categories",
+                        value: "No data",
+                      )
+                    : Column(
+                        children: mainCategoryInventorySummary.map(
+                          (Map<String, dynamic> item) {
+                            final String categoryName =
+                                (item['main_category_name'] ?? '')
+                                    .toString()
+                                    .trim();
+
+                            final int productCount =
+                                _asInt(item['product_count']);
+
+                            final double sellingValue = _asDouble(
+                              item['total_selling_value'],
+                            );
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Column(
+                                children: [
+                                  _buildInventorySummaryLine(
+                                    title: categoryName,
+                                    value: "Count: $productCount",
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _buildInventorySummaryLine(
+                                    title: "Amount",
+                                    value: _formatDashboardAmount(
+                                      sellingValue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ).toList(),
+                      ),
             onTap: () {
               Navigator.push(
                 context,
@@ -6663,14 +7058,16 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                         size: 28,
                       ),
                       onPressed: () async {
-                        await Navigator.push(
+                        await Navigator.push<void>(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const StaffMailPage(),
+                            builder: (_) => const StaffMailPage(),
                           ),
                         );
 
-                        fetchInboxMailCount();
+                        if (!mounted) return;
+
+                        await fetchInboxMailCount();
                       },
                     ),
                     if (inboxMailCount > 0)
@@ -6763,12 +7160,20 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                     },
                   ),
                   ListTile(
-                    title: Text('Send Mail'),
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => StaffMailPage()));
+                    title: const Text('Send Mail'),
+                    onTap: () async {
+                      Navigator.pop(context);
+
+                      await Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const StaffMailPage(),
+                        ),
+                      );
+
+                      if (!mounted) return;
+
+                      await fetchInboxMailCount();
                     },
                   ),
 
@@ -6856,7 +7261,18 @@ class _ceo_dashboardState extends State<ceo_dashboard> {
                     'View Leave List',
                   ]),
                   Divider(),
-
+                  ListTile(
+                    leading: Icon(Icons.category),
+                    title: Text('Add Main Category'),
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  MainCategoryManagementPage()));
+                      // Navigate to the Settings page or perform any other action
+                    },
+                  ),
                   ListTile(
                     leading: Icon(Icons.person),
                     title: Text('Purchase Invoice'),

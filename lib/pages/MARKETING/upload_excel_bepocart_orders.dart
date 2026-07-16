@@ -123,17 +123,21 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
 
     for (final state in states) {
       final stateName = normalizeStateName(state['name']);
-      final stateProvince = normalizeStateName(state['province']);
 
-      if (stateName == normalized || stateProvince == normalized) {
-        final id = state['id'];
-        return id is int ? id : int.tryParse(id.toString()) ?? 14;
+      if (stateName == normalized) {
+        final dynamic rawId = state['id'];
+        return rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 14;
       }
 
-      if (['jk', 'jandk', 'jammu and kashmir', 'jammu kashmir'].contains(normalized) &&
+      if ([
+            'jk',
+            'jandk',
+            'jammu and kashmir',
+            'jammu kashmir',
+          ].contains(normalized) &&
           stateName == 'jammu kashmir') {
-        final id = state['id'];
-        return id is int ? id : int.tryParse(id.toString()) ?? 14;
+        final dynamic rawId = state['id'];
+        return rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 14;
       }
     }
 
@@ -229,6 +233,8 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
     String message,
     Map<String, dynamic> extra,
   ) {
+    if (!mounted) return;
+
     setState(() {
       successLogs.add({
         ...getOrderDetails(order),
@@ -245,6 +251,8 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
     dynamic error,
     dynamic statusCode,
   ]) {
+    if (!mounted) return;
+
     setState(() {
       failureLogs.add({
         ...getOrderDetails(order),
@@ -287,8 +295,11 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
         final data = jsonDecode(response.body);
         final List list = data["data"] ?? [];
 
+        if (!mounted) return;
+
         setState(() {
-          states = list.map((e) => Map<String, dynamic>.from(e)).toList();
+          states =
+              list.map((e) => Map<String, dynamic>.from(e)).toList();
         });
       }
     } catch (e) {
@@ -409,13 +420,15 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
         orderName,
       ).toString();
 
-      final phone = getValue(row, [
-        "Phone",
-        "phone",
-        "Shipping Phone",
-        "Billing Phone",
-        "Customer Phone",
-      ]).toString();
+      final phone = cleanPhone(
+        getValue(row, [
+          "Shipping Phone",
+          "Billing Phone",
+          "Customer Phone",
+          "Phone",
+          "phone",
+        ]),
+      );
 
       final customerName = getValue(row, [
         "Shipping Name",
@@ -710,6 +723,10 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
       });
 
       await compareCustomers(orders);
+
+      showSnackBar(
+        "Excel/CSV orders processed successfully",
+      );
     } catch (e) {
       addFailureLog(
         {
@@ -1194,7 +1211,10 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
     }
   }
 
-  Future<void> updateAmount(Map<String, dynamic> order, dynamic orderId) async {
+  Future<void> updateAmount(
+    Map<String, dynamic> order,
+    dynamic orderId,
+  ) async {
     if (orderId == null) return;
 
     try {
@@ -1209,11 +1229,14 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
           double.tryParse(order["shippingCharge"]?.toString() ?? "0") ?? 0;
 
       final totalAmount = (productAmount + shippingCharge).toStringAsFixed(2);
+
       final rawPaymentMethod = order["paymentGatewayNames"] is List &&
               order["paymentGatewayNames"].isNotEmpty
           ? order["paymentGatewayNames"][0]
           : "N/A";
+
       final paymentMethod = mapPaymentMethod(rawPaymentMethod);
+
       final codeCharge =
           double.tryParse(order["codeCharge"]?.toString() ?? "0") ?? 0;
 
@@ -1222,22 +1245,25 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
         headers: authHeaders(token),
         body: jsonEncode({
           "total_amount": totalAmount,
-          "code_charge": paymentMethod == "Cash on Delivery (COD)" ? "0" : codeCharge.toString(),
-          "cod_amount": paymentMethod == "Cash on Delivery (COD)" ? codeCharge.toString() : "0",
+          "code_charge":
+              paymentMethod == "Cash on Delivery (COD)"
+                  ? "0"
+                  : codeCharge.toString(),
+          "cod_amount":
+              paymentMethod == "Cash on Delivery (COD)"
+                  ? codeCharge.toString()
+                  : "0",
         }),
       );
 
-      if (response.statusCode != 200) {
-        addFailureLog(
-          order,
-          "Amount update failed",
-          "Update Amount API",
-          response,
-          response.statusCode,
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          "updateAmount error: "
+          "${response.statusCode} ${response.body}",
         );
       }
     } catch (e) {
-      addFailureLog(order, "Amount update failed", "Update Amount API", e);
+      debugPrint("updateAmount error: $e");
     }
   }
 
@@ -1556,22 +1582,91 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: isLoading ? null : pickExcelCsvAndProcessOrders,
-                    icon: const Icon(Icons.upload_file_rounded),
-                    label: const Text(
-                      "Upload Excel / CSV",
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                InkWell(
+                  onTap: isLoading ? null : pickExcelCsvAndProcessOrders,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Ink(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF2563EB),
+                          Color(0xFF1D4ED8),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withOpacity(0.25),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.cloud_upload_rounded,
+                            color: Colors.white,
+                            size: 27,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Upload Excel File",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              SizedBox(height: 3),
+                              Text(
+                                "XLSX, XLS or CSV",
+                                style: TextStyle(
+                                  color: Color.fromARGB(255, 55, 138, 8),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            isLoading ? "Working..." : "Browse",
+                            style: const TextStyle(
+                              color: Color(0xFF2563EB),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1581,29 +1676,87 @@ class _OrderBulkUploadexcelState extends State<OrderBulkUploadexcel> {
           Container(height: 1, color: const Color(0xFFEDF0F4)),
           Padding(
             padding: const EdgeInsets.all(18),
-            child: TextField(
-              onChanged: (value) {
-                setState(() {
-                  searchTerm = value;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: "Search order, customer, phone or reason...",
-                prefixIcon: const Icon(Icons.search_rounded),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      searchTerm = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText:
+                        "Search order, customer, phone or reason...",
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide:
+                          const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide:
+                          const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide:
+                          const BorderSide(color: Color(0xFF2563EB)),
+                    ),
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildCountBadge(
+                      label: "Valid",
+                      count: successLogs.length,
+                      background: const Color(0xFFDCFCE7),
+                      foreground: const Color(0xFF15803D),
+                    ),
+                    _buildCountBadge(
+                      label: "Error",
+                      count: failureLogs.length,
+                      background: const Color(0xFFFEE2E2),
+                      foreground: const Color(0xFFB91C1C),
+                    ),
+                  ],
                 ),
-              ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCountBadge({
+    required String label,
+    required int count,
+    required Color background,
+    required Color foreground,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 13,
+        vertical: 9,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        "$label: $count",
+        style: TextStyle(
+          color: foreground,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
