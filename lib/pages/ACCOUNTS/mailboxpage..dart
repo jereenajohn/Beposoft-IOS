@@ -1512,417 +1512,673 @@ class _StaffMailPageState extends State<StaffMailPage>
     }
   }
 
-  Future<void> openReplyGroupSelector(
-    String type,
-    VoidCallback refreshParent,
+Future<void> openReplyGroupSelector(
+  String type,
+  VoidCallback refreshParent,
+) async {
+  List<Map<String, dynamic>> visible = [];
+  List<Map<String, dynamic>> eligibleAll = [];
+
+  bool loading = true;
+  bool sheetActive = true;
+  bool initialLoadStarted = false;
+
+  Timer? localDebounce;
+
+  Future<void> load(
+    String search,
+    StateSetter modalSetState,
+    BuildContext modalContext,
   ) async {
-    List<Map<String, dynamic>> visible = [];
-    List<Map<String, dynamic>> eligibleAll = [];
-    bool loading = true;
-    bool sheetActive = true;
-    bool initialLoadStarted = false;
-    Timer? localDebounce;
+    if (!sheetActive) return;
 
-    Future<void> load(
-      String search,
-      StateSetter modalSetState,
-      BuildContext modalContext,
-    ) async {
-      if (!sheetActive) return;
+    loading = true;
 
-      await fetchReplySelectorStaffs(search);
-
-      if (!sheetActive || !mounted || !modalContext.mounted) return;
-
-      eligibleAll = await _eligibleReplyRecipients(type);
-
-      if (!sheetActive || !mounted || !modalContext.mounted) return;
-
-      visible = replyStaffs
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .where((user) {
-            final int? id = getRecipientId(user);
-            final Set<int> currentGroupIds = _replyListFor(type)
-                .map(getRecipientId)
-                .whereType<int>()
-                .toSet();
-
-            return id != null &&
-                (!replyAllRecipientIds.contains(id) ||
-                    currentGroupIds.contains(id));
-          })
-          .toList();
-
-      loading = false;
-
-      if (sheetActive && modalContext.mounted) {
-        modalSetState(() {});
-      }
+    if (modalContext.mounted) {
+      modalSetState(() {});
     }
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (modalContext, modalSetState) {
-            if (!initialLoadStarted) {
-              initialLoadStarted = true;
+    await fetchReplySelectorStaffs(search);
 
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (sheetActive && modalContext.mounted) {
-                  load('', modalSetState, modalContext);
-                }
-              });
-            }
+    if (!sheetActive || !mounted || !modalContext.mounted) {
+      return;
+    }
 
-            return DraggableScrollableSheet(
-              initialChildSize: .88,
-              minChildSize: .5,
-              maxChildSize: .96,
-              builder: (_, scrollController) => Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(26),
-                  ),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      Container(
-                        width: 48,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2E8F0),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 18, 8, 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Select Reply ${_recipientLabel(type)}',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => Navigator.pop(sheetContext),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        child: TextField(
-                          decoration: inputDecoration(
-                            hint: 'Search staff',
-                            icon: Icons.search_rounded,
-                          ),
-                          onChanged: (value) {
-                            localDebounce?.cancel();
-                            localDebounce = Timer(
-                              const Duration(milliseconds: 400),
-                              () {
-                                if (sheetActive && modalContext.mounted) {
-                                  load(
-                                    value.trim(),
-                                    modalSetState,
-                                    modalContext,
-                                  );
-                                }
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        child: Builder(
-                          builder: (_) {
-                            final bool allSelected =
-                                areAllReplyRecipientsSelected(
-                              type,
-                              eligibleAll,
-                            );
+    eligibleAll = await _eligibleReplyRecipients(type);
 
-                            return InkWell(
-                              onTap: isFetchingAllStaffs
-                                  ? null
-                                  : () async {
-                                      if (allSelected) {
-                                        clearAllReplyRecipientsFor(type);
-                                      } else {
-                                        await selectAllReplyRecipientsFor(
-                                          type,
-                                        );
-                                      }
+    if (!sheetActive || !mounted || !modalContext.mounted) {
+      return;
+    }
 
-                                      eligibleAll =
-                                          await _eligibleReplyRecipients(type);
+    final Set<int> currentGroupIds = _replyListFor(type)
+        .map(getRecipientId)
+        .whereType<int>()
+        .toSet();
 
-                                      if (modalContext.mounted) {
-                                        modalSetState(() {});
-                                      }
+    visible = replyStaffs
+        .whereType<Map>()
+        .map(
+          (staff) => Map<String, dynamic>.from(staff),
+        )
+        .where((user) {
+          final int? recipientId = getRecipientId(user);
 
-                                      refreshParent();
-                                    },
-                              borderRadius: BorderRadius.circular(14),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: allSelected
-                                      ? const Color(0xFFEFF6FF)
-                                      : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: allSelected
-                                        ? const Color(0xFF2563EB)
-                                        : const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 48,
-                                      height: 48,
-                                      child: Center(
-                                        child: isFetchingAllStaffs
-                                            ? const SizedBox(
-                                                width: 23,
-                                                height: 23,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2.5,
-                                                ),
-                                              )
-                                            : Checkbox(
-                                                value: allSelected,
-                                                activeColor:
-                                                    const Color(0xFF2563EB),
-                                                onChanged: (_) async {
-                                                  if (allSelected) {
-                                                    clearAllReplyRecipientsFor(
-                                                      type,
-                                                    );
-                                                  } else {
-                                                    await selectAllReplyRecipientsFor(
-                                                      type,
-                                                    );
-                                                  }
+          if (recipientId == null || recipientId <= 0) {
+            return false;
+          }
 
-                                                  eligibleAll =
-                                                      await _eligibleReplyRecipients(
-                                                    type,
-                                                  );
+          return !replyAllRecipientIds.contains(recipientId) ||
+              currentGroupIds.contains(recipientId);
+        })
+        .toList();
 
-                                                  if (modalContext.mounted) {
-                                                    modalSetState(() {});
-                                                  }
+    loading = false;
 
-                                                  refreshParent();
-                                                },
-                                              ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            isFetchingAllStaffs
-                                                ? 'Loading all staff...'
-                                                : allSelected
-                                                    ? 'Clear All'
-                                                    : 'Select All',
-                                            style: const TextStyle(
-                                              color: Color(0xFF0F172A),
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            isFetchingAllStaffs
-                                                ? 'Fetching every staff page'
-                                                : allSelected
-                                                    ? 'All available reply ${_recipientLabel(type)} recipients selected'
-                                                    : 'Select approved staff from all pages',
-                                            style: const TextStyle(
-                                              color: Color(0xFF64748B),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEFF6FF),
-                                        borderRadius:
-                                            BorderRadius.circular(999),
-                                      ),
-                                      child: Text(
-                                        '${_replyListFor(type).length} selected',
-                                        style: const TextStyle(
-                                          color: Color(0xFF2563EB),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: loading
-                            ? const Center(
-                                child: CircularProgressIndicator(),
-                              )
-                            : visible.isEmpty
-                                ? const Center(
-                                    child: Text('No staff found'),
-                                  )
-                                : ListView.separated(
-                                    controller: scrollController,
-                                    padding: const EdgeInsets.fromLTRB(
-                                      18,
-                                      4,
-                                      18,
-                                      100,
-                                    ),
-                                    itemCount: visible.length,
-                                    separatorBuilder: (_, __) =>
-                                        const SizedBox(height: 8),
-                                    itemBuilder: (_, index) {
-                                      final Map<String, dynamic> user =
-                                          visible[index];
-                                      final int id = getRecipientId(user)!;
-                                      final List<Map<String, dynamic>> list =
-                                          _replyListFor(type);
-                                      final bool selected = list.any(
-                                        (e) => getRecipientId(e) == id,
-                                      );
-
-                                      return CheckboxListTile(
-                                        value: selected,
-                                        activeColor: const Color(0xFF2563EB),
-                                        title: Text(
-                                          staffName(user),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                        subtitle: Text(
-                                          user['department_name']
-                                                  ?.toString() ??
-                                              user['department']?.toString() ??
-                                              'mexpo.org',
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        tileColor: selected
-                                            ? const Color(0xFFEFF6FF)
-                                            : const Color(0xFFF8FAFC),
-                                        onChanged: (_) {
-                                          if (!sheetActive ||
-                                              !modalContext.mounted) {
-                                            return;
-                                          }
-
-                                          setState(() {
-                                            if (selected) {
-                                              list.removeWhere(
-                                                (e) =>
-                                                    getRecipientId(e) == id,
-                                              );
-                                            } else {
-                                              replyRecipientUsers.removeWhere(
-                                                (e) =>
-                                                    getRecipientId(e) == id,
-                                              );
-                                              replyCcRecipientUsers.removeWhere(
-                                                (e) =>
-                                                    getRecipientId(e) == id,
-                                              );
-                                              replyBccRecipientUsers
-                                                  .removeWhere(
-                                                (e) =>
-                                                    getRecipientId(e) == id,
-                                              );
-                                              list.add(user);
-                                            }
-                                          });
-
-                                          if (modalContext.mounted) {
-                                            modalSetState(() {});
-                                          }
-
-                                          refreshParent();
-                                        },
-                                      );
-                                    },
-                                  ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            style: primaryButtonStyle(),
-                            onPressed: () => Navigator.pop(sheetContext),
-                            child: Text(
-                              'Done (${_replyListFor(type).length})',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    sheetActive = false;
-    localDebounce?.cancel();
-
-    if (mounted) {
-      refreshParent();
+    if (sheetActive && modalContext.mounted) {
+      modalSetState(() {});
     }
   }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: false,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(0.45),
+    builder: (sheetContext) {
+      return StatefulBuilder(
+        builder: (modalContext, modalSetState) {
+          if (!initialLoadStarted) {
+            initialLoadStarted = true;
+
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (sheetActive && modalContext.mounted) {
+                load(
+                  '',
+                  modalSetState,
+                  modalContext,
+                );
+              }
+            });
+          }
+
+          final double keyboardHeight =
+              MediaQuery.viewInsetsOf(modalContext).bottom;
+
+          return AnimatedPadding(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(
+              bottom: keyboardHeight,
+            ),
+            child: DraggableScrollableSheet(
+              initialChildSize: keyboardHeight > 0 ? 0.98 : 0.88,
+              minChildSize: keyboardHeight > 0 ? 0.70 : 0.50,
+              maxChildSize: 0.98,
+              expand: false,
+              snap: keyboardHeight == 0,
+              snapSizes: keyboardHeight == 0
+                  ? const [
+                      0.50,
+                      0.88,
+                      0.98,
+                    ]
+                  : null,
+              builder: (
+                BuildContext draggableContext,
+                ScrollController scrollController,
+              ) {
+                return ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(26),
+                  ),
+                  child: Material(
+                    color: Colors.white,
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 12),
+
+                          Container(
+                            width: 48,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                          ),
+
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              18,
+                              18,
+                              8,
+                              12,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Select Reply ${_recipientLabel(type)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF0F172A),
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Close',
+                                  onPressed: () {
+                                    FocusScope.of(modalContext).unfocus();
+                                    Navigator.pop(sheetContext);
+                                  },
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    color: Color(0xFF334155),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                            ),
+                            child: TextField(
+                              textInputAction: TextInputAction.search,
+                              keyboardType: TextInputType.text,
+                              onTapOutside: (_) {
+                                FocusScope.of(modalContext).unfocus();
+                              },
+                              decoration: inputDecoration(
+                                hint: 'Search staff',
+                                icon: Icons.search_rounded,
+                              ),
+                              onChanged: (value) {
+                                localDebounce?.cancel();
+
+                                localDebounce = Timer(
+                                  const Duration(milliseconds: 400),
+                                  () {
+                                    if (!sheetActive ||
+                                        !modalContext.mounted) {
+                                      return;
+                                    }
+
+                                    load(
+                                      value.trim(),
+                                      modalSetState,
+                                      modalContext,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                            ),
+                            child: Builder(
+                              builder: (context) {
+                                final bool allSelected =
+                                    areAllReplyRecipientsSelected(
+                                  type,
+                                  eligibleAll,
+                                );
+
+                                Future<void> handleSelectAll() async {
+                                  if (isFetchingAllStaffs) {
+                                    return;
+                                  }
+
+                                  if (allSelected) {
+                                    clearAllReplyRecipientsFor(type);
+                                  } else {
+                                    await selectAllReplyRecipientsFor(type);
+                                  }
+
+                                  if (!sheetActive ||
+                                      !mounted ||
+                                      !modalContext.mounted) {
+                                    return;
+                                  }
+
+                                  eligibleAll =
+                                      await _eligibleReplyRecipients(type);
+
+                                  final Set<int> currentGroupIds =
+                                      _replyListFor(type)
+                                          .map(getRecipientId)
+                                          .whereType<int>()
+                                          .toSet();
+
+                                  visible = replyStaffs
+                                      .whereType<Map>()
+                                      .map(
+                                        (staff) =>
+                                            Map<String, dynamic>.from(
+                                          staff,
+                                        ),
+                                      )
+                                      .where((user) {
+                                        final int? recipientId =
+                                            getRecipientId(user);
+
+                                        if (recipientId == null ||
+                                            recipientId <= 0) {
+                                          return false;
+                                        }
+
+                                        return !replyAllRecipientIds.contains(
+                                              recipientId,
+                                            ) ||
+                                            currentGroupIds.contains(
+                                              recipientId,
+                                            );
+                                      })
+                                      .toList();
+
+                                  modalSetState(() {});
+                                  refreshParent();
+                                }
+
+                                return InkWell(
+                                  onTap: isFetchingAllStaffs
+                                      ? null
+                                      : handleSelectAll,
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: allSelected
+                                          ? const Color(0xFFEFF6FF)
+                                          : const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: allSelected
+                                            ? const Color(0xFF2563EB)
+                                            : const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 48,
+                                          height: 48,
+                                          child: Center(
+                                            child: isFetchingAllStaffs
+                                                ? const SizedBox(
+                                                    width: 23,
+                                                    height: 23,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2.5,
+                                                    ),
+                                                  )
+                                                : Checkbox(
+                                                    value: allSelected,
+                                                    activeColor:
+                                                        const Color(
+                                                      0xFF2563EB,
+                                                    ),
+                                                    onChanged: (_) {
+                                                      handleSelectAll();
+                                                    },
+                                                  ),
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 2),
+
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                isFetchingAllStaffs
+                                                    ? 'Loading all staff...'
+                                                    : allSelected
+                                                        ? 'Clear All'
+                                                        : 'Select All',
+                                                style: const TextStyle(
+                                                  color: Color(0xFF0F172A),
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                isFetchingAllStaffs
+                                                    ? 'Fetching every staff page'
+                                                    : allSelected
+                                                        ? 'All available reply ${_recipientLabel(type)} recipients selected'
+                                                        : 'Select approved staff from all pages',
+                                                maxLines: 2,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Color(0xFF64748B),
+                                                  fontSize: 12,
+                                                  height: 1.35,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 8),
+
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEFF6FF),
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            '${_replyListFor(type).length} selected',
+                                            style: const TextStyle(
+                                              color: Color(0xFF2563EB),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Expanded(
+                            child: ClipRect(
+                              child: loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : visible.isEmpty
+                                      ? const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(24),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.person_search_rounded,
+                                                  size: 48,
+                                                  color: Color(0xFF94A3B8),
+                                                ),
+                                                SizedBox(height: 12),
+                                                Text(
+                                                  'No staff found',
+                                                  style: TextStyle(
+                                                    color: Color(0xFF475569),
+                                                    fontWeight:
+                                                        FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        )
+                                      : Scrollbar(
+                                          controller: scrollController,
+                                          thumbVisibility: true,
+                                          child: ListView.separated(
+                                            controller: scrollController,
+                                            keyboardDismissBehavior:
+                                                ScrollViewKeyboardDismissBehavior
+                                                    .onDrag,
+                                            physics:
+                                                const AlwaysScrollableScrollPhysics(
+                                              parent:
+                                                  ClampingScrollPhysics(),
+                                            ),
+                                            clipBehavior: Clip.hardEdge,
+                                            padding:
+                                                const EdgeInsets.fromLTRB(
+                                              18,
+                                              4,
+                                              18,
+                                              16,
+                                            ),
+                                            itemCount: visible.length,
+                                            separatorBuilder: (_, __) {
+                                              return const SizedBox(
+                                                height: 8,
+                                              );
+                                            },
+                                            itemBuilder: (
+                                              BuildContext itemContext,
+                                              int index,
+                                            ) {
+                                              final Map<String, dynamic> user =
+                                                  visible[index];
+
+                                              final int? id =
+                                                  getRecipientId(user);
+
+                                              if (id == null || id <= 0) {
+                                                return const SizedBox.shrink();
+                                              }
+
+                                              final List<
+                                                      Map<String, dynamic>>
+                                                  selectedList =
+                                                  _replyListFor(type);
+
+                                              final bool selected =
+                                                  selectedList.any(
+                                                (item) =>
+                                                    getRecipientId(item) == id,
+                                              );
+
+                                              return Material(
+                                                color: Colors.transparent,
+                                                child: CheckboxListTile(
+                                                  value: selected,
+                                                  activeColor:
+                                                      const Color(0xFF2563EB),
+                                                  checkColor: Colors.white,
+                                                  controlAffinity:
+                                                      ListTileControlAffinity
+                                                          .trailing,
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 5,
+                                                  ),
+                                                  title: Text(
+                                                    staffName(user),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color:
+                                                          Color(0xFF0F172A),
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                  subtitle: Text(
+                                                    user['department_name']
+                                                            ?.toString() ??
+                                                        user['department']
+                                                            ?.toString() ??
+                                                        'mexpo.org',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color:
+                                                          Color(0xFF64748B),
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  shape:
+                                                      RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      14,
+                                                    ),
+                                                    side: BorderSide(
+                                                      color: selected
+                                                          ? const Color(
+                                                              0xFF2563EB,
+                                                            )
+                                                          : const Color(
+                                                              0xFFE2E8F0,
+                                                            ),
+                                                      width:
+                                                          selected ? 1.3 : 1,
+                                                    ),
+                                                  ),
+                                                  tileColor: selected
+                                                      ? const Color(
+                                                          0xFFEFF6FF,
+                                                        )
+                                                      : Colors.white,
+                                                  selectedTileColor:
+                                                      const Color(
+                                                    0xFFEFF6FF,
+                                                  ),
+                                                  onChanged: (_) {
+                                                    if (!sheetActive ||
+                                                        !modalContext.mounted) {
+                                                      return;
+                                                    }
+
+                                                    setState(() {
+                                                      if (selected) {
+                                                        selectedList
+                                                            .removeWhere(
+                                                          (item) =>
+                                                              getRecipientId(
+                                                                item,
+                                                              ) ==
+                                                              id,
+                                                        );
+                                                      } else {
+                                                        replyRecipientUsers
+                                                            .removeWhere(
+                                                          (item) =>
+                                                              getRecipientId(
+                                                                item,
+                                                              ) ==
+                                                              id,
+                                                        );
+
+                                                        replyCcRecipientUsers
+                                                            .removeWhere(
+                                                          (item) =>
+                                                              getRecipientId(
+                                                                item,
+                                                              ) ==
+                                                              id,
+                                                        );
+
+                                                        replyBccRecipientUsers
+                                                            .removeWhere(
+                                                          (item) =>
+                                                              getRecipientId(
+                                                                item,
+                                                              ) ==
+                                                              id,
+                                                        );
+
+                                                        selectedList.add(user);
+                                                      }
+
+                                                      if (type == 'to') {
+                                                        allReplyRecipientsSelected =
+                                                            false;
+                                                      }
+                                                    });
+
+                                                    modalSetState(() {});
+                                                    refreshParent();
+                                                  },
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                            ),
+                          ),
+
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(
+                              18,
+                              12,
+                              18,
+                              18,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                top: BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: ElevatedButton(
+                                style: primaryButtonStyle(),
+                                onPressed: () {
+                                  FocusScope.of(modalContext).unfocus();
+                                  Navigator.pop(sheetContext);
+                                },
+                                child: Text(
+                                  'Done (${_replyListFor(type).length})',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  sheetActive = false;
+  localDebounce?.cancel();
+
+  if (mounted) {
+    refreshParent();
+  } 
+}
 
   Future<void> openStaffSelector() async {
     staffSearchController.clear();
@@ -5090,6 +5346,8 @@ class _StaffMailPageState extends State<StaffMailPage>
                                   ],
                                 ),
                               ),
+
+                              const SizedBox(height: 300),
                             ],
                           ),
                         ),

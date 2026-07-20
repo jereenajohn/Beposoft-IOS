@@ -3188,6 +3188,128 @@ class _ceo_dashboardState extends State<ceo_dashboard>
     );
   }
 
+Widget _buildMarketingExpenseItem({
+  required String expenseType,
+  required double amount,
+  required double grandTotal,
+}) {
+  final double percentage = grandTotal <= 0
+      ? 0
+      : (amount / grandTotal).clamp(0.0, 1.0);
+      final String normalizedType = expenseType.trim().toUpperCase();
+
+final String displayExpenseType = switch (normalizedType) {
+  'EMI' => 'EMI EX',
+  'PERMANENT' => 'PM EX',
+  'MISCELLANEOUS' => 'MISC EX',
+  'CARGO' => 'CARGO EX',
+  _ => normalizedType,
+};
+
+  return InkWell(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => expence_list_type(
+            type: expenseType,
+            fromDate: monthlyExpenseFrom,
+            toDate: monthlyExpenseTo,
+          ),
+        ),
+      );
+    },
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+displayExpenseType,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${(percentage * 100).toStringAsFixed(1)}%',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.88),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            _formatDashboardAmount(amount),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 7),
+          LayoutBuilder(
+            builder: (
+              BuildContext context,
+              BoxConstraints constraints,
+            ) {
+              final double availableWidth = constraints.maxWidth;
+
+              return Stack(
+                children: [
+                  Container(
+                    width: availableWidth,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    width: availableWidth * percentage,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
   Widget dashboardCards() {
     final bankSummary = _asMap(beposoftSummary['bank_summary']);
     final todayData = _asMap(bankSummary['today_data']);
@@ -3319,6 +3441,19 @@ class _ceo_dashboardState extends State<ceo_dashboard>
 
     final monthPaid = _asMap(monthPayment['paid']);
     final monthCod = _asMap(monthPayment['COD']);
+    final List<MapEntry<String, double>> marketingExpenseEntries =
+    expenseTypeWiseTotals.entries.toList()
+      ..sort(
+        (a, b) => b.value.compareTo(a.value),
+      );
+
+final double marketingExpenseGrandTotal =
+    marketingExpenseEntries.fold<double>(
+  0.0,
+  (double total, MapEntry<String, double> entry) {
+    return total + entry.value;
+  },
+);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
@@ -3738,14 +3873,116 @@ class _ceo_dashboardState extends State<ceo_dashboard>
             },
           ),
           _buildDashboardCard(
-            title: "Marketing",
-            value: "Campaigns",
-            lines: [
-              "Ads & promotions",
-              "Marketing overview",
-            ],
-            onTap: () {},
+  title:
+      "CO EX Analysis\n(${DateFormat('MMM yyyy').format(DateTime.now())})",
+  value: marketingExpenseGrandTotal <= 0
+      ? "₹0.00"
+      : _formatDashboardAmount(
+          marketingExpenseGrandTotal,
+        ),
+  valueLabel: "Total",
+  lines: const [],
+  bottomTopSpacing: 2,
+  bottom: expenseTypeWiseTotals.isEmpty
+      ? Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 16,
           ),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.22),
+            ),
+          ),
+          child: const Column(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                color: Colors.white70,
+                size: 24,
+              ),
+              SizedBox(height: 8),
+              Text(
+                "No expense data",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        )
+      : Column(
+          children: [
+            ...marketingExpenseEntries.map(
+              (MapEntry<String, double> entry) {
+                return _buildMarketingExpenseItem(
+                  expenseType: entry.key,
+                  amount: entry.value,
+                  grandTotal: marketingExpenseGrandTotal,
+                );
+              },
+            ),
+
+            const SizedBox(height: 2),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 9,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "GT",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _formatDashboardAmount(
+                          marketingExpenseGrandTotal,
+                        ),
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+  onTap: () {},
+),
           _buildDashboardCard(
             title: "Sales Analysis(DSR)",
             value: "",
@@ -3989,16 +4226,17 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child:Text(
+  title,
+  style: const TextStyle(
+    color: Colors.white,
+    fontSize: 13,
+    height: 1.25,
+    fontWeight: FontWeight.w700,
+  ),
+  maxLines: 2,
+  overflow: TextOverflow.ellipsis,
+),
                     ),
                   ],
                 ),
