@@ -242,17 +242,14 @@ else if(dep=="Warehouse Admin" ){
     };
   }
 
-  bool isAllowedSalesTeam(dynamic team) {
+bool isAllowedSalesTeam(dynamic team) {
   final name = (team["team_name"] ?? team["name"] ?? "")
       .toString()
       .trim()
       .toUpperCase();
 
-  return name == "SALES DEPARTMENT (MUBARISH)" ||
-      name == "SALES DEPARTMENT (NOUFAL)" ||
-      name == "SALES DEPARTMENT (SHAMI)";
+  return name.contains("SALES");
 }
-
   Map<String, dynamic> mapStaffItem(dynamic item) {
     return {
       "id": item["id"],
@@ -905,7 +902,7 @@ final list = toArray(body)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: const Color(0xFFF8FAFC),
+            color: const Color.fromARGB(255, 233, 234, 235),
             child: Row(
               children: [
                 CircleAvatar(
@@ -929,7 +926,7 @@ final list = toArray(body)
                         style: const TextStyle(
                           color: Color(0xFF111827),
                           fontWeight: FontWeight.w900,
-                          fontSize: 16,
+                          fontSize: 11,
                         ),
                       ),
                       const SizedBox(height: 4),
