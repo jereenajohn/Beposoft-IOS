@@ -93,12 +93,11 @@ class _advance_recipt_ReportState extends State<advance_recipt_Report> {
 
   // Function to update totals based on filtered data
   void _updateTotals() {
-   ;
+    ;
     int tempTotalReceipts = 0; // Add this line
     double tempTotalAmount = 0.0; // Add this line
 
     for (var reportData in salesReportList) {
-    
       // Increment total receipts and total amount
       tempTotalReceipts++; // Add this line
       tempTotalAmount += reportData['amount']; // Add this line
@@ -119,173 +118,165 @@ class _advance_recipt_ReportState extends State<advance_recipt_Report> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
-    List<Map<String, dynamic>> bank = [];
 
-Future<void> getbank() async{
-  final token=await getTokenFromPrefs();
-  try{
-    final response= await http.get(Uri.parse('$api/api/banks/'),
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    }
-    );
-    List<Map<String, dynamic>> banklist = [];
+  List<Map<String, dynamic>> bank = [];
+
+  Future<void> getbank() async {
+    final token = await getTokenFromPrefs();
+    try {
+      final response = await http.get(Uri.parse('$api/api/banks/'), headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+      List<Map<String, dynamic>> banklist = [];
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         var productsData = parsed['data'];
 
-        
         for (var productData in productsData) {
           // String imageUrl = "${productData['image']}";
           banklist.add({
             'id': productData['id'],
             'name': productData['name'],
-            'branch':productData['branch']
-            
+            'branch': productData['branch']
           });
-        
         }
         setState(() {
           bank = banklist;
-                  
-          
         });
       }
+    } catch (e) {}
+  }
 
-  }
-  catch(e){
-    
-  }
-}
   List<Map<String, dynamic>> customer = [];
 
-Future<void> getcustomer() async {
-  try {
-    final dep = await getdepFromPrefs();
-    final token = await getTokenFromPrefs();
+  Future<void> getcustomer() async {
+    try {
+      final dep = await getdepFromPrefs();
+      final token = await getTokenFromPrefs();
 
-    final jwt = JWT.decode(token!);
-    var name = jwt.payload['name'];
-    
+      final jwt = JWT.decode(token!);
+      var name = jwt.payload['name'];
 
-    var response = await http.get(
-      Uri.parse('$api/api/customers/'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+      var response = await http.get(
+        Uri.parse('$api/api/customers/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    ;
+      ;
 
-    if (response.statusCode == 200) {
-      final parsed = jsonDecode(response.body);
-      var productsData = parsed['data']; // Directly accessing 'data' since no pagination
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        var productsData =
+            parsed['data']; // Directly accessing 'data' since no pagination
 
-      List<Map<String, dynamic>> newCustomers = [];
+        List<Map<String, dynamic>> newCustomers = [];
 
-      for (var productData in productsData) {
-        newCustomers.add({
-          'id': productData['id'],
-          'name': productData['name'],
-          'created_at': productData['created_at'],
+        for (var productData in productsData) {
+          newCustomers.add({
+            'id': productData['id'],
+            'name': productData['name'],
+            'created_at': productData['created_at'],
+          });
+        }
+
+        // Update UI
+        setState(() {
+          customer = newCustomers;
         });
+      } else {
+        throw Exception("Failed to load customer data");
       }
-
-      // Update UI
-      setState(() {
-        customer = newCustomers;
-      });
-    } else {
-      throw Exception("Failed to load customer data");
+    } catch (error) {
+      ;
     }
-  } catch (error) {
-    ;
   }
-}
 
-Future<void> getreciptReport() async {
-  setState(() {});
-  try {
-    final token = await getTokenFromPrefs();
+  Future<void> getreciptReport() async {
+    setState(() {});
+    try {
+      final token = await getTokenFromPrefs();
 
-    var response = await http.get(
-      Uri.parse('$api/api/advancereceipt/view/'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+      var response = await http.get(
+        Uri.parse('$api/api/advancereceipt/view/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-   
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
 
-    if (response.statusCode == 200) {
-      final parsed = jsonDecode(response.body);
+        List<Map<String, dynamic>> reciptList = [];
 
-      List<Map<String, dynamic>> reciptList = [];
+        // Helper to get bank name by id
+        String getBankName(dynamic bankId) {
+          if (bankId == null) return '';
+          final found = bank.firstWhere(
+            (b) => b['id'] == bankId,
+            orElse: () => {},
+          );
+          return found != null && found['name'] != null
+              ? found['name'].toString()
+              : '';
+        }
 
-      // Helper to get bank name by id
-      String getBankName(dynamic bankId) {
-        if (bankId == null) return '';
-        final found = bank.firstWhere(
-          (b) => b['id'] == bankId,
-          orElse: () => {},
-        );
-        return found != null && found['name'] != null ? found['name'].toString() : '';
-      }
+        // The response is a List, so iterate directly
+        for (var reportData in parsed) {
+          reciptList.add({
+            'type': 'Advance Receipt', // Or set type as needed
+            'id': reportData['id'],
+            'payment_receipt': reportData['payment_receipt'] ?? '',
+            'transactionID': reportData['transactionID'] ?? '',
+            'amount': double.tryParse(reportData['amount'].toString()) ?? 0.0,
+            'received_at': reportData['received_at'] ?? '',
+            'bank': reportData['bank'] ?? '',
+            'bank_name': getBankName(reportData['bank']),
+            'invoice': '', // No invoice in this response
+            'customer': '', // No customer in this response
+            'customer_name': '', // No customer_name in this response
+            'created_by': reportData['created_by'] ?? '',
+            'created_by_name': reportData['created_by_name'] ?? '',
+            'remark': reportData['remark'] ?? '',
+          });
+        }
 
-      // The response is a List, so iterate directly
-      for (var reportData in parsed) {
-        reciptList.add({
-          'type': 'Advance Receipt', // Or set type as needed
-          'id': reportData['id'],
-          'payment_receipt': reportData['payment_receipt'] ?? '',
-          'transactionID': reportData['transactionID'] ?? '',
-          'amount': double.tryParse(reportData['amount'].toString()) ?? 0.0,
-          'received_at': reportData['received_at'] ?? '',
-          'bank': reportData['bank'] ?? '',
-          'bank_name': getBankName(reportData['bank']),
-          'invoice': '', // No invoice in this response
-          'customer': '', // No customer in this response
-          'customer_name': '', // No customer_name in this response
-          'created_by': reportData['created_by'] ?? '',
-          'created_by_name': reportData['created_by_name'] ?? '',
-          'remark': reportData['remark'] ?? '',
+        setState(() {
+          allSalesReportList = reciptList;
+          salesReportList = allSalesReportList;
         });
+        _updateTotals();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to fetch data'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
-
-      setState(() {
-        allSalesReportList = reciptList;
-        salesReportList = allSalesReportList;
-      });
-      _updateTotals();
-    } else {
+    } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to fetch data'),
+          content: Text('Error fetching data'),
           duration: Duration(seconds: 2),
         ),
       );
+    } finally {
+      setState(() {});
     }
-  } catch (error) {
-  
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Error fetching data'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  } finally {
-    setState(() {});
   }
-}
+
 // ...existing code...
   void _filterProducts(String query) {
     setState(() {
       if (query.isEmpty) {
-        salesReportList = List.from(salesReportList); // Show all if search is empty
+        salesReportList =
+            List.from(salesReportList); // Show all if search is empty
       } else {
         salesReportList = salesReportList
             .where((product) =>
@@ -348,73 +339,77 @@ Future<void> getreciptReport() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
-Future<void> _navigateBack() async {
-    final dep = await getdepFromPrefs();
-   if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
 
-}
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if (dep == "COO") {
+  Future<void> _navigateBack() async {
+    final dep = await getdepFromPrefs();
+    if (dep == "BDO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdo_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "BDM") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdm_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "warehouse") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseDashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "CEO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }
-
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-}else {
+    } else if (dep == "Warehouse Admin") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseAdmin()), // Replace AnotherPage with your target page
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => dashboard()),
       );
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-       onWillPop: () async {
+      onWillPop: () async {
         // Prevent the swipe-back gesture (and back button)
         _navigateBack();
         return false;
       },
-
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
@@ -426,56 +421,59 @@ else if(dep=="Warehouse Admin" ){
             icon: const Icon(Icons.arrow_back), // Custom back arrow
             onPressed: () async {
               final dep = await getdepFromPrefs();
-               if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
-
-}
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if (dep == "COO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => ceo_dashboard()),
-      );
-    }
-    else if (dep == "CSO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => cso_dashboard()),
-      );
-    }
-
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-} else {
+              if (dep == "BDO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          bdo_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "BDM") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          bdm_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "CEO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ceo_dashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "COO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ceo_dashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "COO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => ceo_dashboard()),
+                );
+              } else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => cso_dashboard()),
+                );
+              } else if (dep == "warehouse") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          WarehouseDashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "Warehouse Admin") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          WarehouseAdmin()), // Replace AnotherPage with your target page
+                );
+              } else {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
@@ -485,7 +483,7 @@ else if(dep=="Warehouse Admin" ){
               }
             },
           ),
-         actions: [
+          actions: [
             IconButton(
                 icon: Icon(Icons.date_range), // Calendar icon
                 onPressed: () async {
@@ -547,14 +545,16 @@ else if(dep=="Warehouse Admin" ){
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30.0),
                     borderSide: BorderSide(
-                      color: Colors.blue, // Border color when TextField is not focused
+                      color: Colors
+                          .blue, // Border color when TextField is not focused
                       width: 2.0,
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30.0),
                     borderSide: BorderSide(
-                      color: Colors.blueAccent, // Border color when TextField is focused
+                      color: Colors
+                          .blueAccent, // Border color when TextField is focused
                       width: 2.0,
                     ),
                   ),
@@ -562,7 +562,7 @@ else if(dep=="Warehouse Admin" ){
                 onChanged: _filterProducts, // Filtering logic
               ),
             ),
-      
+
             // Main content in Stack
             Expanded(
               child: RefreshIndicator(
@@ -576,7 +576,8 @@ else if(dep=="Warehouse Admin" ){
                         children: salesReportList.map((reportData) {
                           return Card(
                             color: Colors.white,
-                            margin: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                            margin: EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 15),
                             elevation: 8,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
@@ -587,37 +588,57 @@ else if(dep=="Warehouse Admin" ){
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(height: 8),
-                                  _buildRow('Receipt:', reportData['payment_receipt']),
+                                  _buildRow('Receipt:',
+                                      reportData['payment_receipt']),
                                   // ...inside your widget list...
-                                if (reportData['invoice'] != null && reportData['invoice'].toString().isNotEmpty)
-                                 _buildRow('Invoice:', reportData['invoice']),
-                                if (reportData['customer_name'] != null && reportData['customer_name'].toString().isNotEmpty)
-                                  _buildRow('customer:', reportData['customer_name']),
-                                // ...rest of the code...
+                                  if (reportData['invoice'] != null &&
+                                      reportData['invoice']
+                                          .toString()
+                                          .isNotEmpty)
+                                    _buildRow(
+                                        'Invoice:', reportData['invoice']),
+                                  if (reportData['customer_name'] != null &&
+                                      reportData['customer_name']
+                                          .toString()
+                                          .isNotEmpty)
+                                    _buildRow('customer:',
+                                        reportData['customer_name']),
+                                  // ...rest of the code...
 
-                                  _buildRow('Transaction ID:', reportData['transactionID']),
+                                  _buildRow('Transaction ID:',
+                                      reportData['transactionID']),
                                   _buildRow('Amount:', reportData['amount']),
-                                  _buildRow('Received At:', reportData['received_at']),
+                                  _buildRow('Received At:',
+                                      reportData['received_at']),
                                   _buildRow('Bank:', reportData['bank_name']),
-                                  _buildRow('Created By:', reportData['created_by_name']),
-      
-                                    ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                ),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context)=>update_advance_recipt(id: reportData['id'],))); 
-                  // Handle "View" button action
-                },
-                child: Text(
-                  "View",
-                  style: TextStyle(fontSize: 14, color: Colors.white),
-                ),
-              ),
+                                  _buildRow('Created By:',
+                                      reportData['created_by_name']),
+
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blueAccent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 20, vertical: 10),
+                                    ),
+                                    onPressed: () {
+                                      Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  update_advance_recipt(
+                                                    id: reportData['id'],
+                                                  )));
+                                      // Handle "View" button action
+                                    },
+                                    child: Text(
+                                      "View",
+                                      style: TextStyle(
+                                          fontSize: 14, color: Colors.white),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -625,7 +646,7 @@ else if(dep=="Warehouse Admin" ){
                         }).toList(),
                       ),
                     ),
-      
+
                     // Bottom summary card
                     Positioned(
                       bottom: 0,
@@ -634,11 +655,14 @@ else if(dep=="Warehouse Admin" ){
                       child: Material(
                         elevation: 12,
                         color: const Color.fromARGB(255, 12, 80, 163),
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20)),
                         child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+                          padding:
+                              EdgeInsets.symmetric(vertical: 8, horizontal: 20),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                            borderRadius:
+                                BorderRadius.vertical(top: Radius.circular(20)),
                             color: const Color.fromARGB(255, 12, 80, 163),
                           ),
                           child: Column(
@@ -658,23 +682,33 @@ else if(dep=="Warehouse Admin" ){
                                 indent: 0,
                                 endIndent: 0,
                               ),
-                              
                               Row(
                                 children: [
-                                  Text('Total Receipts: ', style: TextStyle(color: Colors.white)), // Add this line
+                                  Text('Total Receipts: ',
+                                      style: TextStyle(
+                                          color:
+                                              Colors.white)), // Add this line
                                   Spacer(),
-                                  Text('$totalReceipts', style: TextStyle(color: Colors.white)), // Add this line
+                                  Text('$totalReceipts',
+                                      style: TextStyle(
+                                          color:
+                                              Colors.white)), // Add this line
                                 ],
                               ),
                               Row(
                                 children: [
-                                  Text('Total Amount: ', style: TextStyle(color: Colors.white)), // Add this line
+                                  Text('Total Amount: ',
+                                      style: TextStyle(
+                                          color:
+                                              Colors.white)), // Add this line
                                   Spacer(),
-                                  Text('$totalAmount', style: TextStyle(color: Colors.white)), // Add this line
+                                  Text('$totalAmount',
+                                      style: TextStyle(
+                                          color:
+                                              Colors.white)), // Add this line
                                 ],
                               ),
-                                                            SizedBox(height: 40),
-
+                              SizedBox(height: 40),
                             ],
                           ),
                         ),

@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/Staff_exit_form_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Expenses.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Recipt.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
+import 'package:beposoft/pages/ACCOUNTS/add_commission_receipt.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_credit_note.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ACCOUNTS/cso_order_list.dart';
@@ -389,6 +390,12 @@ class drower {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => cod_transfer_list()),
+        );
+        break;
+           case 'Add Commission Recipt':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => CommissionReceiptScreen()),
         );
         break;
 
