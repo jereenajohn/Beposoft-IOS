@@ -155,7 +155,8 @@ class _ceo_dashboardState extends State<ceo_dashboard>
   double dashboardTotalAssets = 0.0;
   double dashboardTotalLiabilities = 0.0;
   double dashboardCapital = 0.0;
-
+double todayAttendancePercentage = 0.0;
+double monthAttendancePercentage = 0.0;
   bool assetDashboardLoading = false;
 
   Map<String, dynamic> cyclingInventorySummary = {};
@@ -1128,80 +1129,228 @@ class _ceo_dashboardState extends State<ceo_dashboard>
     }
   }
 
-  Future<void> fetchTeamWiseAttendanceCount() async {
-    try {
-      final token = await getTokenFromPrefs();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+Future<void> fetchTeamWiseAttendanceCount() async {
+  try {
+    final String? token = await getTokenFromPrefs();
 
-      final response = await http.get(
-        Uri.parse('$api/api/staff/attendance/team/wise/count/').replace(
-          queryParameters: {
-            'start_date': today,
-            'end_date': today,
-          },
-        ),
+    if (token == null || token.trim().isEmpty) {
+      debugPrint("TEAM ATTENDANCE: Token not found");
+      return;
+    }
+
+    final DateTime now = DateTime.now();
+
+    final String today = DateFormat('yyyy-MM-dd').format(now);
+
+    final String monthStart = DateFormat('yyyy-MM-dd').format(
+      DateTime(now.year, now.month, 1),
+    );
+
+    final Uri todayUri = Uri.parse(
+      '$api/api/staff/attendance/team/wise/count/',
+    ).replace(
+      queryParameters: {
+        'start_date': today,
+        'end_date': today,
+      },
+    );
+
+    final Uri monthUri = Uri.parse(
+      '$api/api/staff/attendance/team/wise/count/',
+    ).replace(
+      queryParameters: {
+        'start_date': monthStart,
+        'end_date': today,
+      },
+    );
+
+    debugPrint("TODAY ATTENDANCE URL: $todayUri");
+    debugPrint("MONTH ATTENDANCE URL: $monthUri");
+
+    final List<http.Response> responses = await Future.wait([
+      http.get(
+        todayUri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
+      ),
+      http.get(
+        monthUri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    ]);
+
+    final http.Response todayResponse = responses[0];
+    final http.Response monthResponse = responses[1];
+
+    debugPrint(
+      "TODAY ATTENDANCE STATUS: ${todayResponse.statusCode}",
+    );
+    debugPrint(
+      "TODAY ATTENDANCE BODY: ${todayResponse.body}",
+    );
+
+    debugPrint(
+      "MONTH ATTENDANCE STATUS: ${monthResponse.statusCode}",
+    );
+    debugPrint(
+      "MONTH ATTENDANCE BODY: ${monthResponse.body}",
+    );
+
+    if (todayResponse.statusCode != 200) {
+      debugPrint(
+        "TODAY ATTENDANCE FAILED: "
+        "${todayResponse.statusCode} ${todayResponse.body}",
       );
+      return;
+    }
 
-      if (response.statusCode == 200) {
-        final parsed = jsonDecode(response.body);
-        final summary = parsed['summary'] ?? {};
-        final List data = parsed['data'] ?? [];
+    final dynamic todayDecoded = jsonDecode(todayResponse.body);
 
-        int salesPresent = 0;
-        int salesAbsent = 0;
-        int salesHalfDay = 0;
+    final Map<String, dynamic> todayParsed =
+        todayDecoded is Map<String, dynamic>
+            ? todayDecoded
+            : Map<String, dynamic>.from(todayDecoded as Map);
 
-        final List<Map<String, dynamic>> cards = [];
+    final Map<String, dynamic> todaySummary =
+        todayParsed['summary'] is Map
+            ? Map<String, dynamic>.from(todayParsed['summary'])
+            : <String, dynamic>{};
 
-        for (final item in data) {
-          final teamName = (item['team_name'] ?? '').toString().trim();
-          final upperName = teamName.toUpperCase();
+    final List<dynamic> todayData =
+        todayParsed['data'] is List
+            ? List<dynamic>.from(todayParsed['data'])
+            : <dynamic>[];
 
-          final present = _asInt(item['present_count']);
-          final absent = _asInt(item['absent_count']);
-          final halfDay = _asInt(item['half_day_count']);
+    double fetchedMonthAttendancePercentage = 0.0;
 
-          if (upperName.startsWith('SALES DEPARTMENT')) {
-            salesPresent += present;
-            salesAbsent += absent;
-            salesHalfDay += halfDay;
-          } else {
-            cards.add({
-              'title': teamName,
-              'present': present,
-              'absent': absent,
-              'half_day': halfDay,
-            });
-          }
-        }
+    if (monthResponse.statusCode == 200) {
+      final dynamic monthDecoded = jsonDecode(monthResponse.body);
 
-        cards.insert(0, {
-          'title': 'SALES DEPARTMENT',
-          'present': salesPresent,
-          'absent': salesAbsent,
-          'half_day': salesHalfDay,
-        });
+      final Map<String, dynamic> monthParsed =
+          monthDecoded is Map<String, dynamic>
+              ? monthDecoded
+              : Map<String, dynamic>.from(monthDecoded as Map);
 
-        if (!mounted) return;
-        setState(() {
-          teamWiseTotalTeams = _asInt(summary['total_teams']);
-          teamWiseTotalMembers = _asInt(summary['total_members']);
-          teamWiseTotalPresent = _asInt(summary['total_present']);
-          teamWiseTotalAbsent = _asInt(summary['total_absent']);
-          teamWiseTotalHalfDay = _asInt(summary['total_half_day']);
-          teamWiseGrandTotal = _asInt(summary['grand_total']);
+      final Map<String, dynamic> monthSummary =
+          monthParsed['summary'] is Map
+              ? Map<String, dynamic>.from(monthParsed['summary'])
+              : <String, dynamic>{};
 
-          departmentAttendanceCards = cards;
+      fetchedMonthAttendancePercentage = _asDouble(
+        monthSummary['attendance_percentage'],
+      );
+    } else {
+      debugPrint(
+        "MONTH ATTENDANCE FAILED: "
+        "${monthResponse.statusCode} ${monthResponse.body}",
+      );
+    }
+
+    int salesPresent = 0;
+    int salesAbsent = 0;
+    int salesHalfDay = 0;
+
+    final List<Map<String, dynamic>> cards = [];
+
+    for (final dynamic rawItem in todayData) {
+      if (rawItem is! Map) continue;
+
+      final Map<String, dynamic> item =
+          Map<String, dynamic>.from(rawItem);
+
+      final String teamName =
+          (item['team_name'] ?? '').toString().trim();
+
+      final String upperName = teamName.toUpperCase();
+
+      final int present = _asInt(item['present_count']);
+      final int absent = _asInt(item['absent_count']);
+      final int halfDay = _asInt(item['half_day_count']);
+
+      if (upperName.startsWith('SALES DEPARTMENT')) {
+        salesPresent += present;
+        salesAbsent += absent;
+        salesHalfDay += halfDay;
+      } else {
+        cards.add({
+          'title': teamName,
+          'present': present,
+          'absent': absent,
+          'half_day': halfDay,
         });
       }
-    } catch (e) {
-      debugPrint("TEAM WISE ATTENDANCE COUNT ERROR: $e");
     }
+
+    cards.insert(0, {
+      'title': 'SALES DEPARTMENT',
+      'present': salesPresent,
+      'absent': salesAbsent,
+      'half_day': salesHalfDay,
+    });
+
+    if (!mounted) return;
+
+    setState(() {
+      teamWiseTotalTeams = _asInt(
+        todaySummary['total_teams'],
+      );
+
+      teamWiseTotalMembers = _asInt(
+        todaySummary['total_members'],
+      );
+
+      teamWiseTotalPresent = _asInt(
+        todaySummary['total_present'],
+      );
+
+      teamWiseTotalAbsent = _asInt(
+        todaySummary['total_absent'],
+      );
+
+      teamWiseTotalHalfDay = _asInt(
+        todaySummary['total_half_day'],
+      );
+
+      teamWiseGrandTotal = _asInt(
+        todaySummary['grand_total'],
+      );
+
+      todayAttendancePercentage = _asDouble(
+        todaySummary['attendance_percentage'],
+      );
+
+      monthAttendancePercentage =
+          fetchedMonthAttendancePercentage;
+
+      departmentAttendanceCards = cards;
+    });
+
+    debugPrint(
+      "TODAY ATTENDANCE PERCENTAGE: "
+      "$todayAttendancePercentage",
+    );
+
+    debugPrint(
+      "MONTH ATTENDANCE PERCENTAGE: "
+      "$monthAttendancePercentage",
+    );
+  } catch (error, stackTrace) {
+    debugPrint(
+      "TEAM WISE ATTENDANCE COUNT ERROR: $error",
+    );
+
+    debugPrintStack(
+      stackTrace: stackTrace,
+    );
   }
+}
 
   // Future<void> getProfile() async {
   //   try {
@@ -1265,6 +1414,7 @@ class _ceo_dashboardState extends State<ceo_dashboard>
       Future(() => getCategoryWiseProducts()),
       Future(() => fetchBdmOverallFamilyReport()),
       Future(() => fetchInventoryAmountSummary()),
+      Future(() => fetchTeamWiseAttendanceCount()),
       // Future(() => fetchFamilyWiseInventorySummary()),
       Future(() => fetchMainCategoryInventorySummary()),
       Future(() => getstaff()),
@@ -3907,44 +4057,53 @@ class _ceo_dashboardState extends State<ceo_dashboard>
               );
             },
           ),
-          _buildDashboardCard(
-            title: "Employees",
-            value: "Total $teamWiseTotalMembers",
-            lines: const [],
-            bottom: Column(
-              children: [
-                // _buildEmployeeColumnItem(
-                //   title: "Teams",
-                //   value: "$teamWiseTotalTeams",
-                //   icon: Icons.groups_rounded,
-                // ),
-                const SizedBox(height: 6),
-                _buildEmployeeColumnItem(
-                  title: "Present",
-                  value: "$teamWiseTotalPresent",
-                  icon: Icons.person_pin_circle_rounded,
-                ),
-                const SizedBox(height: 6),
-                _buildEmployeeColumnItem(
-                  title: "Absent",
-                  value: "$teamWiseTotalAbsent",
-                  icon: Icons.cancel_rounded,
-                ),
-                const SizedBox(height: 6),
-                _buildEmployeeColumnItem(
-                  title: "Half Day",
-                  value: "$teamWiseTotalHalfDay",
-                  icon: Icons.access_time_filled_rounded,
-                ),
-              ],
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => staff_list()),
-              );
-            },
-          ),
+       _buildDashboardCard(
+  title: "Employees",
+  value: "Total $teamWiseTotalMembers",
+  lines: const [],
+  bottomTopSpacing: 0,
+  bottom: Column(
+    children: [
+      _buildEmployeeColumnItem(
+        title: "Present",
+        value: "$teamWiseTotalPresent",
+        icon: Icons.person_pin_circle_rounded,
+      ),
+      const SizedBox(height: 6),
+      _buildEmployeeColumnItem(
+        title: "Absent",
+        value: "$teamWiseTotalAbsent",
+        icon: Icons.cancel_rounded,
+      ),
+      const SizedBox(height: 6),
+      _buildEmployeeColumnItem(
+        title: "Half Day",
+        value: "$teamWiseTotalHalfDay",
+        icon: Icons.access_time_filled_rounded,
+      ),
+      const SizedBox(height: 6),
+      _buildEmployeeColumnItem(
+        title: "T Att. %",
+        value: "${todayAttendancePercentage.toStringAsFixed(2)}%",
+        icon: Icons.today_rounded,
+      ),
+      const SizedBox(height: 6),
+      _buildEmployeeColumnItem(
+        title: "M Att. %",
+        value: "${monthAttendancePercentage.toStringAsFixed(2)}%",
+        icon: Icons.calendar_month_rounded,
+      ),
+    ],
+  ),
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => staff_list(),
+      ),
+    );
+  },
+),
           _buildDashboardCard(
             title: "Attendance",
             value: "",
@@ -7945,36 +8104,36 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                   //   ],
                   // ),
 
-                  ListTile(
-                    leading: const Icon(Icons.inventory_2_outlined),
-                    title: const Text('Product Rack Usability'),
-                    onTap: () async {
-                      final String? accessToken = await getTokenFromPrefs();
+                  // ListTile(
+                  //   leading: const Icon(Icons.inventory_2_outlined),
+                  //   title: const Text('Product Rack Usability'),
+                  //   onTap: () async {
+                  //     final String? accessToken = await getTokenFromPrefs();
 
-                      if (!context.mounted) return;
+                  //     if (!context.mounted) return;
 
-                      if (accessToken == null || accessToken.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Access token not found. Please log in again.'),
-                          ),
-                        );
-                        return;
-                      }
+                  //     if (accessToken == null || accessToken.trim().isEmpty) {
+                  //       ScaffoldMessenger.of(context).showSnackBar(
+                  //         const SnackBar(
+                  //           content: Text(
+                  //               'Access token not found. Please log in again.'),
+                  //         ),
+                  //       );
+                  //       return;
+                  //     }
 
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ProductRackUsabilityPage(
-                            baseUrl: api,
-                            token: accessToken,
-                            initialUsability: 'usable',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  //     Navigator.push(
+                  //       context,
+                  //       MaterialPageRoute(
+                  //         builder: (context) => ProductRackUsabilityPage(
+                  //           baseUrl: api,
+                  //           token: accessToken,
+                  //           initialUsability: 'usable',
+                  //         ),
+                  //       ),
+                  //     );
+                  //   },
+                  // ),
 
                   _buildDropdownTile(context, 'Customers', [
                     'Add Customer',
@@ -8648,6 +8807,9 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                     'Finance Report',
                     'Actual Delivery Report',
                     'Order Comparison Report',
+                    'Product Usability Report',
+                   'Dispatched & Pending Orders Report',
+
                   ]),
 
                   _buildDropdownTile(context, 'Staff', [

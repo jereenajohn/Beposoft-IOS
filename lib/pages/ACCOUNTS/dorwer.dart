@@ -1,6 +1,7 @@
 import 'package:beposoft/Sales%20Directors/DSR_BDO_List.dart';
 import 'package:beposoft/Sales%20Directors/sd_confirm_call_duration.dart';
 import 'package:beposoft/pages/ACCOUNTS/BDO_call_List.dart';
+import 'package:beposoft/pages/ACCOUNTS/Dispatched_Pending_Orders_Summary_Report.dart';
 import 'package:beposoft/pages/ACCOUNTS/Staff_exit_form_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Expenses.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Recipt.dart';
@@ -13,6 +14,7 @@ import 'package:beposoft/pages/ACCOUNTS/cso_sales_report_summary.dart';
 import 'package:beposoft/pages/ACCOUNTS/cso_staff.dart';
 import 'package:beposoft/pages/ACCOUNTS/dailyproductcategorywisecyclingskating.dart';
 import 'package:beposoft/pages/ACCOUNTS/ordercomparison_report.dart';
+import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_all_team_members.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
@@ -122,6 +124,11 @@ import 'package:beposoft/pages/BDM/bdm_order_list.dart';
 
 import 'package:flutter/material.dart';
 
+Future<String?> getTokenFromPrefs() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  return prefs.getString('token');
+}
+
 class drower {
   Future<void> navigateToSelectedPage(
       BuildContext context, String option) async {
@@ -151,7 +158,7 @@ class drower {
           MaterialPageRoute(builder: (context) => addcustomertransfer()),
         );
         break;
-             case 'View Staff List':
+      case 'View Staff List':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => cso_staff_list()),
@@ -163,10 +170,12 @@ class drower {
           MaterialPageRoute(builder: (context) => customertransferList()),
         );
         break;
-          case 'Family Wise Excel Report':
+      case 'Family Wise Excel Report':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => CyclingskatingCategoryDailyProductwiseReport()),
+          MaterialPageRoute(
+              builder: (context) =>
+                  CyclingskatingCategoryDailyProductwiseReport()),
         );
         break;
       case 'Add Department & Managers':
@@ -184,13 +193,13 @@ class drower {
           MaterialPageRoute(builder: (context) => AllMembersPage()),
         );
         break;
-          case 'Add Your Attendance':
+      case 'Add Your Attendance':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => StaffSelfAttendanceScreen()),
         );
         break;
-             case 'Approve Your Team Attendance':
+      case 'Approve Your Team Attendance':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => StaffMarkAttendanceScreen()),
@@ -203,7 +212,7 @@ class drower {
           MaterialPageRoute(builder: (context) => AllAttendanceAddPage()),
         );
         break;
-           case 'Add & Approve All Attendance':
+      case 'Add & Approve All Attendance':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => AllAttendanceAddPage()),
@@ -229,7 +238,7 @@ class drower {
         );
         break;
 
-       case 'View All Team Members':
+      case 'View All Team Members':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => ViewAllTeamMembers()),
@@ -385,6 +394,17 @@ class drower {
                   )),
         );
         break;
+    case 'Dispatched & Pending Orders Report':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => ShippingOrderSummaryPage(
+                    baseUrl: api,
+                  )),
+        );
+        break;
+
+
 
       case 'COD Transfer List':
         Navigator.push(
@@ -392,7 +412,7 @@ class drower {
           MaterialPageRoute(builder: (context) => cod_transfer_list()),
         );
         break;
-           case 'Add Commission Recipt':
+      case 'Add Commission Recipt':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => CommissionReceiptScreen()),
@@ -506,7 +526,7 @@ class drower {
                   )),
         );
         break;
-          case 'Pre Booked':
+      case 'Pre Booked':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -581,7 +601,7 @@ class drower {
         );
         break;
 
-            case 'View Orders List':
+      case 'View Orders List':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -669,6 +689,33 @@ class drower {
           MaterialPageRoute(builder: (context) => expence_list()),
         );
         break;
+      case 'Product Usability Report':
+        final String? accessToken = await getTokenFromPrefs();
+
+        if (!context.mounted) return;
+
+        if (accessToken == null || accessToken.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Access token not found. Please log in again.',
+              ),
+            ),
+          );
+          break;
+        }
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductRackUsabilityPage(
+              baseUrl: api,
+              token: accessToken,
+              initialUsability: 'usable',
+            ),
+          ),
+        );
+        break;
       case 'Sales Report':
         Navigator.push(
           context,
@@ -682,7 +729,7 @@ class drower {
         );
         break;
 
-           case 'Sales Report Summary':
+      case 'Sales Report Summary':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => SalesReportExcelsummary()),
@@ -1148,7 +1195,7 @@ class drower {
           MaterialPageRoute(builder: (context) => AddTeamMembers()),
         );
         break;
-       case 'View All Team Members':
+      case 'View All Team Members':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => ViewAllTeamMembers()),
