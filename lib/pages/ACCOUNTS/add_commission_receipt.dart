@@ -38,6 +38,7 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
   final transactionController = TextEditingController();
   final remarkController = TextEditingController();
   final receiptSearchController = TextEditingController();
+  final orderSearchController = TextEditingController();
 
   List<Map<String, dynamic>> banks = [];
   List<Map<String, dynamic>> orders = [];
@@ -77,6 +78,7 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
     amountController.dispose();
     transactionController.dispose();
     remarkController.dispose();
+    orderSearchController.dispose();
     super.dispose();
   }
 
@@ -598,7 +600,8 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
   }
 
   Future<void> _showOrderPicker() async {
-    final controller = TextEditingController();
+    orderSearchController.clear();
+
     List<Map<String, dynamic>> visibleOrders = List.of(orders);
     bool searching = false;
 
@@ -614,7 +617,7 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
 
               await fetchOrders(
                 reset: true,
-                search: controller.text,
+                search: orderSearchController.text,
               );
 
               if (!sheetContext.mounted) return;
@@ -685,7 +688,7 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18),
                         child: TextField(
-                          controller: controller,
+                          controller: orderSearchController,
                           textInputAction: TextInputAction.search,
                           onSubmitted: (_) => runSearch(),
                           decoration: InputDecoration(
@@ -876,7 +879,6 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
       },
     );
 
-    controller.dispose();
   }
  Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();

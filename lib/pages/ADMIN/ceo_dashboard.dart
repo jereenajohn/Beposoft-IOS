@@ -21,6 +21,7 @@ import 'package:beposoft/pages/ACCOUNTS/all_users_categorywise_sales_report.dart
 import 'package:beposoft/pages/ACCOUNTS/all_users_sales_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/assetmanagement.dart';
 import 'package:beposoft/pages/ACCOUNTS/mailboxpage..dart';
+import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
 import 'package:beposoft/pages/ADMIN/add_staffwise_department.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_team_staff.dart';
@@ -149,6 +150,13 @@ class _ceo_dashboardState extends State<ceo_dashboard>
   String familySummaryTeamToDate = "";
   String profileImage = '';
   bool familyInventoryLoading = false;
+  List<Map<String, dynamic>> dashboardAssetCategorySummary = [];
+
+  double dashboardTotalAssets = 0.0;
+  double dashboardTotalLiabilities = 0.0;
+  double dashboardCapital = 0.0;
+
+  bool assetDashboardLoading = false;
 
   Map<String, dynamic> cyclingInventorySummary = {};
   Map<String, dynamic> skatingInventorySummary = {};
@@ -231,11 +239,6 @@ class _ceo_dashboardState extends State<ceo_dashboard>
   int teamWiseTotalHalfDay = 0;
 
   List<Map<String, dynamic>> departmentAttendanceCards = [];
-  double dashboardTotalAssets = 0.0;
-  double dashboardTotalLiabilities = 0.0;
-  double dashboardCapital = 0.0;
-
-  bool assetDashboardLoading = false;
 
   bool assetLoading = false;
   // int getFamilyPresentCount(String familyName) {
@@ -454,94 +457,177 @@ class _ceo_dashboardState extends State<ceo_dashboard>
   }
 
   Future<void> fetchAssetSummaryForDashboard() async {
+    if (!mounted) return;
+
+    setState(() {
+      assetDashboardLoading = true;
+    });
+
     try {
-      final token = await getTokenFromPrefs();
+      final String? token = await getTokenFromPrefs();
 
-      if (token == null) return;
+      if (token == null || token.trim().isEmpty) {
+        if (!mounted) return;
 
-      setState(() {
-        assetDashboardLoading = true;
-      });
+        setState(() {
+          dashboardAssetCategorySummary = [];
+          dashboardTotalAssets = 0.0;
+          dashboardTotalLiabilities = 0.0;
+          dashboardCapital = 0.0;
+          assetDashboardLoading = false;
+        });
+
+        return;
+      }
+
+      final List<http.Response> responses = await Future.wait([
+        http.get(
+          Uri.parse('$api/apis/get/asset/report/'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        ),
+        http.get(
+          Uri.parse('$api/apis/liability/get/'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        ),
+      ]);
+
+      final http.Response assetResponse = responses[0];
+      final http.Response liabilityResponse = responses[1];
 
       double totalAssets = 0.0;
       double totalLiabilities = 0.0;
 
-      // ASSETS
-      final assetResponse = await http.get(
-        Uri.parse('$api/apis/get/asset/report/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
+      final List<Map<String, dynamic>> categorySummary = [];
 
+      // ================= ASSETS =================
       if (assetResponse.statusCode == 200) {
-        final assetData = jsonDecode(assetResponse.body);
+        final dynamic decodedAsset = jsonDecode(assetResponse.body);
 
-        final List assets = assetData['assets'] ?? [];
+        final List<dynamic> rawAssetCategories =
+            decodedAsset is Map && decodedAsset['assets'] is List
+                ? List<dynamic>.from(decodedAsset['assets'])
+                : <dynamic>[];
 
-        for (final category in assets) {
-          final products = category['products'] ?? [];
+        for (final dynamic categoryItem in rawAssetCategories) {
+          if (categoryItem is! Map) continue;
 
-          for (final product in products) {
-            final stock = double.tryParse(
-                    (product['stock'] ?? product['quantity'] ?? 0)
-                        .toString()) ??
-                0;
+          final Map<String, dynamic> category =
+              Map<String, dynamic>.from(categoryItem);
 
-            double price = 0;
+          final String categoryName =
+              (category['category'] ?? 'Unknown').toString().trim();
+
+          final List<dynamic> products = category['products'] is List
+              ? List<dynamic>.from(category['products'])
+              : <dynamic>[];
+
+          int categoryTotalStock = 0;
+          double categoryTotalAmount = 0.0;
+
+          for (final dynamic productItem in products) {
+            if (productItem is! Map) continue;
+
+            final Map<String, dynamic> product =
+                Map<String, dynamic>.from(productItem);
+
+            final int stock = _asInt(
+              product['stock'] ?? product['quantity'],
+            );
+
+            double price = 0.0;
 
             if (product['landing_cost'] != null) {
-              price = double.tryParse(product['landing_cost'].toString()) ?? 0;
+              price = _asDouble(product['landing_cost']);
             } else if (product['amount'] != null) {
-              price = double.tryParse(product['amount'].toString()) ?? 0;
+              price = _asDouble(product['amount']);
             }
 
-            totalAssets += stock * price;
+            categoryTotalStock += stock;
+            categoryTotalAmount += stock * price;
           }
+
+          totalAssets += categoryTotalAmount;
+
+          categorySummary.add({
+            'category': categoryName,
+            'total_stock': categoryTotalStock,
+            'total_amount': categoryTotalAmount,
+          });
         }
+
+        categorySummary.sort(
+          (Map<String, dynamic> a, Map<String, dynamic> b) {
+            return a['category'].toString().toLowerCase().compareTo(
+                  b['category'].toString().toLowerCase(),
+                );
+          },
+        );
+      } else {
+        debugPrint(
+          'ASSET DASHBOARD API FAILED: '
+          '${assetResponse.statusCode} ${assetResponse.body}',
+        );
       }
 
-      // LIABILITIES
-
-      final liabilityResponse = await http.get(
-        Uri.parse('$api/apis/liability/get/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
+      // ================= LIABILITIES =================
       if (liabilityResponse.statusCode == 200) {
-        final liabilityData = jsonDecode(liabilityResponse.body);
+        final dynamic decodedLiability = jsonDecode(liabilityResponse.body);
 
-        final List liabilities = liabilityData['liabilities'] ?? [];
+        final List<dynamic> liabilities =
+            decodedLiability is Map && decodedLiability['liabilities'] is List
+                ? List<dynamic>.from(
+                    decodedLiability['liabilities'],
+                  )
+                : <dynamic>[];
 
-        for (final item in liabilities) {
-          totalLiabilities +=
-              double.tryParse(item['pending_amount'].toString()) ?? 0;
+        for (final dynamic liabilityItem in liabilities) {
+          if (liabilityItem is! Map) continue;
+
+          final Map<String, dynamic> liability =
+              Map<String, dynamic>.from(liabilityItem);
+
+          totalLiabilities += _asDouble(
+            liability['pending_amount'],
+          );
         }
+      } else {
+        debugPrint(
+          'LIABILITY DASHBOARD API FAILED: '
+          '${liabilityResponse.statusCode} '
+          '${liabilityResponse.body}',
+        );
       }
 
       if (!mounted) return;
 
       setState(() {
+        dashboardAssetCategorySummary = categorySummary;
         dashboardTotalAssets = totalAssets;
-
         dashboardTotalLiabilities = totalLiabilities;
-
         dashboardCapital = totalAssets - totalLiabilities;
-
         assetDashboardLoading = false;
       });
-    } catch (e) {
-      debugPrint("ASSET DASHBOARD ERROR : $e");
+    } catch (error, stackTrace) {
+      debugPrint('ASSET DASHBOARD ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
 
-      if (mounted) {
-        setState(() {
-          assetDashboardLoading = false;
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        dashboardAssetCategorySummary = [];
+        dashboardTotalAssets = 0.0;
+        dashboardTotalLiabilities = 0.0;
+        dashboardCapital = 0.0;
+        assetDashboardLoading = false;
+      });
     }
   }
 
@@ -3310,6 +3396,76 @@ class _ceo_dashboardState extends State<ceo_dashboard>
     );
   }
 
+  Widget _buildAssetCategoryDashboardItem({
+    required String categoryName,
+    required int totalStock,
+    required double totalAmount,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            categoryName.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Stock: $totalStock',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.88),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _formatDashboardAmount(totalAmount),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDashboardLineItem({
     required String title,
     required String value,
@@ -3711,25 +3867,33 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                 ? "Loading..."
                 : _formatDashboardAmount(monthTotalOrderAmount),
             lines: [
-              // dgmLoading
-              //     ? "Today Orders: Loading..."
-              //     : "Today Orders: $todayTotalOrders",
-              // dgmLoading
-              //     ? "Today Amount: Loading..."
-              //     : "Today Amount: ${_formatDashboardAmount(todayTotalOrderAmount)}",
               dgmLoading
-                  ? "Total Invoices: Loading..."
-                  : "Total Invoices: $monthTotalOrders",
-              // dgmLoading
-              //     ? "Month Amount: Loading..."
-              //     : "Month Amount: ${_formatDashboardAmount(monthTotalOrderAmount)}",
-
+                  ? "Today Invoices: Loading..."
+                  : "Today INV: $todayTotalOrders",
               dgmLoading
-                  ? "PO Amount: Loading..."
-                  : "PO Amount: ${_formatDashboardAmount(monthTotalParcelAmount)}",
+                  ? "Today Amount: Loading..."
+                  : "T.Amount: ${_formatDashboardAmount(
+                      todayTotalOrderAmount,
+                    )}",
+              dgmLoading
+                  ? "Today Weight: Loading..."
+                  : "T.Weight: ${_asDouble(
+                      dgmTodaySummary['total_weight_field_kg'],
+                    ).toStringAsFixed(3)} kg",
+              dgmLoading
+                  ? "Month Invoices: Loading..."
+                  : "Month INV: $monthTotalOrders",
+              dgmLoading
+                  ? "Month Amount: Loading..."
+                  : "M.Amount: ${_formatDashboardAmount(monthTotalOrderAmount)}",
               dgmLoading
                   ? "Weight: Loading..."
-                  : "Weight: ${dgmWeightFieldKg.toStringAsFixed(3)} kg",
+                  : "M.Weight: ${dgmWeightFieldKg.toStringAsFixed(3)} kg",
+              dgmLoading
+                  ? "PO Amount: Loading..."
+                  : "PO Amount: ${_formatDashboardAmount(
+                      monthTotalParcelAmount,
+                    )}",
               dgmLoading
                   ? "Avg: Loading..."
                   : "Avg: ₹${monthAverage.toStringAsFixed(2)}/kg",
@@ -3866,16 +4030,66 @@ class _ceo_dashboardState extends State<ceo_dashboard>
           _buildDashboardCard(
             title: "Assets & Liabilities",
             value: '',
-            titleBottomSpacing: 18,
+            titleBottomSpacing: 8,
             lines: [
-              "Assets: ${_formatDashboardAmount(dashboardTotalAssets)}",
-              "Liabilities: ${_formatDashboardAmount(dashboardTotalLiabilities)}",
+              assetDashboardLoading
+                  ? "Assets: Loading..."
+                  : "Assets: ${_formatDashboardAmount(
+                      dashboardTotalAssets,
+                    )}",
+              assetDashboardLoading
+                  ? "Liabilities: Loading..."
+                  : "Liabilities: ${_formatDashboardAmount(
+                      dashboardTotalLiabilities,
+                    )}",
             ],
+            bottomTopSpacing: 4,
+            bottom: assetDashboardLoading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                : dashboardAssetCategorySummary.isEmpty
+                    ? _buildDashboardLineItem(
+                        title: "Assets",
+                        value: "No data",
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: dashboardAssetCategorySummary
+                            .where(
+                          (Map<String, dynamic> category) =>
+                              (category['category'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .toLowerCase() !=
+                              'fully paid emis',
+                        )
+                            .map(
+                          (Map<String, dynamic> category) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _buildDashboardLineItem(
+                                title: (category['category'] ?? 'Unknown')
+                                    .toString(),
+                                value: _formatDashboardAmount(
+                                  _asDouble(category['total_amount']),
+                                ),
+                              ),
+                            );
+                          },
+                        ).toList(),
+                      ),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => AssetManegment(),
+                  builder: (_) => const AssetManegment(),
                 ),
               );
             },
@@ -7730,7 +7944,38 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                   //     ),
                   //   ],
                   // ),
-              
+
+                  ListTile(
+                    leading: const Icon(Icons.inventory_2_outlined),
+                    title: const Text('Product Rack Usability'),
+                    onTap: () async {
+                      final String? accessToken = await getTokenFromPrefs();
+
+                      if (!context.mounted) return;
+
+                      if (accessToken == null || accessToken.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Access token not found. Please log in again.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProductRackUsabilityPage(
+                            baseUrl: api,
+                            token: accessToken,
+                            initialUsability: 'usable',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
                   _buildDropdownTile(context, 'Customers', [
                     'Add Customer',
                     'Customers',
@@ -7815,7 +8060,7 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                     'Employee Leave Requests',
                     'View Leave List',
                   ]),
-                      ListTile(
+                  ListTile(
                     leading: Icon(Icons.dashboard),
                     title: Text('Local Purchase Order'),
                     onTap: () {
@@ -7827,7 +8072,7 @@ class _ceo_dashboardState extends State<ceo_dashboard>
                     },
                   ),
 
-                                ListTile(
+                  ListTile(
                     leading: Icon(Icons.dashboard),
                     title: Text('All Local Purchase Orders'),
                     onTap: () {
