@@ -117,6 +117,14 @@ void _filterOrdersByStatus(String status) {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
+
+  String getDisplayStatus(dynamic rawStatus) {
+    final String status = (rawStatus ?? '').toString().trim();
+
+    return status == 'Invoice Created'
+        ? 'Waiting For Approval'
+        : status;
+  }
  
  
 Future<void> fetchOrderData() async {
@@ -364,7 +372,7 @@ Future<void> fetchOrderData() async {
           item['price'] ?? '',
           item['tax'] ?? '',
           item['discount'] ?? '',
-          order['status'] ?? '',
+          getDisplayStatus(order['status']),
           order['total_amount'] ?? '',
           order['order_date'] ?? '',
         ]);
@@ -495,7 +503,9 @@ Future<void> fetchOrderData() async {
                     'Order Summary',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
-                  pw.Text('Status: ${order['status'] ?? ''}'),
+                  pw.Text(
+                    'Status: ${getDisplayStatus(order['status'])}',
+                  ),
                   pw.Text('Total Amount: ${order['total_amount'].toString()}'),
                   pw.Text('Order Date: ${order['order_date'] ?? ''}'),
                 ],
@@ -744,7 +754,7 @@ else if(dep=="Warehouse Admin" ){
     items: orderStatuses.map((status) {
       return DropdownMenuItem<String>(
         value: status,
-        child: Text(status),
+        child: Text(getDisplayStatus(status)),
       );
     }).toList(),
   ),
@@ -866,10 +876,13 @@ else if(dep=="Warehouse Admin" ){
                                                 ),
                                               ),
                                               Text(
-                                                '${order['status']}',
-                                                style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: Colors.blue),
+                                                getDisplayStatus(
+                                                  order['status'],
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue,
+                                                ),
                                               ),
                                             ],
                                           ),

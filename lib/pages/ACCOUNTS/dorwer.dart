@@ -499,7 +499,7 @@ class drower {
           MaterialPageRoute(builder: (context) => order_products()),
         );
         break;
-      case 'Invoice Created':
+      case 'Waiting For Approval':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -931,6 +931,18 @@ class drower {
           MaterialPageRoute(builder: (context) => bank_list()),
         );
         break;
+             case 'Create Proforma Invoice':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => CreatePerformaProduct_List()),
+        );
+        break;
+      case 'View Proforma Invoice':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ProformaInvoiceList()),
+        );
+        break;
       // case 'Other Transfer':
       //   Navigator.push(
       //     context,
@@ -1168,6 +1180,7 @@ class drower {
   void navigateToSelectedPage3(BuildContext context, String option) {
     // Navigate to the selected page based on the option
     switch (option) {
+      
       case 'Add Team':
         Navigator.push(
           context,
@@ -1423,6 +1436,18 @@ class drower {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => staff_list()),
+        );
+        break;
+                   case 'Create Proforma Invoice':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => CreatePerformaProduct_List()),
+        );
+        break;
+      case 'View Proforma Invoice':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ProformaInvoiceList()),
         );
         break;
 

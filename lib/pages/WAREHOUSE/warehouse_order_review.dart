@@ -2766,12 +2766,8 @@ class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
                     SizedBox(height: 10),
 
                     // Display each item in the visibleItems list within a card
-                    for (var item in visibleItems)
-                      GestureDetector(
-                        onTap: () {
-                          showPopupDialog(context, item);
-                        },
-                        child: Card(
+                   for (var item in visibleItems)
+  Card(
                           color: Colors.white,
                           margin: const EdgeInsets.only(bottom: 8.0),
                           shape: RoundedRectangleBorder(
@@ -2871,7 +2867,7 @@ class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
                             ),
                           ),
                         ),
-                      ),
+                      
 
                     // "See More" or "See Less" Button
                     if (items.length >

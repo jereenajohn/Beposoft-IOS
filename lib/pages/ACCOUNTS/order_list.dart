@@ -121,6 +121,14 @@ class _OrderListState extends State<OrderList> {
     return prefs.getString('department');
   }
 
+  String getDisplayStatus(dynamic rawStatus) {
+    final String status = (rawStatus ?? '').toString().trim();
+
+    return status == 'Invoice Created'
+        ? 'Waiting For Approval'
+        : status;
+  }
+
   Future<void> fetchOrderData() async {
     try {
       final token = await getTokenFromPrefs();
@@ -413,7 +421,7 @@ class _OrderListState extends State<OrderList> {
           item['price'] ?? '',
           item['tax'] ?? '',
           item['discount'] ?? '',
-          order['status'] ?? '',
+          getDisplayStatus(order['status']),
           order['total_amount'] ?? '',
           order['order_date'] ?? '',
         ]);
@@ -544,7 +552,9 @@ class _OrderListState extends State<OrderList> {
                     'Order Summary',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
-                  pw.Text('Status: ${order['status'] ?? ''}'),
+                  pw.Text(
+                    'Status: ${getDisplayStatus(order['status'])}',
+                  ),
                   pw.Text('Total Amount: ${order['total_amount'].toString()}'),
                   pw.Text('Order Date: ${order['order_date'] ?? ''}'),
                 ],
@@ -806,7 +816,7 @@ class _OrderListState extends State<OrderList> {
                 items: orderStatuses.map((status) {
                   return DropdownMenuItem<String>(
                     value: status,
-                    child: Text(status),
+                    child: Text(getDisplayStatus(status)),
                   );
                 }).toList(),
               ),
@@ -945,10 +955,13 @@ class _OrderListState extends State<OrderList> {
                                                 ),
                                               ),
                                               Text(
-                                                '${order['status']}',
-                                                style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: Colors.blue),
+                                                getDisplayStatus(
+                                                  order['status'],
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue,
+                                                ),
                                               ),
                                             ],
                                           ),
