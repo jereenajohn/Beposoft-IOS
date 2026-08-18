@@ -27,6 +27,7 @@ import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_team_staff.dart';
 import 'package:beposoft/pages/ADMIN/all_local_purchases_screen.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard_all_sections_single_page.dart';
+import 'package:beposoft/pages/ADMIN/family_date_summary_page.dart';
 import 'package:beposoft/pages/ADMIN/grv_sales_return_summary.dart';
 import 'package:beposoft/pages/ADMIN/localpurchaseorderscreen.dart';
 
@@ -3976,7 +3977,7 @@ Widget _buildDashboardLineItem({
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => SalesReportExcel()),
+                MaterialPageRoute(builder: (context) => FamilyDateSummaryPage()),
               );
             },
           ),

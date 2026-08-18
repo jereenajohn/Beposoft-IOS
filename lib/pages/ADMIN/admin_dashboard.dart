@@ -934,6 +934,21 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                     // Navigate to the Settings page or perform any other action
                   },
                 ),
+
+                  // if (isManager)
+                  // ListTile(
+                  //   leading: const Icon(Icons.person),
+                  //   title: const Text('Face Recognition'),
+                  //   onTap: () {
+                  //     Navigator.push(
+                  //       context,
+                  //       MaterialPageRoute(
+                  //         builder: (context) =>
+                  //             const StaffMarkAttendanceScreenface(),
+                  //       ),
+                  //     );
+                  //   },
+                  // ),
                 ListTile(
                   leading: Icon(Icons.person),
                   title: Text('Add Attendance'),
