@@ -8230,14 +8230,18 @@ Widget _buildDashboardLineItem({
                     'New Proforma Invoice',
                     'Proforma Invoice List',
                   ]),
-                  _buildDropdownTile(context, 'Delivery Note', [
-                    'Delivery Note List(To Print)',
-                    'Delivery Note List(Packing under Progress)',
-                    'Delivery Note List(Packed)',
-                    'Delivery Note List(Ready to ship)',
-                    'Delivery Note List(Shipped)',
-                    'Daily Goods Movement'
-                  ]),
+                    _buildDropdownTile(
+                context,
+                'Delivery Note',
+                [
+                  'Delivery Order (DO)',
+                  'Delivery Order(Packing under Progress)',
+                  'Packed For Delivery(PFD)',
+                  'Out For Delivery(OFD)',
+                  'Delivery Order(Shipped)',
+                  'Daily Goods Movement',
+                ],
+              ),
                   _buildDropdownTile(context, 'Orders', [
                     // 'New Orders',
                     'Orders List',
@@ -8245,10 +8249,11 @@ Widget _buildDashboardLineItem({
                     'Invoice Approved',
                     'Pre Booked',
                     'Waiting For Confirmation',
-                    'To Print',
+                    'DO(Delivery Order)',
                     'Packing Under Progress',
-                    'Packed',
-                    'Ready to ship',
+                    'PFD (Packed For Delivery)',
+                     'OFD (Out For Delivery)',
+                     'Return From Delivery',
                     'Shipped',
                     'Invoice Rejected'
                   ]),

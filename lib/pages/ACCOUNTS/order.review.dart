@@ -71,6 +71,8 @@ class _OrderReviewState extends State<OrderReview> {
   bool showParcelServiceDropdown = false;
   final TextEditingController parcelServiceNoteController =
       TextEditingController();
+  final TextEditingController deliveryReturnReasonController =
+      TextEditingController();
 
   String? currentOrderStatus; // REAL status from API
   bool statusSubmitted = false; // Track submit action
@@ -131,6 +133,7 @@ class _OrderReviewState extends State<OrderReview> {
     'Packing under progress',
     'Packed',
     'Ready to ship',
+    'Return From Delivery',
     'Shipped',
     'Invoice Rejected',
   ];
@@ -204,6 +207,7 @@ class _OrderReviewState extends State<OrderReview> {
     'Packing under progress',
     'Packed', // 👈 use either "Packed" or "Packing" everywhere; be consistent
     'Ready to ship',
+    'Return From Delivery',
     'Shipped',
     'Invoice Rejected',
   ];
@@ -247,8 +251,12 @@ class _OrderReviewState extends State<OrderReview> {
     ],
     'Ready to ship': [
       'Ready to ship',
+      'Return From Delivery',
       'Shipped',
-      'Invoice Rejected',
+    ],
+    'Return From Delivery': [
+      'Return From Delivery',
+      'Ready to ship',
     ],
     'Shipped': [
       'Shipped',
@@ -259,6 +267,27 @@ class _OrderReviewState extends State<OrderReview> {
   };
 
   List<String> getFilteredStatuses() {
+    final String baseStatus =
+        (currentOrderStatus ?? selectedStatus ?? '').toString().trim();
+
+    // Special delivery flow:
+    // OFD can move to Return From Delivery or Shipped.
+    // Return From Delivery must first move back to OFD before Shipped is allowed.
+    if (baseStatus == 'Ready to ship') {
+      return [
+        'Ready to ship',
+        'Return From Delivery',
+        'Shipped',
+      ];
+    }
+
+    if (baseStatus == 'Return From Delivery') {
+      return [
+        'Return From Delivery',
+        'Ready to ship',
+      ];
+    }
+
     if (isTopManagement()) {
       return statuses2;
     }
@@ -267,36 +296,36 @@ class _OrderReviewState extends State<OrderReview> {
 
     // ✅ BDM old flow: Invoice Approved -> Waiting For Confirmation
     if (dept == "BDM" || dept == "SD" || dept == "CSO") {
-      final baseStatus = (selectedStatus ?? currentOrderStatus)?.trim();
+      final branchStatus = (selectedStatus ?? currentOrderStatus)?.trim();
 
-      if (baseStatus == null || baseStatus.isEmpty) return [];
+      if (branchStatus == null || branchStatus.isEmpty) return [];
 
-      return statusFlow[baseStatus]
+      return statusFlow[branchStatus]
               ?.where((status) => status != 'Pre Booked')
               .toSet()
               .toList() ??
-          [baseStatus];
+          [branchStatus];
     }
 
     // ✅ ADMIN / Accounts new flow with Pre Booked
     if (isAdminOrAccounts()) {
-      final baseStatus = (selectedStatus ?? currentOrderStatus)?.trim();
+      final branchStatus = (selectedStatus ?? currentOrderStatus)?.trim();
 
-      if (baseStatus == null || baseStatus.isEmpty) return [];
+      if (branchStatus == null || branchStatus.isEmpty) return [];
 
       final List<String> result = [];
 
       if (!statusSubmitted) {
-        result.add(baseStatus);
+        result.add(branchStatus);
       }
 
-      if (baseStatus == 'Invoice Approved') {
+      if (branchStatus == 'Invoice Approved') {
         result.add('Pre Booked');
         result.add('Waiting For Confirmation');
-      } else if (baseStatus == 'Pre Booked') {
+      } else if (branchStatus == 'Pre Booked') {
         result.add('Waiting For Confirmation');
       } else {
-        final currentIndex = statuses2.indexOf(baseStatus);
+        final currentIndex = statuses2.indexOf(branchStatus);
 
         if (currentIndex != -1 && currentIndex + 1 < statuses2.length) {
           final nextStatus = statuses2[currentIndex + 1];
@@ -307,7 +336,7 @@ class _OrderReviewState extends State<OrderReview> {
         }
       }
 
-      if (baseStatus != 'Shipped' && !result.contains('Invoice Rejected')) {
+      if (branchStatus != 'Shipped' && !result.contains('Invoice Rejected')) {
         result.add('Invoice Rejected');
       }
 
@@ -1455,7 +1484,7 @@ class _OrderReviewState extends State<OrderReview> {
                 items: statuses.map((status) {
                   return DropdownMenuItem<String>(
                     value: status,
-                    child: Text(status),
+                    child: Text(getDisplayStatus(status)),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -1881,8 +1910,83 @@ class _OrderReviewState extends State<OrderReview> {
     return false;
   }
 
+  Future<String?> _showDeliveryReturnReasonDialog() async {
+    deliveryReturnReasonController.clear();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'Delivery Return Reason',
+          ),
+          content: TextField(
+            controller: deliveryReturnReasonController,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 5,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Return Reason',
+              hintText: 'Enter delivery return reason',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final String reason =
+                    deliveryReturnReasonController.text.trim();
+
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Delivery return reason is required',
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.of(dialogContext).pop(reason);
+              },
+              child: const Text('Update'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> updatestatus() async {
     try {
+      String? deliveryReturnReason;
+
+      if ((selectedStatus ?? '').trim() == 'Return From Delivery') {
+        deliveryReturnReason =
+            await _showDeliveryReturnReasonDialog();
+
+        if (!mounted ||
+            deliveryReturnReason == null ||
+            deliveryReturnReason.trim().isEmpty) {
+          return;
+        }
+      }
+
       // 🚫 BLOCK "To Print" IF RACK NOT SELECTED
       if ((selectedStatus ?? '').trim() == 'To Print' && !isRackSelected()) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1910,6 +2014,8 @@ class _OrderReviewState extends State<OrderReview> {
 
       Map<String, dynamic> body = {
         'status': selectedStatus,
+        if (selectedStatus == 'Return From Delivery')
+          'delivery_return_reason': deliveryReturnReason,
         if (isToPrint && id != null) 'confirmed_by': id,
         'time': formattedTime,
         'updated_at': DateTime.now().toIso8601String().split('T')[0],
@@ -1951,6 +2057,8 @@ class _OrderReviewState extends State<OrderReview> {
                     0.0
                 : 0.0,
             'accounts_note': accountsnoteController.text.trim(),
+            if (selectedStatus == 'Return From Delivery')
+              'delivery_return_reason': deliveryReturnReason,
           },
         );
 
@@ -5747,7 +5855,26 @@ void showPopupDialog(
 
   String getDisplayStatus(dynamic rawStatus) {
     final String value = (rawStatus ?? '').toString().trim();
-    return value == 'Invoice Created' ? 'Waiting For Approval' : value;
+
+    switch (value) {
+      case 'Invoice Created':
+        return 'Waiting For Approval';
+
+      case 'To Print':
+        return 'Delivery Order (DO)';
+
+      case 'Packed':
+        return 'Packed For Delivery (PFD)';
+
+      case 'Ready to ship':
+        return 'Out For Delivery (OFD)';
+
+      case 'Return From Delivery':
+        return 'Return From Delivery';
+
+      default:
+        return value;
+    }
   }
 
 bool canManageApprovalControls() {
@@ -8710,6 +8837,51 @@ bool isPrivilegedDepartment() {
                                 ),
                               ),
                             ),
+
+                            if (ord != null &&
+                                ord['delivery_return_reason'] != null &&
+                                ord['delivery_return_reason']
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF7ED),
+                                  borderRadius: BorderRadius.circular(13),
+                                  border: Border.all(
+                                    color: const Color(0xFFF97316)
+                                        .withOpacity(0.25),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Delivery Return Reason',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF9A3412),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      ord['delivery_return_reason']
+                                          .toString(),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        height: 1.4,
+                                        color: Color(0xFF7C2D12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
