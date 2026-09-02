@@ -224,10 +224,10 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 
         if (parsed is Map<String, dynamic> &&
             parsed['status'] == 'success') {
-          final Map<String, dynamic> allOrders =
-              parsed['all_orders'] is Map
+          final Map<String, dynamic> currentMonthOrders =
+              parsed['current_month_orders'] is Map
                   ? Map<String, dynamic>.from(
-                      parsed['all_orders'],
+                      parsed['current_month_orders'],
                     )
                   : <String, dynamic>{};
 
@@ -249,12 +249,12 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 
           setState(() {
             familyTotalBills = int.tryParse(
-                  allOrders['count']?.toString() ?? '0',
+                  currentMonthOrders['count']?.toString() ?? '0',
                 ) ??
                 0;
 
             familyTotalAmount = double.tryParse(
-                  allOrders['total_amount']?.toString() ?? '0',
+                  currentMonthOrders['total_amount']?.toString() ?? '0',
                 ) ??
                 0.0;
 
@@ -2742,7 +2742,7 @@ void dispose() {
                                   isFamilySummaryLoading
                                       ? "..."
                                       : familyTotalBills.toString(),
-                                  'Total Bills',
+                                  'Month Bills',
                                   0,
                                 ),
                               ),
@@ -2753,7 +2753,7 @@ void dispose() {
                                 isFamilySummaryLoading
                                     ? "..."
                                     : formatCompactAmount(familyTotalAmount),
-                                'Total Volume',
+                                'Month Volume',
                                 0,
                               ),
                             ),
@@ -2761,20 +2761,22 @@ void dispose() {
                             Expanded(
                               child: GestureDetector(
                                 onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => bdm_OrderList(
-                                        status: "Invoice Created",
-                                      ),
-                                    ),
-                                  );
+                                  // Navigator.push(
+                                  //   context,
+                                  //   MaterialPageRoute(
+                                  //     builder: (context) => bdm_OrderList(
+                                  //       status: "Invoice Created",
+                                  //     ),
+                                  //   ),
+                                  // );
                                 },
                                 child: _buildInfoCard(
-                                  isFamilySummaryLoading
-                                      ? "..."
-                                      : familyInvoiceCreatedBills.toString(),
-                                  'Waiting For Approval',
+                                  // isFamilySummaryLoading
+                                  //     ? "..."
+                                  //     : familyInvoiceCreatedBills.toString(),
+                                  '0',
+                                  // 'Waiting For Approval',
+                                  'Rank',
                                   0,
                                 ),
                               ),
@@ -2817,8 +2819,12 @@ void dispose() {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            const Expanded(
-                              child: SizedBox(),
+                            Expanded(
+                              child: _buildInfoCard(
+                                '0',
+                                'Points',
+                                0,
+                              ),
                             ),
                           ],
                         ),
@@ -2897,11 +2903,11 @@ void dispose() {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  buildMyTeamSummarySection(),
-                  const SizedBox(height: 12),
-                  buildAttendanceTableSection(),
-                  const SizedBox(height: 12),
+                  // const SizedBox(height: 16),
+                  // buildMyTeamSummarySection(),
+                  // const SizedBox(height: 12),
+                  // buildAttendanceTableSection(),
+                  // const SizedBox(height: 12),
                 ],
               ),
             ),
