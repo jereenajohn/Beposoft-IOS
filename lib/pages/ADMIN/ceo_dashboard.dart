@@ -8235,7 +8235,7 @@ Widget _buildDashboardLineItem({
                 'Delivery Note',
                 [
                   'Delivery Order (DO)',
-                  'Delivery Order(Packing under Progress)',
+                  // 'Delivery Order(Packing under Progress)',
                   'Packed For Delivery(PFD)',
                   'Out For Delivery(OFD)',
                   'Delivery Order(Shipped)',
@@ -8250,7 +8250,7 @@ Widget _buildDashboardLineItem({
                     'Pre Booked',
                     'Waiting For Confirmation',
                     'DO(Delivery Order)',
-                    'Packing Under Progress',
+                    // 'Packing Under Progress',
                     'PFD (Packed For Delivery)',
                      'OFD (Out For Delivery)',
                      'Return From Delivery',

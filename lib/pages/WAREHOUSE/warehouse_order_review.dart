@@ -545,81 +545,80 @@ class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
     return prefs.getString('department');
   }
 
-  final List<String> statuses = [
-    'To Print',
-    'Packing under progress',
-    'Packed',
-    'Ready to ship',
-    'Return From Delivery',
-    'Shipped',
-  ];
+ final List<String> statuses = [
+  'To Print',
+  // 'Packing under progress',
+  'Packed',
+  'Ready to ship',
+  'Return From Delivery',
+  'Shipped',
+];
+List<String> getAvailableOrderStatuses() {
+  final String currentStatus =
+      ord?['status']?.toString().trim() ?? '';
 
-  List<String> getAvailableOrderStatuses() {
-    final String currentStatus =
-        ord?['status']?.toString().trim() ?? '';
+  switch (currentStatus) {
+    case 'To Print':
+      return [
+        'To Print',
+        // 'Packing under progress',
+        'Packed',
+        'Ready to ship',
+      ];
 
-    switch (currentStatus) {
-      case 'To Print':
+    // case 'Packing under progress':
+    //   return [
+    //     'Packing under progress',
+    //     'Packed',
+    //     'Ready to ship',
+    //   ];
+
+    case 'Packed':
+      return [
+        'Packed',
+        'Ready to ship',
+      ];
+
+    case 'Ready to ship':
+      final String department =
+          dep?.toString().trim().toLowerCase() ?? '';
+
+      final bool canMarkAsShipped =
+          department == 'ceo' ||
+          department == 'admin' ||
+          department == 'coo' ||
+          department == 'accounts' ||
+          department == 'accounting' ||
+          department == 'accounts / accounting' ||
+          department == 'warehouse admin';
+
+      return [
+        'Ready to ship',
+        'Return From Delivery',
+        if (canMarkAsShipped) 'Shipped',
+      ];
+
+    case 'Return From Delivery':
+      return [
+        'Return From Delivery',
+        'Ready to ship',
+      ];
+
+    case 'Shipped':
+      return [
+        'Shipped',
+      ];
+
+    default:
+      if (currentStatus.isNotEmpty) {
         return [
-          'To Print',
-          'Packing under progress',
-          'Packed',
-          'Ready to ship',
+          currentStatus,
         ];
+      }
 
-      case 'Packing under progress':
-        return [
-          'Packing under progress',
-          'Packed',
-          'Ready to ship',
-        ];
-
-      case 'Packed':
-        return [
-          'Packed',
-          'Ready to ship',
-        ];
-
-      case 'Ready to ship':
-        final String department =
-            dep?.toString().trim().toLowerCase() ?? '';
-
-        final bool canMarkAsShipped =
-            department == 'ceo' ||
-            department == 'admin' ||
-            department == 'coo' ||
-            department == 'accounts' ||
-            department == 'accounting' ||
-            department == 'accounts / accounting' ||
-            department == 'warehouse admin';
-
-        return [
-          'Ready to ship',
-          'Return From Delivery',
-          if (canMarkAsShipped) 'Shipped',
-        ];
-
-      case 'Return From Delivery':
-        return [
-          'Return From Delivery',
-          'Ready to ship',
-        ];
-
-      case 'Shipped':
-        return [
-          'Shipped',
-        ];
-
-      default:
-        if (currentStatus.isNotEmpty) {
-          return [
-            currentStatus,
-          ];
-        }
-
-        return const [];
-    }
+      return const [];
   }
+}
   double netAmountBeforeTax = 0.0; // Define at the class level
   double totalTaxAmount = 0.0; // Define at the class level
   double payableAmount = 0.0; // Define at the class level
@@ -1403,7 +1402,7 @@ class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
     breadth.text = order['breadth']?.toString() ?? '';
     height.text = order['height']?.toString() ?? '';
     weight.text = order['weight']?.toString() ?? '';
-    selectedStatus = order['status'] ?? 'Packing under progress';
+selectedStatus = order['status'] ?? 'Packed';
     selectedManagerId = order['packed_by_id'] != null
         ? (order['packed_by_id'] is int
             ? order['packed_by_id']

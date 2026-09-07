@@ -79,15 +79,14 @@ class _WarehouseDashboardState extends State<WarehouseDashboard>
 
   String? dgmSummaryError;
 
-  static const List<String> warehouseDashboardStatuses = [
-    'To Print',
-    'Packing under progress',
-    'Packed',
-    'Ready to ship',
-    'Return From Delivery',
-    'Shipped',
-  ];
-
+static const List<String> warehouseDashboardStatuses = [
+  'To Print',
+  // 'Packing under progress',
+  'Packed',
+  'Ready to ship',
+  'Return From Delivery',
+  'Shipped',
+];
   int inboxMailCount = 0;
 
   Timer? mailCountTimer;
@@ -1196,14 +1195,14 @@ class _WarehouseDashboardState extends State<WarehouseDashboard>
           ),
         );
 
-        dashboardCards.add(
-          _buildTodayStatusCard(
-            status: 'Packing under progress',
-            todayCount: todayCountMap['Packing under progress'] ?? 0,
-            allCount: allCountMap['Packing under progress'] ?? 0,
-            isVerySmallPhone: isVerySmallPhone,
-          ),
-        );
+        // dashboardCards.add(
+        //   _buildTodayStatusCard(
+        //     status: 'Packing under progress',
+        //     todayCount: todayCountMap['Packing under progress'] ?? 0,
+        //     allCount: allCountMap['Packing under progress'] ?? 0,
+        //     isVerySmallPhone: isVerySmallPhone,
+        //   ),
+        // );
 
         dashboardCards.add(
           _buildTodayStatusCard(

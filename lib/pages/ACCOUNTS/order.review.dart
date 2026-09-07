@@ -124,19 +124,21 @@ class _OrderReviewState extends State<OrderReview> {
 
   var selectedserviceId;
   List<String> statuses = [];
-  List<String> statuses2 = [
-    'Invoice Created',
-    'Invoice Approved',
-    'Pre Booked',
-    'Waiting For Confirmation',
-    'To Print',
-    'Packing under progress',
-    'Packed',
-    'Ready to ship',
-    'Return From Delivery',
-    'Shipped',
-    'Invoice Rejected',
-  ];
+List<String> statuses2 = [
+  'Invoice Created',
+  'Invoice Approved',
+  'Pre Booked',
+  'Waiting For Confirmation',
+  'To Print',
+
+  // 'Packing under progress',
+
+  'Packed',
+  'Ready to ship',
+  'Return From Delivery',
+  'Shipped',
+  'Invoice Rejected',
+];
 
   List<String> statuses3 = [];
 
@@ -200,17 +202,19 @@ class _OrderReviewState extends State<OrderReview> {
     return prefs.getString('department');
   }
 
-  var kAllStatuses = <String>[
-    'Invoice Approved',
-    'Waiting For Confirmation',
-    'To Print',
-    'Packing under progress',
-    'Packed', // 👈 use either "Packed" or "Packing" everywhere; be consistent
-    'Ready to ship',
-    'Return From Delivery',
-    'Shipped',
-    'Invoice Rejected',
-  ];
+ var kAllStatuses = <String>[
+  'Invoice Approved',
+  'Waiting For Confirmation',
+  'To Print',
+
+  // 'Packing under progress',
+
+  'Packed',
+  'Ready to ship',
+  'Return From Delivery',
+  'Shipped',
+  'Invoice Rejected',
+];
 
   final Map<String, List<String>> statusFlow = {
     'Invoice Created': [
@@ -234,16 +238,17 @@ class _OrderReviewState extends State<OrderReview> {
       'To Print',
       'Invoice Rejected',
     ],
-    'To Print': [
-      'To Print',
-      'Packing under progress',
-      'Invoice Rejected',
-    ],
-    'Packing under progress': [
-      'Packing under progress',
-      'Packed',
-      'Invoice Rejected',
-    ],
+'To Print': [
+  'To Print',
+  'Packed',
+  'Invoice Rejected',
+],
+
+// 'Packing under progress': [
+//   'Packing under progress',
+//   'Packed',
+//   'Invoice Rejected',
+// ],
     'Packed': [
       'Packed',
       'Ready to ship',
@@ -701,9 +706,13 @@ class _OrderReviewState extends State<OrderReview> {
       return ['Shipped', 'Waiting For Confirmation', 'Invoice Rejected'];
     } else if (dep == 'admin') {
       return ['To Print', 'Invoice Rejected'];
-    } else if (dep == 'warehouse') {
-      return ['Packing under progress', 'Packed', 'Ready to ship'];
-    } else if (dep == 'coo') {
+   } else if (dep == 'warehouse') {
+  return [
+    // 'Packing under progress',
+    'Packed',
+    'Ready to ship',
+  ];
+} else if (dep == 'coo') {
       // ✅ COO sees ALL
       return List<String>.from(kAllStatuses);
     }
@@ -5870,7 +5879,22 @@ void showPopupDialog(
         return 'Out For Delivery (OFD)';
 
       case 'Return From Delivery':
-        return 'Return From Delivery';
+        return 'Return From Delivery (RFD)';
+
+      case 'Shipped':
+        return 'Shipped';
+
+      case 'Invoice Approved':
+        return 'Invoice Approved';
+
+      case 'Pre Booked':
+        return 'Pre Booked';
+
+      case 'Waiting For Confirmation':
+        return 'Waiting For Confirmation';
+
+      case 'Invoice Rejected':
+        return 'Invoice Rejected';
 
       default:
         return value;
@@ -9326,7 +9350,7 @@ bool isPrivilegedDepartment() {
                                                 ),
                                               ),
                                               Text(
-                                                order['status'] ?? 'N/A',
+                                                getDisplayStatus(order['status']),
                                                 style: TextStyle(fontSize: 14),
                                               ),
                                             ],
