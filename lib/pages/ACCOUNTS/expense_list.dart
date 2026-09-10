@@ -42,6 +42,18 @@ class _expence_listState extends State<expence_list> {
   int _totalCount = 0;
 
   String? token;
+  String currentDepartment = '';
+
+  bool get canUpdate {
+    final String department = currentDepartment.trim().toUpperCase();
+
+    return department == 'ADMIN' ||
+        department == 'COO' ||
+        department == 'CEO' ||
+        department == 'ACCOUNTS' ||
+        department == 'ACCOUNTING' ||
+        department == 'ACCOUNTS / ACCOUNTING';
+  }
 
   List<ExpenseItem> expenseList = [];
 
@@ -54,6 +66,8 @@ class _expence_listState extends State<expence_list> {
   List<DropdownOption> _companyOptions = [];
   List<DropdownOption> _bankOptions = [];
   List<DropdownOption> _addedByOptions = [];
+  List<DropdownOption> _emiOptions = [];
+  List<DropdownOption> _categoryOptions = [];
   List<DropdownOption> _assetTypeOptions = const [
     DropdownOption(id: "assets", label: "Assets"),
     DropdownOption(id: "expenses", label: "Expenses"),
@@ -145,11 +159,24 @@ class _expence_listState extends State<expence_list> {
 
   Future<void> _loadTokenAndFetch() async {
     final prefs = await SharedPreferences.getInstance();
-    token = prefs.getString("token") ?? prefs.getString("access");
+
+    final String? storedToken =
+        prefs.getString("token") ?? prefs.getString("access");
+    final String storedDepartment =
+        prefs.getString("department")?.trim().toUpperCase() ?? '';
+
+    if (!mounted) return;
+
+    setState(() {
+      token = storedToken;
+      currentDepartment = storedDepartment;
+    });
 
     _searchController.text = filters.search;
 
     await _loadDropdownData();
+    if (!mounted) return;
+
     await fetchExpenses(reset: true);
   }
 
@@ -159,6 +186,8 @@ class _expence_listState extends State<expence_list> {
       _fetchCompanyOptions(),
       _fetchBankOptions(),
       _fetchAddedByOptions(),
+      _fetchEmiOptions(),
+      _fetchCategoryOptions(),
     ]);
   }
 
@@ -327,6 +356,93 @@ class _expence_listState extends State<expence_list> {
       }
     } catch (e) {
       debugPrint("ADDED BY DROPDOWN ERROR: $e");
+    }
+  }
+
+  Future<void> _fetchEmiOptions() async {
+    if (token == null || token!.isEmpty) return;
+
+    try {
+      final uri = Uri.parse("$apiBaseUrl/apis/emi/");
+      final response = await http.get(
+        uri,
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<dynamic> rawList = decoded is Map<String, dynamic> &&
+                decoded["data"] is List
+            ? decoded["data"] as List
+            : <dynamic>[];
+
+        final items = rawList
+            .whereType<Map>()
+            .map((raw) {
+              final item = Map<String, dynamic>.from(raw);
+              return DropdownOption(
+                id: item["id"]?.toString() ?? "",
+                label: item["emi_name"]?.toString().trim() ?? "",
+              );
+            })
+            .where((item) => item.id.isNotEmpty && item.label.isNotEmpty)
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _emiOptions = items;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("EMI DROPDOWN ERROR: $e");
+    }
+  }
+
+  Future<void> _fetchCategoryOptions() async {
+    if (token == null || token!.isEmpty) return;
+
+    try {
+      final uri = Uri.parse("$apiBaseUrl/apis/add/assetcategory/");
+      final response = await http.get(
+        uri,
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<dynamic> rawList = decoded is List
+            ? decoded
+            : decoded is Map<String, dynamic> && decoded["data"] is List
+                ? decoded["data"] as List
+                : <dynamic>[];
+
+        final items = rawList
+            .whereType<Map>()
+            .map((raw) {
+              final item = Map<String, dynamic>.from(raw);
+              return DropdownOption(
+                id: item["id"]?.toString() ?? "",
+                label: item["category_name"]?.toString().trim() ?? "",
+              );
+            })
+            .where((item) => item.id.isNotEmpty && item.label.isNotEmpty)
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _categoryOptions = items;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("CATEGORY DROPDOWN ERROR: $e");
     }
   }
 
@@ -3012,6 +3128,1421 @@ class _expence_listState extends State<expence_list> {
     );
   }
 
+  int? _nullableInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  int? _nestedId(dynamic value) {
+    if (value is Map) {
+      return _nullableInt(value["id"]);
+    }
+    return _nullableInt(value);
+  }
+
+  bool _isEmiPurposeId(String? purposeId) {
+    if (purposeId == null || purposeId.trim().isEmpty) return false;
+
+    for (final option in _purposeOptions) {
+      if (option.id == purposeId) {
+        return option.label.trim().toLowerCase() == "emi";
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _createExpenseUpdateLog({
+    required int expenseId,
+    required Map<String, dynamic> beforeData,
+    required Map<String, dynamic> afterData,
+  }) async {
+    final String? authToken = token;
+
+    if (authToken == null || authToken.trim().isEmpty) {
+      debugPrint(
+        'Unable to create expense update log: authentication token not found.',
+      );
+      return;
+    }
+
+    try {
+      final http.Response response = await http.post(
+        Uri.parse(
+          '$apiBaseUrl/api/datalog/create/',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'before_data': {
+            'Action': 'Expense update',
+            'Expense ID': expenseId,
+            'Data': beforeData,
+          },
+          'after_data': {
+            'Action': 'Expense updated',
+            'Expense ID': expenseId,
+            'Data': afterData,
+          },
+          'order': '',
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint(
+          'Expense update log added successfully. Expense ID: $expenseId',
+        );
+      } else {
+        debugPrint(
+          'Expense update log failed: '
+          '${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Error creating expense update log: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _openExpenseEditor(ExpenseItem item) async {
+    if (!canUpdate) {
+      _showSnackBar(
+        "You do not have permission to update expenses.",
+      );
+      return;
+    }
+
+    if (token == null || token!.isEmpty) {
+      _showSnackBar("Authentication token not found");
+      return;
+    }
+
+    // Open the editor immediately from the data already returned by
+    // /api/expense/get/data/. This avoids downloading the entire expense
+    // collection again every time a card is tapped.
+    final Map<String, dynamic> data =
+        Map<String, dynamic>.from(item.rawData);
+
+    final Map<String, dynamic> beforeUpdateData =
+        Map<String, dynamic>.from(item.rawData);
+
+    final companyId = _nestedId(data["company"]);
+    final paidById = _nestedId(data["payed_by"]);
+    final bankId = _nestedId(data["bank"]);
+
+    int? purposeId = _nestedId(data["purpose_of_payment"]);
+    if (purposeId == null) {
+      purposeId = _nullableInt(data["purpose_of_payment"]);
+    }
+
+    final loanId = _nestedId(data["loan"]);
+    final categoryId = _nestedId(data["category"] ?? data["category_id"]);
+
+    final amountController = TextEditingController(
+      text: data["amount"]?.toString() ?? item.amount,
+    );
+    final transactionController = TextEditingController(
+      text: data["transaction_id"]?.toString() ?? item.transactionId,
+    );
+    final descriptionController = TextEditingController(
+      text: data["description"]?.toString() ?? item.description,
+    );
+    final nameController = TextEditingController(
+      text: data["name"]?.toString() ?? "",
+    );
+    final quantityController = TextEditingController(
+      text: data["quantity"]?.toString() ?? "",
+    );
+
+    int? localCompanyId = companyId;
+    int? localPaidById = paidById;
+    int? localBankId = bankId;
+    String? localPurposeId = purposeId?.toString();
+    String? localLoanId = loanId?.toString();
+    String? localCategoryId = categoryId?.toString();
+
+    String localAssetType =
+        (data["asset_types"]?.toString().trim().toLowerCase().isNotEmpty ?? false)
+            ? data["asset_types"].toString().trim().toLowerCase()
+            : (item.assetTypes.trim().toLowerCase().isNotEmpty
+                ? item.assetTypes.trim().toLowerCase()
+                : "expenses");
+
+    if (localAssetType != "assets" && localAssetType != "expenses") {
+      localAssetType = "expenses";
+    }
+
+    String localExpenseType =
+        data["expense_type"]?.toString().trim().toLowerCase() ??
+            item.expenseType.trim().toLowerCase();
+
+    DateTime localDate = DateTime.tryParse(
+          data["expense_date"]?.toString() ?? item.expenseDate,
+        ) ??
+        DateTime.now();
+
+    bool isSaving = false;
+    bool dialogClosed = false;
+    final formKey = GlobalKey<FormState>();
+
+    bool isEmi() => _isEmiPurposeId(localPurposeId);
+
+    Future<void> submit(
+      BuildContext dialogContext,
+      StateSetter setModalState,
+    ) async {
+      if (isSaving) return;
+
+      if (!(formKey.currentState?.validate() ?? false)) return;
+
+      if (localCompanyId == null) {
+        _showSnackBar("Please select company");
+        return;
+      }
+      if (localPaidById == null) {
+        _showSnackBar("Please select paid by");
+        return;
+      }
+      if (localBankId == null) {
+        _showSnackBar("Please select bank");
+        return;
+      }
+      if (localPurposeId == null || localPurposeId!.isEmpty) {
+        _showSnackBar("Please select purpose of payment");
+        return;
+      }
+
+      final bool emi = isEmi();
+
+      if (emi && (localLoanId == null || localLoanId!.isEmpty)) {
+        _showSnackBar("Please select an EMI (loan) for EMI payments");
+        return;
+      }
+
+      if (emi) {
+        localAssetType = "expenses";
+      }
+
+      if (localAssetType == "assets") {
+        if (nameController.text.trim().isEmpty) {
+          _showSnackBar("Please enter asset name");
+          return;
+        }
+        if (quantityController.text.trim().isNotEmpty &&
+            int.tryParse(quantityController.text.trim()) == null) {
+          _showSnackBar("Please enter a valid asset quantity");
+          return;
+        }
+      }
+
+      setModalState(() {
+        isSaving = true;
+      });
+
+      try {
+        final payload = <String, dynamic>{
+          "company": localCompanyId,
+          "payed_by": localPaidById,
+          "bank": localBankId,
+          "purpose_of_payment": int.tryParse(localPurposeId ?? ""),
+          "amount": amountController.text.trim(),
+          "expense_date": DateFormat("yyyy-MM-dd").format(localDate),
+          "transaction_id": transactionController.text.trim(),
+          "description": descriptionController.text.trim(),
+          "expense_type": localExpenseType.trim().isEmpty
+              ? null
+              : localExpenseType.trim().toLowerCase(),
+          "asset_types": localAssetType,
+        };
+
+        if (localAssetType == "assets") {
+          payload.addAll({
+            "name": nameController.text.trim(),
+            "quantity": quantityController.text.trim().isEmpty
+                ? null
+                : int.tryParse(quantityController.text.trim()),
+            "category": localCategoryId == null || localCategoryId!.isEmpty
+                ? null
+                : int.tryParse(localCategoryId!),
+          });
+        }
+
+        if (emi) {
+          payload["loan"] = int.tryParse(localLoanId!);
+        }
+
+        final String endpoint;
+        if (emi) {
+          endpoint = "$apiBaseUrl/api/expense/get/${item.id}/";
+        } else if (localAssetType == "assets") {
+          endpoint = "$apiBaseUrl/api/asset/update/${item.id}/";
+        } else {
+          endpoint =
+              "$apiBaseUrl/api/expense/addexpectemiupdate/${item.id}/";
+        }
+
+        debugPrint("EXPENSE UPDATE URL: $endpoint");
+        debugPrint("EXPENSE UPDATE PAYLOAD: ${jsonEncode(payload)}");
+
+        final response = await http.put(
+          Uri.parse(endpoint),
+          headers: {
+            "Authorization": "Bearer $token",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: jsonEncode(payload),
+        );
+
+        debugPrint("EXPENSE UPDATE STATUS: ${response.statusCode}");
+        debugPrint("EXPENSE UPDATE RESPONSE: ${response.body}");
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          String message = "Failed to update expense";
+          try {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              message = decoded["detail"]?.toString() ??
+                  decoded["message"]?.toString() ??
+                  decoded["error"]?.toString() ??
+                  decoded.toString();
+            }
+          } catch (_) {
+            if (response.body.trim().isNotEmpty) {
+              message = response.body.trim();
+            }
+          }
+          throw Exception(message);
+        }
+
+        if (!mounted) return;
+
+        Map<String, dynamic> responseData = <String, dynamic>{};
+        try {
+          final dynamic decodedResponse = jsonDecode(response.body);
+          if (decodedResponse is Map) {
+            responseData = Map<String, dynamic>.from(decodedResponse);
+          }
+        } catch (_) {
+          // Some update endpoints can return an empty/non-JSON success body.
+        }
+
+        final Map<String, dynamic> afterUpdateData = <String, dynamic>{
+          ...payload,
+          if (responseData.isNotEmpty) 'api_response': responseData,
+        };
+
+        await _createExpenseUpdateLog(
+          expenseId: item.id,
+          beforeData: beforeUpdateData,
+          afterData: afterUpdateData,
+        );
+
+        if (!mounted) return;
+
+        dialogClosed = true;
+
+        if (Navigator.of(dialogContext).canPop()) {
+          Navigator.of(dialogContext).pop();
+        }
+
+        _showSnackBar("Expense updated successfully");
+        await fetchExpenses(reset: true);
+      } catch (e, stackTrace) {
+        debugPrint("EXPENSE UPDATE ERROR: $e");
+        debugPrintStack(stackTrace: stackTrace);
+        _showSnackBar(
+          e.toString().replaceFirst("Exception: ", ""),
+        );
+      } finally {
+        if (mounted && !dialogClosed) {
+          setModalState(() {
+            isSaving = false;
+          });
+        }
+      }
+    }
+
+await showDialog<void>(
+  context: context,
+  barrierDismissible: !isSaving,
+  barrierColor: Colors.black.withOpacity(0.48),
+  builder: (dialogContext) {
+    return StatefulBuilder(
+      builder: (dialogContext, setModalState) {
+        final bool emi = isEmi();
+
+        if (emi && localAssetType != "expenses") {
+          localAssetType = "expenses";
+        }
+
+        InputDecoration modernDecoration(
+          String label, {
+          IconData? icon,
+          String? hint,
+        }) {
+          return InputDecoration(
+            labelText: label,
+            hintText: hint,
+            labelStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xff667085),
+            ),
+            hintStyle: const TextStyle(
+              fontSize: 14,
+              color: Color(0xff98A2B3),
+            ),
+            prefixIcon: icon == null
+                ? null
+                : Icon(
+                    icon,
+                    size: 20,
+                    color: const Color(0xff667085),
+                  ),
+            filled: true,
+            fillColor: const Color(0xffF9FAFB),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xffE4E7EC),
+              ),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xffEAECF0),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xff2563EB),
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xffD92D20),
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xffD92D20),
+                width: 1.5,
+              ),
+            ),
+          );
+        }
+
+        Widget sectionTitle({
+          required String title,
+          required IconData icon,
+        }) {
+          return Padding(
+            padding: const EdgeInsets.only(
+              bottom: 12,
+              top: 4,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: const Color(0xffEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: const Color(0xff2563EB),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xff101828),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget sectionCard({
+          required Widget child,
+        }) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xffEAECF0),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.025),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: child,
+          );
+        }
+
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: Material(
+              color: const Color(0xffF8FAFC),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 720,
+                  maxHeight:
+                      MediaQuery.of(dialogContext).size.height * 0.92,
+                ),
+                child: Column(
+                  children: [
+                    // HEADER
+                    Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.fromLTRB(
+                        20,
+                        18,
+                        14,
+                        16,
+                      ),
+                      child: Row(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xffEFF6FF),
+                              borderRadius:
+                                  BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.edit_note_rounded,
+                              color: Color(0xff2563EB),
+                              size: 25,
+                            ),
+                          ),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "Update Expense",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    height: 1.15,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xff101828),
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Row(
+                                  children: [
+                                    Text(
+                                      "Expense #${item.id}",
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xff667085),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      width: 4,
+                                      height: 4,
+                                      decoration:
+                                          const BoxDecoration(
+                                        color: Color(0xff98A2B3),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        "Edit details and save changes",
+                                        maxLines: 1,
+                                        overflow:
+                                            TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color:
+                                              Color(0xff98A2B3),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Material(
+                            color: const Color(0xffF2F4F7),
+                            borderRadius:
+                                BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius:
+                                  BorderRadius.circular(12),
+                              onTap: isSaving
+                                  ? null
+                                  : () => Navigator.pop(
+                                        dialogContext,
+                                      ),
+                              child: const SizedBox(
+                                width: 40,
+                                height: 40,
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 21,
+                                  color: Color(0xff475467),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(
+                      height: 1,
+                      color: Color(0xffEAECF0),
+                    ),
+
+                    // BODY
+                    Expanded(
+                      child: SingleChildScrollView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior
+                                .onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          18,
+                          16,
+                          MediaQuery.of(dialogContext)
+                                  .viewInsets
+                                  .bottom +
+                              18,
+                        ),
+                        child: Form(
+                          key: formKey,
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              // BASIC DETAILS
+                              sectionTitle(
+                                title: "Basic Details",
+                                icon: Icons.receipt_long_outlined,
+                              ),
+                              sectionCard(
+                                child: Column(
+                                  children: [
+                                    DropdownButtonFormField<int>(
+                                      value: _companyOptions.any(
+                                        (e) =>
+                                            e.id ==
+                                            localCompanyId
+                                                ?.toString(),
+                                      )
+                                          ? localCompanyId
+                                          : null,
+                                      isExpanded: true,
+                                      decoration:
+                                          modernDecoration(
+                                        "Company",
+                                        icon: Icons
+                                            .business_outlined,
+                                      ),
+                                      items: _companyOptions
+                                          .map(
+                                            (option) =>
+                                                DropdownMenuItem<
+                                                    int>(
+                                              value:
+                                                  int.tryParse(
+                                                option.id,
+                                              ),
+                                              child: Text(
+                                                option.label,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow
+                                                        .ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: isSaving
+                                          ? null
+                                          : (value) {
+                                              setModalState(
+                                                () {
+                                                  localCompanyId =
+                                                      value;
+                                                },
+                                              );
+                                            },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    DropdownButtonFormField<int>(
+                                      value: _addedByOptions.any(
+                                        (e) =>
+                                            e.id ==
+                                            localPaidById
+                                                ?.toString(),
+                                      )
+                                          ? localPaidById
+                                          : null,
+                                      isExpanded: true,
+                                      decoration:
+                                          modernDecoration(
+                                        "Paid By",
+                                        icon: Icons
+                                            .person_outline_rounded,
+                                      ),
+                                      items: _addedByOptions
+                                          .map(
+                                            (option) =>
+                                                DropdownMenuItem<
+                                                    int>(
+                                              value:
+                                                  int.tryParse(
+                                                option.id,
+                                              ),
+                                              child: Text(
+                                                option.label,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow
+                                                        .ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: isSaving
+                                          ? null
+                                          : (value) {
+                                              setModalState(
+                                                () {
+                                                  localPaidById =
+                                                      value;
+                                                },
+                                              );
+                                            },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    DropdownButtonFormField<int>(
+                                      value: _bankOptions.any(
+                                        (e) =>
+                                            e.id ==
+                                            localBankId
+                                                ?.toString(),
+                                      )
+                                          ? localBankId
+                                          : null,
+                                      isExpanded: true,
+                                      decoration:
+                                          modernDecoration(
+                                        "Bank",
+                                        icon: Icons
+                                            .account_balance_outlined,
+                                      ),
+                                      items: _bankOptions
+                                          .map(
+                                            (option) =>
+                                                DropdownMenuItem<
+                                                    int>(
+                                              value:
+                                                  int.tryParse(
+                                                option.id,
+                                              ),
+                                              child: Text(
+                                                option.label,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow
+                                                        .ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: isSaving
+                                          ? null
+                                          : (value) {
+                                              setModalState(
+                                                () {
+                                                  localBankId =
+                                                      value;
+                                                },
+                                              );
+                                            },
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              // CLASSIFICATION
+                              sectionTitle(
+                                title: "Expense Classification",
+                                icon: Icons.category_outlined,
+                              ),
+                              sectionCard(
+                                child: Column(
+                                  children: [
+                                    DropdownButtonFormField<
+                                        String>(
+                                      value:
+                                          localExpenseType.isEmpty
+                                              ? null
+                                              : localExpenseType,
+                                      isExpanded: true,
+                                      decoration:
+                                          modernDecoration(
+                                        "Type of Expense",
+                                        icon: Icons
+                                            .sell_outlined,
+                                      ),
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value:
+                                              "miscellaneous",
+                                          child: Text(
+                                            "Miscellaneous",
+                                          ),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: "permanent",
+                                          child:
+                                              Text("Permanent"),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: "emi",
+                                          child: Text("EMI"),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: "cargo",
+                                          child: Text("Cargo"),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: "purchase",
+                                          child:
+                                              Text("Purchase"),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: "others",
+                                          child:
+                                              Text("Others"),
+                                        ),
+                                      ],
+                                      onChanged: isSaving
+                                          ? null
+                                          : (value) {
+                                              setModalState(
+                                                () {
+                                                  localExpenseType =
+                                                      value ??
+                                                          "";
+                                                },
+                                              );
+                                            },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    DropdownButtonFormField<
+                                        String>(
+                                      value: localAssetType,
+                                      isExpanded: true,
+                                      decoration:
+                                          modernDecoration(
+                                        "Type of Payment",
+                                        icon: Icons
+                                            .payments_outlined,
+                                      ),
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value: "assets",
+                                          child: Text("Asset"),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: "expenses",
+                                          child: Text("Expense"),
+                                        ),
+                                      ],
+                                      onChanged:
+                                          isSaving || emi
+                                              ? null
+                                              : (value) {
+                                                  setModalState(
+                                                    () {
+                                                      localAssetType =
+                                                          value ??
+                                                              "expenses";
+                                                    },
+                                                  );
+                                                },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    DropdownButtonFormField<
+                                        String>(
+                                      value: _purposeOptions
+                                              .any(
+                                        (e) =>
+                                            e.id ==
+                                            localPurposeId,
+                                      )
+                                          ? localPurposeId
+                                          : null,
+                                      isExpanded: true,
+                                      decoration:
+                                          modernDecoration(
+                                        "Purpose of Payment",
+                                        icon: Icons
+                                            .flag_outlined,
+                                      ),
+                                      items: _purposeOptions
+                                          .map(
+                                            (option) =>
+                                                DropdownMenuItem<
+                                                    String>(
+                                              value:
+                                                  option.id,
+                                              child: Text(
+                                                option.label,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow
+                                                        .ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: isSaving
+                                          ? null
+                                          : (value) {
+                                              setModalState(
+                                                () {
+                                                  localPurposeId =
+                                                      value;
+
+                                                  if (_isEmiPurposeId(
+                                                    value,
+                                                  )) {
+                                                    localAssetType =
+                                                        "expenses";
+                                                    nameController
+                                                        .clear();
+                                                    quantityController
+                                                        .clear();
+                                                    localCategoryId =
+                                                        null;
+                                                  } else {
+                                                    localLoanId =
+                                                        null;
+                                                  }
+                                                },
+                                              );
+                                            },
+                                    ),
+
+                                    if (emi) ...[
+                                      const SizedBox(height: 14),
+                                      DropdownButtonFormField<
+                                          String>(
+                                        value: _emiOptions.any(
+                                          (e) =>
+                                              e.id ==
+                                              localLoanId,
+                                        )
+                                            ? localLoanId
+                                            : null,
+                                        isExpanded: true,
+                                        decoration:
+                                            modernDecoration(
+                                          "Select EMI",
+                                          icon: Icons
+                                              .account_balance_wallet_outlined,
+                                        ),
+                                        items: _emiOptions
+                                            .map(
+                                              (option) =>
+                                                  DropdownMenuItem<
+                                                      String>(
+                                                value:
+                                                    option.id,
+                                                child: Text(
+                                                  option.label,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: isSaving
+                                            ? null
+                                            : (value) {
+                                                setModalState(
+                                                  () {
+                                                    localLoanId =
+                                                        value;
+                                                  },
+                                                );
+                                              },
+                                      ),
+                                    ],
+
+                                    if (!emi &&
+                                        localAssetType ==
+                                            "assets") ...[
+                                      const SizedBox(height: 14),
+                                      TextFormField(
+                                        controller:
+                                            nameController,
+                                        enabled: !isSaving,
+                                        textInputAction:
+                                            TextInputAction.next,
+                                        decoration:
+                                            modernDecoration(
+                                          "Asset Name",
+                                          icon: Icons
+                                              .inventory_2_outlined,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      TextFormField(
+                                        controller:
+                                            quantityController,
+                                        enabled: !isSaving,
+                                        keyboardType:
+                                            TextInputType.number,
+                                        textInputAction:
+                                            TextInputAction.next,
+                                        decoration:
+                                            modernDecoration(
+                                          "Quantity",
+                                          icon: Icons
+                                              .numbers_outlined,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      DropdownButtonFormField<
+                                          String>(
+                                        value:
+                                            _categoryOptions
+                                                    .any(
+                                          (e) =>
+                                              e.id ==
+                                              localCategoryId,
+                                        )
+                                                ? localCategoryId
+                                                : null,
+                                        isExpanded: true,
+                                        decoration:
+                                            modernDecoration(
+                                          "Category",
+                                          icon: Icons
+                                              .folder_outlined,
+                                        ),
+                                        items: _categoryOptions
+                                            .map(
+                                              (option) =>
+                                                  DropdownMenuItem<
+                                                      String>(
+                                                value:
+                                                    option.id,
+                                                child: Text(
+                                                  option.label,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: isSaving
+                                            ? null
+                                            : (value) {
+                                                setModalState(
+                                                  () {
+                                                    localCategoryId =
+                                                        value;
+                                                  },
+                                                );
+                                              },
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              // PAYMENT DETAILS
+                              sectionTitle(
+                                title: "Payment Details",
+                                icon: Icons
+                                    .account_balance_wallet_outlined,
+                              ),
+                              sectionCard(
+                                child: Column(
+                                  children: [
+                                    InkWell(
+                                      onTap: isSaving
+                                          ? null
+                                          : () async {
+                                              final picked =
+                                                  await showDatePicker(
+                                                context:
+                                                    dialogContext,
+                                                initialDate:
+                                                    localDate,
+                                                firstDate:
+                                                    DateTime(
+                                                  2000,
+                                                ),
+                                                lastDate:
+                                                    DateTime(
+                                                  2100,
+                                                ),
+                                              );
+
+                                              if (picked !=
+                                                  null) {
+                                                setModalState(
+                                                  () {
+                                                    localDate =
+                                                        picked;
+                                                  },
+                                                );
+                                              }
+                                            },
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        14,
+                                      ),
+                                      child: InputDecorator(
+                                        decoration:
+                                            modernDecoration(
+                                          "Expense Date",
+                                          icon: Icons
+                                              .calendar_month_outlined,
+                                        ).copyWith(
+                                          suffixIcon:
+                                              const Icon(
+                                            Icons
+                                                .chevron_right_rounded,
+                                            color:
+                                                Color(0xff98A2B3),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          DateFormat(
+                                            "dd MMM yyyy",
+                                          ).format(
+                                            localDate,
+                                          ),
+                                          style:
+                                              const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight:
+                                                FontWeight.w600,
+                                            color:
+                                                Color(0xff101828),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    TextFormField(
+                                      controller:
+                                          amountController,
+                                      enabled: !isSaving,
+                                      keyboardType:
+                                          const TextInputType
+                                              .numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      textInputAction:
+                                          TextInputAction.next,
+                                      decoration:
+                                          modernDecoration(
+                                        "Amount",
+                                        icon: Icons
+                                            .currency_rupee_rounded,
+                                      ),
+                                      validator: (value) {
+                                        final amount =
+                                            double.tryParse(
+                                          value?.trim() ?? "",
+                                        );
+
+                                        if (amount == null ||
+                                            amount <= 0) {
+                                          return "Enter a valid amount";
+                                        }
+
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    TextFormField(
+                                      controller:
+                                          transactionController,
+                                      enabled: !isSaving,
+                                      textInputAction:
+                                          TextInputAction.next,
+                                      decoration:
+                                          modernDecoration(
+                                        "Transaction ID",
+                                        icon: Icons
+                                            .tag_rounded,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    TextFormField(
+                                      controller:
+                                          descriptionController,
+                                      enabled: !isSaving,
+                                      minLines: 3,
+                                      maxLines: 5,
+                                      textCapitalization:
+                                          TextCapitalization
+                                              .sentences,
+                                      decoration:
+                                          modernDecoration(
+                                        "Description",
+                                        icon: Icons
+                                            .notes_rounded,
+                                        hint:
+                                            "Add expense description",
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // STICKY FOOTER
+                    Container(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        12,
+                        16,
+                        12 +
+                            MediaQuery.of(dialogContext)
+                                .padding
+                                .bottom,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: const Border(
+                          top: BorderSide(
+                            color: Color(0xffEAECF0),
+                          ),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                Colors.black.withOpacity(0.04),
+                            blurRadius: 14,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 52,
+                              child: OutlinedButton(
+                                onPressed: isSaving
+                                    ? null
+                                    : () =>
+                                        Navigator.pop(
+                                          dialogContext,
+                                        ),
+                                style:
+                                    OutlinedButton.styleFrom(
+                                  foregroundColor:
+                                      const Color(0xff344054),
+                                  side: const BorderSide(
+                                    color:
+                                        Color(0xffD0D5DD),
+                                  ),
+                                  shape:
+                                      RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      14,
+                                    ),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Cancel",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight:
+                                        FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: SizedBox(
+                              height: 52,
+                              child: ElevatedButton(
+                                onPressed: isSaving
+                                    ? null
+                                    : () => submit(
+                                          dialogContext,
+                                          setModalState,
+                                        ),
+                                style:
+                                    ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      const Color(0xff2563EB),
+                                  foregroundColor:
+                                      Colors.white,
+                                  disabledBackgroundColor:
+                                      const Color(0xffB2CCFF),
+                                  elevation: 0,
+                                  shape:
+                                      RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      14,
+                                    ),
+                                  ),
+                                ),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(
+                                    milliseconds: 180,
+                                  ),
+                                  child: isSaving
+                                      ? const Row(
+                                          key: ValueKey(
+                                            "saving",
+                                          ),
+                                          mainAxisAlignment:
+                                              MainAxisAlignment
+                                                  .center,
+                                          children: [
+                                            SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color:
+                                                    Colors.white,
+                                              ),
+                                            ),
+                                            SizedBox(
+                                              width: 10,
+                                            ),
+                                            Text(
+                                              "Updating...",
+                                              style:
+                                                  TextStyle(
+                                                fontWeight:
+                                                    FontWeight
+                                                        .w700,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : const Row(
+                                          key: ValueKey(
+                                            "update",
+                                          ),
+                                          mainAxisAlignment:
+                                              MainAxisAlignment
+                                                  .center,
+                                          children: [
+                                            Icon(
+                                              Icons
+                                                  .check_rounded,
+                                              size: 20,
+                                            ),
+                                            SizedBox(
+                                              width: 8,
+                                            ),
+                                            Text(
+                                              "Save Changes",
+                                              style:
+                                                  TextStyle(
+                                                fontSize: 14,
+                                                fontWeight:
+                                                    FontWeight
+                                                        .w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  },
+);
+  }
+
   Widget _buildExpenseCard(ExpenseItem item) {
     final companyName = item.companyName.isEmpty ? "-" : item.companyName;
     final bankName = item.bankName.isEmpty ? "-" : item.bankName;
@@ -3019,8 +4550,11 @@ class _expence_listState extends State<expence_list> {
     final description = item.description.isEmpty ? "-" : item.description;
     final addedBy = item.addedBy.isEmpty ? "-" : item.addedBy;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openExpenseEditor(item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -3165,6 +4699,7 @@ class _expence_listState extends State<expence_list> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -3867,6 +5402,7 @@ class ExpenseItem {
   final String addedBy;
   final String loanName;
   final String assetTypes;
+  final Map<String, dynamic> rawData;
 
   ExpenseItem({
     required this.id,
@@ -3882,6 +5418,7 @@ class ExpenseItem {
     required this.addedBy,
     required this.loanName,
     required this.assetTypes,
+    required this.rawData,
   });
 
   factory ExpenseItem.fromJson(Map<String, dynamic> json) {
@@ -3896,7 +5433,7 @@ class ExpenseItem {
     return ExpenseItem(
       id: _parseInt(json["id"]),
       bankId: _parseInt(
-        bankMap["id"] ?? json["bank_id"] ?? json["payed_by"]?["id"],
+        bankMap["id"] ?? json["bank_id"],
       ),
       companyName: companyMap["name"]?.toString() ?? "",
       bankName: bankMap["name"]?.toString() ?? "",
@@ -3909,6 +5446,7 @@ class ExpenseItem {
       addedBy: json["added_by"]?.toString() ?? "",
       loanName: json["loanname"]?.toString() ?? "",
       assetTypes: json["asset_types"]?.toString() ?? "",
+      rawData: Map<String, dynamic>.from(json),
     );
   }
 

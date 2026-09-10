@@ -63,7 +63,7 @@ class _OrderListState extends State<OrderList> {
     'Invoice Created',
     'Invoice Approved',
     'Waiting For Confirmation',
-    'Packing under progress',
+    // 'Packing under progress',
     // 'Packing',
     'Packed',
     'Ready to ship',

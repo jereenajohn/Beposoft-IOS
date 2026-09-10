@@ -171,15 +171,17 @@ class _update_reciptState extends State<update_recipt> {
           department?.trim().toUpperCase() ?? '';
     });
   }
+bool get canUpdate {
+  final String department =
+      currentDepartment.trim().toUpperCase();
 
-  bool get canUpdate {
-    final String department =
-        currentDepartment.trim().toUpperCase();
-
-    return department == 'ADMIN' ||
-        department == 'COO' ||
-        department == 'CEO';
-  }
+  return department == 'ADMIN' ||
+      department == 'COO' ||
+      department == 'CEO' ||
+      department == 'ACCOUNTS' ||
+      department == 'ACCOUNTING' ||
+      department == 'ACCOUNTS / ACCOUNTING';
+}
 
   Future<void> getbank() async {
     final String? token =

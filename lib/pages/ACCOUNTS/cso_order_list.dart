@@ -65,7 +65,7 @@ class _CsoOrderListState extends State<CsoOrderList> {
     'Invoice Created',
     'Invoice Approved',
     'Waiting For Confirmation',
-    'Packing under progress',
+    // 'Packing under progress',
     'Packed',
     'Ready to ship',
     'Return From Delivery',

@@ -79,7 +79,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
   final List<String> statusOptions = [
     'Invoice Created',
     'Invoice Approved',
-    'Packing under progress',
+    // 'Packing under progress',
     'Packed',
     'Ready to ship',
     'Return From Delivery',

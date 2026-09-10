@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:beposoft/pages/ACCOUNTS/Bulk_Bepocart_Orders.dart';
 import 'package:beposoft/pages/ACCOUNTS/Create_Purchase_Product_List.dart';
 import 'package:beposoft/pages/ACCOUNTS/Today_shipped_orders.dart';
+import 'package:beposoft/pages/ACCOUNTS/Vehiclemanagementpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/activity_log.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_EMI.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_bank_type.dart';
@@ -94,6 +95,20 @@ class _admin_dashboardState extends State<admin_dashboard>
   String? username = '';
   bool isManager = false;
 
+  // ============================================================
+  // BOTTOM NAVIGATION + DASHBOARD SEARCH
+  // Same as BDO dashboard.
+  // ============================================================
+
+  bool isBottomSearchOpen = false;
+
+  String dashboardSearchQuery = '';
+
+  final TextEditingController dashboardSearchController =
+      TextEditingController();
+
+  final FocusNode dashboardSearchFocusNode = FocusNode();
+
   int myTotalBills = 0;
   double myTotalAmount = 0.0;
   int myInvoiceCreatedBills = 0;
@@ -139,6 +154,10 @@ class _admin_dashboardState extends State<admin_dashboard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     mailCountTimer?.cancel();
+
+    dashboardSearchController.dispose();
+    dashboardSearchFocusNode.dispose();
+
     super.dispose();
   }
 
@@ -1053,6 +1072,470 @@ class _admin_dashboardState extends State<admin_dashboard>
     );
   }
 
+  // ============================================================
+  // BOTTOM SEARCH
+  // ============================================================
+
+  void _toggleBottomSearch() {
+    final bool shouldOpen =
+        !isBottomSearchOpen;
+
+    setState(() {
+      isBottomSearchOpen = shouldOpen;
+
+      if (!shouldOpen) {
+        dashboardSearchQuery = '';
+
+        dashboardSearchController.clear();
+      }
+    });
+
+    if (shouldOpen) {
+      WidgetsBinding.instance
+          .addPostFrameCallback(
+        (_) {
+          if (!mounted) return;
+
+          dashboardSearchFocusNode
+              .requestFocus();
+        },
+      );
+    } else {
+      dashboardSearchFocusNode
+          .unfocus();
+    }
+  }
+
+  void _closeBottomSearch() {
+    if (!isBottomSearchOpen &&
+        dashboardSearchController
+            .text
+            .isEmpty &&
+        dashboardSearchQuery.isEmpty) {
+      return;
+    }
+
+    dashboardSearchFocusNode.unfocus();
+
+    setState(() {
+      isBottomSearchOpen = false;
+
+      dashboardSearchQuery = '';
+
+      dashboardSearchController.clear();
+    });
+  }
+
+  // ============================================================
+  // BOTTOM MAIL
+  // ============================================================
+
+  Future<void> _openBottomMail() async {
+    _closeBottomSearch();
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            const StaffMailPage(),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await fetchInboxMailCount();
+  }
+
+  // ============================================================
+  // BOTTOM PROFILE
+  // ============================================================
+
+  void _openBottomProfile() {
+    _closeBottomSearch();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            EditProfileScreen(),
+      ),
+    );
+  }
+
+  // ============================================================
+  // MODERN BOTTOM NAVIGATION
+  // ============================================================
+
+  Widget _buildModernBottomNavigationBar() {
+    return MediaQuery.removePadding(
+      context: context,
+      removeBottom: true,
+      child: Material(
+        color: Colors.white,
+        elevation: 14,
+        shadowColor:
+            Colors.black.withOpacity(
+          0.10,
+        ),
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              height: 68,
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 7,
+              ),
+              decoration:
+                  const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.only(
+                  topLeft:
+                      Radius.circular(
+                    26,
+                  ),
+                  topRight:
+                      Radius.circular(
+                    26,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child:
+                        _buildBottomNavigationItem(
+                      icon:
+                          Icons.person_outline_rounded,
+                      label: 'Profile',
+                      isSelected: false,
+                      onTap:
+                          _openBottomProfile,
+                    ),
+                  ),
+                  Expanded(
+                    child:
+                        _buildBottomNavigationItem(
+                      icon:
+                          Icons.mail_outline_rounded,
+                      label: 'Mail',
+                      isSelected: false,
+                      badgeCount:
+                          inboxMailCount,
+                      onTap: () {
+                        _openBottomMail();
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child:
+                        _buildBottomNavigationItem(
+                      icon:
+                          Icons.search_rounded,
+                      label: 'Search',
+                      isSelected:
+                          isBottomSearchOpen,
+                      onTap:
+                          _toggleBottomSearch,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedSwitcher(
+              duration:
+                  const Duration(
+                milliseconds: 220,
+              ),
+              switchInCurve:
+                  Curves.easeOutCubic,
+              switchOutCurve:
+                  Curves.easeInCubic,
+              child:
+                  isBottomSearchOpen
+                      ? Padding(
+                          key:
+                              const ValueKey<String>(
+                            'dashboard-search-open',
+                          ),
+                          padding:
+                              const EdgeInsets.fromLTRB(
+                            12,
+                            9,
+                            12,
+                            4,
+                          ),
+                          child:
+                              Container(
+                            height: 48,
+                            decoration:
+                                BoxDecoration(
+                              color:
+                                  const Color(
+                                0xFFF2F2F7,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(
+                                16,
+                              ),
+                              border:
+                                  Border.all(
+                                color:
+                                    const Color(
+                                  0xFFE5E5EA,
+                                ),
+                              ),
+                            ),
+                            child:
+                                TextField(
+                              controller:
+                                  dashboardSearchController,
+                              focusNode:
+                                  dashboardSearchFocusNode,
+                              textInputAction:
+                                  TextInputAction.search,
+                              autocorrect:
+                                  false,
+                              enableSuggestions:
+                                  false,
+                              onChanged:
+                                  (String value) {
+                                setState(
+                                  () {
+                                    dashboardSearchQuery =
+                                        value;
+                                  },
+                                );
+                              },
+                              decoration:
+                                  InputDecoration(
+                                hintText:
+                                    'Search cards',
+                                hintStyle:
+                                    const TextStyle(
+                                  color:
+                                      Color(
+                                    0xFF8E8E93,
+                                  ),
+                                  fontSize:
+                                      15,
+                                  fontWeight:
+                                      FontWeight
+                                          .w400,
+                                ),
+                                prefixIcon:
+                                    const Icon(
+                                  Icons.search_rounded,
+                                  color:
+                                      Color(
+                                    0xFF8E8E93,
+                                  ),
+                                  size:
+                                      22,
+                                ),
+                                suffixIcon:
+                                    dashboardSearchQuery
+                                            .isNotEmpty
+                                        ? IconButton(
+                                            tooltip:
+                                                'Clear search',
+                                            onPressed:
+                                                () {
+                                              dashboardSearchController.clear();
+
+                                              setState(
+                                                () {
+                                                  dashboardSearchQuery =
+                                                      '';
+                                                },
+                                              );
+
+                                              dashboardSearchFocusNode.requestFocus();
+                                            },
+                                            icon:
+                                                const Icon(
+                                              Icons.cancel_rounded,
+                                              color: Color(
+                                                0xFF8E8E93,
+                                              ),
+                                              size:
+                                                  20,
+                                            ),
+                                          )
+                                        : null,
+                                border:
+                                    InputBorder.none,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                  horizontal:
+                                      14,
+                                  vertical:
+                                      13,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(
+                          key:
+                              ValueKey<String>(
+                            'dashboard-search-closed',
+                          ),
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
+    final Color foregroundColor =
+        isSelected
+            ? const Color(
+                0xFF2C74FF,
+              )
+            : const Color(
+                0xFF6B7280,
+              );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
+        onTap: onTap,
+        child: SizedBox(
+          height: 54,
+          child: Column(
+            mainAxisAlignment:
+                MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedContainer(
+                    duration:
+                        const Duration(
+                      milliseconds:
+                          180,
+                    ),
+                    width: 36,
+                    height: 32,
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          isSelected
+                              ? const Color(
+                                  0xFFEAF2FF,
+                                )
+                              : Colors.transparent,
+                      borderRadius:
+                          BorderRadius.circular(
+                        12,
+                      ),
+                    ),
+                    child: Icon(
+                      icon,
+                      color:
+                          foregroundColor,
+                      size: 23,
+                    ),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -7,
+                      top: -5,
+                      child: Container(
+                        constraints:
+                            const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        padding:
+                            const EdgeInsets.symmetric(
+                          horizontal:
+                              5,
+                          vertical:
+                              2,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xFFFF3B30,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(
+                            20,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                Colors.white,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          badgeCount > 99
+                              ? '99+'
+                              : badgeCount
+                                  .toString(),
+                          textAlign:
+                              TextAlign.center,
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.white,
+                            fontSize: 9,
+                            fontWeight:
+                                FontWeight
+                                    .w800,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(
+                height: 2,
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow:
+                    TextOverflow.ellipsis,
+                style: TextStyle(
+                  color:
+                      foregroundColor,
+                  fontSize: 10.5,
+                  fontWeight:
+                      isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -1065,64 +1548,27 @@ class _admin_dashboardState extends State<admin_dashboard>
           // leading: Icon(Icons.arrow_back, color: Colors.black),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.mail_outline_rounded,
-                      color: Colors.black,
-                      size: 28,
-                    ),
-                    onPressed: () async {
-                      await Navigator.push<void>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const StaffMailPage(),
-                        ),
-                      );
-
-                      if (!mounted) return;
-
-                      await fetchInboxMailCount();
-                    },
-                  ),
-                  if (inboxMailCount > 0)
-                    Positioned(
-                      right: 4,
-                      top: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
-                        child: Text(
-                          inboxMailCount > 99
-                              ? '99+'
-                              : inboxMailCount.toString(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              padding: const EdgeInsets.only(
+                right: 12,
+              ),
+              child: IconButton(
+                tooltip: 'Logout',
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.black,
+                  size: 27,
+                ),
+                onPressed: () async {
+                  await logoutUser(
+                    context,
+                  );
+                },
               ),
             ),
           ],
         ),
+        bottomNavigationBar:
+            _buildModernBottomNavigationBar(),
         drawer: Drawer(
           backgroundColor: Colors.white,
           child: Container(
@@ -1169,7 +1615,17 @@ class _admin_dashboardState extends State<admin_dashboard>
                     // Navigate to the Settings page or perform any other action
                   },
                 ),
-
+                ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text('Vehicle Management'),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => VehicleKmManagementPage()));
+                    // Navigate to the Settings page or perform any other action
+                  },
+                ),
                 // if (isManager)
                 // ListTile(
                 //   leading: const Icon(Icons.person),

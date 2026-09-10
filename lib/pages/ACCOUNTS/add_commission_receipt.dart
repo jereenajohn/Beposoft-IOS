@@ -132,14 +132,18 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
     });
   }
 
-  bool get canUpdate {
-    final String department =
-        currentDepartment.trim().toUpperCase();
+bool get canUpdate {
+  final String department =
+      currentDepartment.trim().toUpperCase();
 
-    return department == 'ADMIN' ||
-        department == 'COO' ||
-        department == 'CEO';
-  }
+  return department == 'ADMIN' ||
+      department == 'COO' ||
+      department == 'CEO' ||
+      department == 'ACCOUNTS' ||
+      department == 'ACCOUNTING' ||
+      department == 'ACCOUNTS / ACCOUNTING';
+}
+
 
   Future<void> AddStatusTime(
     BuildContext scaffoldContext,

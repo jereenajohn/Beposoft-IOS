@@ -64,7 +64,8 @@ class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
   TextEditingController transactionIdController = TextEditingController();
   TextEditingController remarkController = TextEditingController();
   TextEditingController receivedDateController = TextEditingController();
-  String? selectedStatus;
+  String? selectedOrderStatus;
+  String? selectedBoxStatus;
   final TextEditingController noteController = TextEditingController();
   final TextEditingController parcelNoteController = TextEditingController();
   final TextEditingController deliveryReturnReasonController =
@@ -559,63 +560,35 @@ List<String> getAvailableOrderStatuses() {
 
   switch (currentStatus) {
     case 'To Print':
+      // DO -> PFD only
       return [
-        'To Print',
-        // 'Packing under progress',
         'Packed',
-        'Ready to ship',
       ];
 
-    // case 'Packing under progress':
-    //   return [
-    //     'Packing under progress',
-    //     'Packed',
-    //     'Ready to ship',
-    //   ];
-
     case 'Packed':
+      // PFD -> OFD only
       return [
-        'Packed',
         'Ready to ship',
       ];
 
     case 'Ready to ship':
-      final String department =
-          dep?.toString().trim().toLowerCase() ?? '';
-
-      final bool canMarkAsShipped =
-          department == 'ceo' ||
-          department == 'admin' ||
-          department == 'coo' ||
-          department == 'accounts' ||
-          department == 'accounting' ||
-          department == 'accounts / accounting' ||
-          department == 'warehouse admin';
-
+      // OFD -> RFD or Shipped
       return [
-        'Ready to ship',
         'Return From Delivery',
-        if (canMarkAsShipped) 'Shipped',
+        'Shipped',
       ];
 
     case 'Return From Delivery':
+      // RFD -> OFD only
       return [
-        'Return From Delivery',
         'Ready to ship',
       ];
 
     case 'Shipped':
-      return [
-        'Shipped',
-      ];
+      // Final status - no further status change
+      return const [];
 
     default:
-      if (currentStatus.isNotEmpty) {
-        return [
-          currentStatus,
-        ];
-      }
-
       return const [];
   }
 }
@@ -741,10 +714,10 @@ List<String> getAvailableOrderStatuses() {
       final token = await getTokenFromPrefs();
 
       final Map<String, dynamic> payload = {
-        'status': selectedStatus,
+        'status': selectedOrderStatus,
       };
 
-      if (selectedStatus == 'Return From Delivery') {
+      if (selectedOrderStatus == 'Return From Delivery') {
         final String reason = deliveryReturnReason?.trim() ?? '';
 
         if (reason.isEmpty) {
@@ -782,8 +755,8 @@ List<String> getAvailableOrderStatuses() {
             'Status': ord?['status'],
           },
           afterData: {
-            'Status': selectedStatus,
-            if (selectedStatus == 'Return From Delivery')
+            'Status': selectedOrderStatus,
+            if (selectedOrderStatus == 'Return From Delivery')
               'Delivery Return Reason': deliveryReturnReason?.trim() ?? '',
           },
         );
@@ -827,7 +800,7 @@ List<String> getAvailableOrderStatuses() {
   }
 
   Future<void> _handleStatusUpdate() async {
-    if (selectedStatus == null || selectedStatus!.trim().isEmpty) {
+    if (selectedOrderStatus == null || selectedOrderStatus!.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a status'),
@@ -838,7 +811,7 @@ List<String> getAvailableOrderStatuses() {
       return;
     }
 
-    if (selectedStatus != 'Return From Delivery') {
+    if (selectedOrderStatus != 'Return From Delivery') {
       await updatestatus();
       return;
     }
@@ -1116,7 +1089,7 @@ List<String> getAvailableOrderStatuses() {
         },
         body: jsonEncode(
           {
-            'status': selectedStatus,
+            'status': selectedBoxStatus,
           },
         ),
       );
@@ -1130,7 +1103,7 @@ List<String> getAvailableOrderStatuses() {
             'Warehouse Box ID': orderId,
           },
           afterData: {
-            'Status': selectedStatus,
+            'Status': selectedBoxStatus,
             'Warehouse Box ID': orderId,
           },
         );
@@ -1402,7 +1375,7 @@ List<String> getAvailableOrderStatuses() {
     breadth.text = order['breadth']?.toString() ?? '';
     height.text = order['height']?.toString() ?? '';
     weight.text = order['weight']?.toString() ?? '';
-selectedStatus = order['status'] ?? 'Packed';
+selectedBoxStatus = order['status']?.toString();
     selectedManagerId = order['packed_by_id'] != null
         ? (order['packed_by_id'] is int
             ? order['packed_by_id']
@@ -1610,7 +1583,7 @@ selectedStatus = order['status'] ?? 'Packed';
 
                   // Status Dropdown
                   DropdownButtonFormField<String>(
-                    value: selectedStatus,
+                    value: selectedBoxStatus,
                     hint: Text('Select Status'),
                     items: statuses.map((status) {
                       return DropdownMenuItem<String>(
@@ -1620,7 +1593,7 @@ selectedStatus = order['status'] ?? 'Packed';
                     }).toList(),
                     onChanged: (value) {
                       setState(() {
-                        selectedStatus = value;
+                        selectedBoxStatus = value;
                       });
                     },
                     decoration: InputDecoration(
@@ -2029,7 +2002,7 @@ selectedStatus = order['status'] ?? 'Packed';
       }
 
       request.fields['parcel_service_note'] = parcelNoteController.text.trim();
-      request.fields['status'] = selectedStatus ?? '';
+      request.fields['status'] = selectedBoxStatus ?? order['status']?.toString() ?? '';
 
       if (selectedManagerId == null) {
         request.fields['packed_by'] = loginid.toString();
@@ -2095,7 +2068,7 @@ selectedStatus = order['status'] ?? 'Packed';
             'Breadth': breadth.text,
             'Height': height.text,
             'Weight': weight.text,
-            'Status': selectedStatus,
+            'Status': selectedBoxStatus,
             'Parcel Service': selectedserviceId,
             'Parcel Service Note': parcelNoteController.text.trim(),
             'Packed By': selectedManagerId ?? loginid,
@@ -2134,6 +2107,8 @@ selectedStatus = order['status'] ?? 'Packed';
   }
 
   void showStatusDialog(BuildContext context, var order) {
+    selectedBoxStatus = order['status']?.toString();
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -2143,7 +2118,7 @@ selectedStatus = order['status'] ?? 'Packed';
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: selectedStatus,
+                value: selectedBoxStatus,
                 hint: Text('Select Status'),
                 items: statuses.map((status) {
                   return DropdownMenuItem<String>(
@@ -2153,8 +2128,8 @@ selectedStatus = order['status'] ?? 'Packed';
                 }).toList(),
                 onChanged: (value) {
                   setState(() {
-                    selectedStatus =
-                        value; // This will store the selected status
+                    selectedBoxStatus =
+                        value; // Box status selection
                   });
                 },
                 decoration: InputDecoration(
@@ -2311,7 +2286,7 @@ selectedStatus = order['status'] ?? 'Packed';
         },
         body: jsonEncode(
           {
-            'status': selectedStatus,
+            'status': ord?['status'],
             'billing_address': selectedAddressId,
             'note': noteController.text,
           },
@@ -2329,7 +2304,7 @@ selectedStatus = order['status'] ?? 'Packed';
           afterData: {
             'Billing Address ID': selectedAddressId,
             'Note': noteController.text,
-            'Status': selectedStatus,
+            'Status': ord?['status'],
           },
         );
 
@@ -2641,12 +2616,11 @@ selectedStatus = order['status'] ?? 'Packed';
           Balance = remainingAmount;
           boxCount = fetchedBoxCount;
 
-          // Always show the current order status in the Select Status field.
-          final String currentStatus =
-              ord?['status']?.toString().trim() ?? '';
-
-          selectedStatus =
-              currentStatus.isNotEmpty ? currentStatus : null;
+          // The current status is displayed separately above the dropdown.
+          // Keep this null so DropdownButtonFormField only contains valid
+          // NEXT transitions and never receives a value that is absent
+          // from getAvailableOrderStatuses().
+          selectedOrderStatus = null;
         });
       } else {}
     } catch (error) {}
@@ -3101,25 +3075,38 @@ selectedStatus = order['status'] ?? 'Packed';
               ),
               Padding(
                 padding: const EdgeInsets.only(left: 12, right: 12, top: 10),
-                child: DropdownButtonFormField<String>(
-                  value: selectedStatus,
-                  hint: const Text('Select Status'),
-                  items: getAvailableOrderStatuses().map((status) {
-                    return DropdownMenuItem<String>(
-                      value: status,
-                      child: Text(
-                        getStatusDisplayName(status),
+                child: Builder(
+                  builder: (context) {
+                    final availableStatuses = getAvailableOrderStatuses();
+
+                    return DropdownButtonFormField<String>(
+                      value: selectedOrderStatus,
+                      hint: Text(
+                        availableStatuses.isEmpty
+                            ? 'No further status available'
+                            : 'Select Next Status',
+                      ),
+                      items: availableStatuses.map((status) {
+                        return DropdownMenuItem<String>(
+                          value: status,
+                          child: Text(
+                            getStatusDisplayName(status),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: availableStatuses.isEmpty
+                          ? null
+                          : (value) {
+                              setState(() {
+                                selectedOrderStatus = value;
+                              });
+                            },
+                      decoration: const InputDecoration(
+                        labelText: 'Change Status To',
+                        border: OutlineInputBorder(),
                       ),
                     );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedStatus = value;
-                    });
                   },
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                  ),
                 ),
               ),
               SizedBox(
@@ -3128,9 +3115,11 @@ selectedStatus = order['status'] ?? 'Packed';
               Padding(
                 padding: const EdgeInsets.only(left: 12),
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await _handleStatusUpdate();
-                  },
+                  onPressed: getAvailableOrderStatuses().isEmpty
+                      ? null
+                      : () async {
+                          await _handleStatusUpdate();
+                        },
                   label: Text("Save"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue, // Button color

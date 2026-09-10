@@ -93,14 +93,17 @@ class _UpdateCodTransferListState
     });
   }
 
-  bool get canUpdate {
-    final String department =
-        currentDepartment.trim().toUpperCase();
+bool get canUpdate {
+  final String department =
+      currentDepartment.trim().toUpperCase();
 
-    return department == 'ADMIN' ||
-        department == 'COO' ||
-        department == 'CEO';
-  }
+  return department == 'ADMIN' ||
+      department == 'COO' ||
+      department == 'CEO' ||
+      department == 'ACCOUNTS' ||
+      department == 'ACCOUNTING' ||
+      department == 'ACCOUNTS / ACCOUNTING';
+}
 
   Future<String?> getTokenFromPrefs() async {
     final SharedPreferences prefs =

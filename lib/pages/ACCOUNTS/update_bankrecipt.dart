@@ -1022,41 +1022,51 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                 ),
                               ),
                               SizedBox(height: 15),
-                       ElevatedButton(
-  onPressed: ['ADMIN', 'COO', 'CEO'].contains(currentDepartment)
-      ? () {
-          if (selectedInvoiceId != null) {
-            AddReceipt(context);
-          } else if (selectedCustomerId != null) {
-            AddReceipt2(context);
-          } else {
-            updateexpense();
-          }
-        }
-      : null,
-  style: ButtonStyle(
-    backgroundColor: MaterialStateProperty.resolveWith<Color>(
-      (states) {
-        if (states.contains(MaterialState.disabled)) {
-          return Colors.grey;
-        }
-        return Colors.blue;
-      },
-    ),
-    shape: MaterialStateProperty.all<RoundedRectangleBorder>(
-      RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
-    ),
-    fixedSize: MaterialStateProperty.all<Size>(
-      Size(constraints.maxWidth * 0.4, 50),
-    ),
-  ),
-  child: const Text(
-    "Update",
-    style: TextStyle(color: Colors.white),
-  ),
-),
+                              ElevatedButton(
+                                onPressed: [
+                                  'ADMIN',
+                                  'COO',
+                                  'CEO',
+                                  'ACCOUNTS',
+                                  'ACCOUNTING',
+                                  'ACCOUNTS / ACCOUNTING',
+                                ].contains(currentDepartment)
+                                    ? () {
+                                        if (selectedInvoiceId != null) {
+                                          AddReceipt(context);
+                                        } else if (selectedCustomerId != null) {
+                                          AddReceipt2(context);
+                                        } else {
+                                          updateexpense();
+                                        }
+                                      }
+                                    : null,
+                                style: ButtonStyle(
+                                  backgroundColor:
+                                      MaterialStateProperty.resolveWith<Color>(
+                                    (states) {
+                                      if (states
+                                          .contains(MaterialState.disabled)) {
+                                        return Colors.grey;
+                                      }
+                                      return Colors.blue;
+                                    },
+                                  ),
+                                  shape: MaterialStateProperty.all<
+                                      RoundedRectangleBorder>(
+                                    RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  fixedSize: MaterialStateProperty.all<Size>(
+                                    Size(constraints.maxWidth * 0.4, 50),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Update",
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
 
                               // Displaying the list of departments as a table
                               SizedBox(height: 10),
