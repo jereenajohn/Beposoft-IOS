@@ -38,7 +38,7 @@ class _add_staffState extends State<add_staff> {
   List<Map<String, dynamic>> Warehouses = [];
   int? selectedPostingStateId;
 
-  DateTime selecteLastWorking = DateTime.now();
+  DateTime? selecteLastWorking;
 
   File? selectedAadharImage;
   File? selectedPanImage;
@@ -46,6 +46,10 @@ class _add_staffState extends State<add_staff> {
   @override
   void initState() {
     super.initState();
+
+    debugPrint('========== ADD STAFF PAGE INIT ==========');
+    debugPrint('=========================================');
+
     getdepartments();
     getmanegers();
     getstaff();
@@ -90,6 +94,8 @@ class _add_staffState extends State<add_staff> {
   TextEditingController pan_no = TextEditingController();
   TextEditingController place = TextEditingController();
   TextEditingController termination_date = TextEditingController();
+  TextEditingController salary = TextEditingController();
+  TextEditingController paid_leaves = TextEditingController();
   List<String> bloodGroups = [
     'A+',
     'A-',
@@ -107,7 +113,13 @@ class _add_staffState extends State<add_staff> {
 
   Future<String?> gettokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
+    final token = prefs.getString('token');
+
+    debugPrint(
+      'AUTH TOKEN STATUS: ${token == null || token.isEmpty ? 'MISSING' : 'AVAILABLE'}',
+    );
+
+    return token;
   }
 
   List<String> gender = ["Female", 'Male', 'Other'];
@@ -190,16 +202,21 @@ class _add_staffState extends State<add_staff> {
   Future<void> _selectLastWorkingDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: selecteLastWorking,
+      initialDate: selecteLastWorking ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
     );
 
-    if (picked != null && picked != selecteLastWorking) {
+    if (picked != null) {
       setState(() {
-        selecteLastWorking = DateTime(picked.year, picked.month, picked.day);
-        termination_date.text =
-            DateFormat('yyyy-MM-dd').format(selecteLastWorking);
+        selecteLastWorking = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+        );
+        termination_date.text = DateFormat('yyyy-MM-dd').format(
+          selecteLastWorking!,
+        );
       });
     }
   }
@@ -215,6 +232,8 @@ class _add_staffState extends State<add_staff> {
         setState(() {
           selectedExpLetter = File(result.files.single.path!);
         });
+
+        debugPrint('SELECTED EXPERIENCE LETTER: ${selectedExpLetter?.path}');
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -245,6 +264,8 @@ class _add_staffState extends State<add_staff> {
           selectedSalarySlip = File(result.files.single.path!);
         });
 
+        debugPrint('SELECTED SALARY SLIP: ${selectedSalarySlip?.path}');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Salary slip selected successfully."),
@@ -272,6 +293,13 @@ class _add_staffState extends State<add_staff> {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       });
+
+      debugPrint('========== GET COUNTRY CODES ==========');
+      debugPrint('URL: $api/api/country/codes/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=======================================');
+
       List<Map<String, dynamic>> countrylist = [];
 
       if (response.statusCode == 200) {
@@ -288,7 +316,10 @@ class _add_staffState extends State<add_staff> {
           country = countrylist;
         });
       }
-    } catch (e) {}
+    } catch (e, stackTrace) {
+      debugPrint('GET COUNTRY ERROR: $e');
+      debugPrint('GET COUNTRY STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getwarehouse() async {
@@ -299,6 +330,13 @@ class _add_staffState extends State<add_staff> {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       });
+
+      debugPrint('========== GET WAREHOUSES ==========');
+      debugPrint('URL: $api/api/warehouse/add/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('====================================');
+
       List<Map<String, dynamic>> warehouselist = [];
 
       if (response.statusCode == 200) {
@@ -315,7 +353,10 @@ class _add_staffState extends State<add_staff> {
           Warehouses = warehouselist;
         });
       }
-    } catch (e) {}
+    } catch (e, stackTrace) {
+      debugPrint('GET WAREHOUSE ERROR: $e');
+      debugPrint('GET WAREHOUSE STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getfamily() async {
@@ -329,6 +370,12 @@ class _add_staffState extends State<add_staff> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET FAMILIES ==========');
+      debugPrint('URL: $api/api/familys/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('==================================');
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
@@ -346,7 +393,10 @@ class _add_staffState extends State<add_staff> {
           fam = familylist;
         });
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET FAMILIES ERROR: $error');
+      debugPrint('GET FAMILIES STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getstates() async {
@@ -360,6 +410,12 @@ class _add_staffState extends State<add_staff> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET STATES ==========');
+      debugPrint('URL: $api/api/states/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('================================');
 
       List<Map<String, dynamic>> stateslist = [];
 
@@ -378,7 +434,10 @@ class _add_staffState extends State<add_staff> {
           _checkboxValues = List<bool>.filled(statess.length, false);
         });
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET STATES ERROR: $error');
+      debugPrint('GET STATES STACKTRACE: $stackTrace');
+    }
   }
 
   File? selectedImage;
@@ -392,6 +451,9 @@ class _add_staffState extends State<add_staff> {
         setState(() {
           selectedImage = File(result.files.single.path!);
         });
+
+        debugPrint('SELECTED PROFILE IMAGE: ${selectedImage?.path}');
+
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("image1 selected successfully."),
           backgroundColor: Color.fromARGB(173, 120, 249, 126),
@@ -416,6 +478,9 @@ class _add_staffState extends State<add_staff> {
         setState(() {
           selectedImage1 = File(result.files.single.path!);
         });
+
+        debugPrint('SELECTED SIGNATURE IMAGE: ${selectedImage1?.path}');
+
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("image1 selected successfully."),
           backgroundColor: Color.fromARGB(173, 120, 249, 126),
@@ -445,6 +510,12 @@ class _add_staffState extends State<add_staff> {
         },
       );
 
+      debugPrint('========== GET DEPARTMENTS ==========');
+      debugPrint('URL: $api/api/departments/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=====================================');
+
       List<Map<String, dynamic>> departmentlist = [];
 
       if (response.statusCode == 200) {
@@ -462,7 +533,10 @@ class _add_staffState extends State<add_staff> {
           dep = departmentlist;
         });
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET DEPARTMENTS ERROR: $error');
+      debugPrint('GET DEPARTMENTS STACKTRACE: $stackTrace');
+    }
   }
 
   int? selectedCountryId;
@@ -480,6 +554,12 @@ class _add_staffState extends State<add_staff> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET STAFF LIST ==========');
+      debugPrint('URL: $api/api/staffs/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('====================================');
 
       List<Map<String, dynamic>> stafflist = [];
 
@@ -499,7 +579,10 @@ class _add_staffState extends State<add_staff> {
           sta = stafflist;
         });
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET STAFF LIST ERROR: $error');
+      debugPrint('GET STAFF LIST STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getmanegers() async {
@@ -513,6 +596,13 @@ class _add_staffState extends State<add_staff> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET SUPERVISORS ==========');
+      debugPrint('URL: $api/api/supervisors/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=====================================');
+
       List<Map<String, dynamic>> managerlist = [];
 
       if (response.statusCode == 200) {
@@ -531,7 +621,10 @@ class _add_staffState extends State<add_staff> {
           manager = managerlist;
         });
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET SUPERVISORS ERROR: $error');
+      debugPrint('GET SUPERVISORS STACKTRACE: $stackTrace');
+    }
   }
 
   void pickAadharImage() async {
@@ -544,6 +637,8 @@ class _add_staffState extends State<add_staff> {
         setState(() {
           selectedAadharImage = File(result.files.single.path!);
         });
+
+        debugPrint('SELECTED AADHAR IMAGE: ${selectedAadharImage?.path}');
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -573,6 +668,8 @@ class _add_staffState extends State<add_staff> {
           selectedPanImage = File(result.files.single.path!);
         });
 
+        debugPrint('SELECTED PAN IMAGE: ${selectedPanImage?.path}');
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("PAN image selected successfully."),
@@ -594,16 +691,26 @@ class _add_staffState extends State<add_staff> {
     final token = await gettokenFromPrefs();
 
     try {
+      final Map<String, String> supervisorBody = {
+        "name": name,
+        "department": selectedDepartmentId.toString(),
+      };
+
+      debugPrint('========== ADD SUPERVISOR ==========');
+      debugPrint('URL: $api/api/add/supervisor/');
+      debugPrint('REQUEST BODY: $supervisorBody');
+
       var response = await http.post(
         Uri.parse("$api/api/add/supervisor/"),
         headers: {
           'Authorization': '$token',
         },
-        body: {
-          "name": name,
-          "department": selectedDepartmentId.toString(),
-        },
+        body: supervisorBody,
       );
+
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('====================================');
 
       if (response.statusCode == 201) {
         var responseData = jsonDecode(response.body);
@@ -658,7 +765,7 @@ class _add_staffState extends State<add_staff> {
     );
   }
 
-  Future<void> RegisterUserData(
+  Future<String?> RegisterUserData(
     int selectedDepartmentId,
     DateTime selectedDate,
     String selectgender,
@@ -727,57 +834,161 @@ class _add_staffState extends State<add_staff> {
         'pan_no': pan_no.text,
         'state': selectedPostingStateId,
         'place': place.text,
+        'paid_leaves': int.tryParse(paid_leaves.text.trim()) ?? 0,
       };
 
       request.body = jsonEncode(data);
 
+      debugPrint('========== CREATE STAFF ==========');
+      debugPrint('URL: $api/api/add/staff2/');
+      debugPrint('REQUEST BODY: ${jsonEncode(data)}');
+
       var response = await request.send();
       var responseData = await http.Response.fromStream(response);
 
+      debugPrint('STATUS CODE: ${responseData.statusCode}');
+      debugPrint('RESPONSE: ${responseData.body}');
+      debugPrint('==================================');
+
       if (responseData.statusCode == 201) {
         final Map<String, dynamic> responseJson = jsonDecode(responseData.body);
-        staffId = responseJson['data']['id'].toString();
+        final String newStaffId = responseJson['data']['id'].toString();
+        staffId = newStaffId;
 
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('Data Added Successfully.'),
-          ),
-        );
+        debugPrint('========== STAFF CREATED ==========');
+        debugPrint('STAFF ID: $newStaffId');
+        debugPrint('RESPONSE: ${responseData.body}');
+        debugPrint('===================================');
 
-        Navigator.pushReplacement(
-          scaffoldContext,
-          MaterialPageRoute(builder: (context) => const add_staff()),
-        );
+        return newStaffId;
       } else if (responseData.statusCode == 400) {
         final Map<String, dynamic> responseJson = jsonDecode(responseData.body);
 
         if (responseJson['errors'] != null) {
           String errorMessage = responseJson['errors'].entries.map((e) {
-            return "${e.key}: ${e.value.join(', ')}";
+            final value = e.value;
+            if (value is List) {
+              return "${e.key}: ${value.join(', ')}";
+            }
+            return "${e.key}: $value";
           }).join('\n');
 
           ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-            SnackBar(content: Text(errorMessage)),
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text(errorMessage),
+            ),
           );
         } else {
           ScaffoldMessenger.of(scaffoldContext).showSnackBar(
             const SnackBar(
+              backgroundColor: Colors.red,
               content: Text('Validation failed. Please check your input.'),
             ),
           );
         }
+        return null;
       } else {
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            content: Text('Something went wrong. Please try again later.'),
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              'Unable to create staff. Status: ${responseData.statusCode}\n${responseData.body}',
+            ),
           ),
         );
+        return null;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('CREATE STAFF ERROR: $e');
+      debugPrint('CREATE STAFF STACKTRACE: $stackTrace');
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Error: $e'),
+        ),
       );
+      return null;
+    }
+  }
+
+  Future<bool> addStaffSalary({
+    required String staffId,
+    required int salaryAmount,
+    required BuildContext scaffoldContext,
+  }) async {
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Authentication token not found.'),
+        ),
+      );
+      return false;
+    }
+
+    try {
+      final Map<String, dynamic> body = {
+        'staff': int.parse(staffId),
+        'salary': salaryAmount,
+      };
+
+      debugPrint('========== ADD STAFF SALARY ==========');
+      debugPrint('URL: $api/api/staff/salary/');
+      debugPrint('REQUEST: ${jsonEncode(body)}');
+      debugPrint('STAFF ID: $staffId');
+      debugPrint('SALARY AMOUNT: $salaryAmount');
+
+      final response = await http.post(
+        Uri.parse('$api/api/staff/salary/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      debugPrint('SALARY STATUS CODE: ${response.statusCode}');
+      debugPrint('SALARY RESPONSE: ${response.body}');
+      debugPrint('======================================');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return true;
+      }
+
+      String message = 'Failed to add salary.';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          message = decoded['message']?.toString() ??
+              decoded['detail']?.toString() ??
+              decoded['error']?.toString() ??
+              'Failed to add salary.';
+        }
+      } catch (_) {
+        message =
+            'Failed to add salary. Status code: ${response.statusCode}';
+      }
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(message),
+        ),
+      );
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('ADD SALARY ERROR: $e');
+      debugPrint('ADD SALARY STACKTRACE: $stackTrace');
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Salary API error: $e'),
+        ),
+      );
+      return false;
     }
   }
 
@@ -833,8 +1044,21 @@ class _add_staffState extends State<add_staff> {
             .add(await http.MultipartFile.fromPath('pan_image', panImage.path));
       }
 
+      debugPrint('========== UPDATE STAFF FILES ==========');
+      debugPrint('URL: $api/api/staff/update/$staffId/');
+      debugPrint('PROFILE IMAGE: ${image1?.path}');
+      debugPrint('SIGNATURE IMAGE: ${image2?.path}');
+      debugPrint('EXPERIENCE LETTER: ${expLetter?.path}');
+      debugPrint('SALARY SLIP: ${salarySlip?.path}');
+      debugPrint('AADHAR IMAGE: ${aadharImage?.path}');
+      debugPrint('PAN IMAGE: ${panImage?.path}');
+
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('========================================');
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
@@ -852,7 +1076,10 @@ class _add_staffState extends State<add_staff> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('UPDATE STAFF FILES ERROR: $e');
+      debugPrint('UPDATE STAFF FILES STACKTRACE: $stackTrace');
+
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         SnackBar(content: Text('File upload error: $e')),
       );
@@ -889,6 +1116,8 @@ class _add_staffState extends State<add_staff> {
     emergency_contact_name1.dispose();
     emergency_contact_number1.dispose();
     termination_date.dispose();
+    salary.dispose();
+    paid_leaves.dispose();
 
     place.dispose();
     super.dispose();
@@ -1143,6 +1372,81 @@ class _add_staffState extends State<add_staff> {
                     child: Icon(Icons.date_range_outlined, color: Colors.blue),
                   ),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionalLastWorkingDateField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionMiniLabel("Last day of working"),
+          const SizedBox(height: 8),
+          Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFBFD7FF)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_month_outlined,
+                  color: Colors.blue,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    selecteLastWorking != null
+                        ? DateFormat('dd / MM / yyyy')
+                            .format(selecteLastWorking!)
+                        : 'Select last working day',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: selecteLastWorking != null
+                          ? Colors.black
+                          : Colors.black54,
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _selectLastWorkingDate(context),
+                  borderRadius: BorderRadius.circular(20),
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.date_range_outlined,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+                if (selecteLastWorking != null)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        selecteLastWorking = null;
+                        termination_date.clear();
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(
+                        Icons.close,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1447,6 +1751,8 @@ class _add_staffState extends State<add_staff> {
               _selectedFamily = [int.parse(newValue)];
             }
           });
+
+          debugPrint('SELECTED FAMILY: $_selectedFamily');
         },
       ),
     );
@@ -1526,6 +1832,9 @@ class _add_staffState extends State<add_staff> {
                         dynamicStatid.remove(selectedStateId);
                       }
                     });
+
+                    debugPrint('ALLOCATED STATE NAMES: $stat');
+                    debugPrint('ALLOCATED STATE IDS: $dynamicStatid');
                   }
                 },
                 icon: const Icon(Icons.arrow_drop_down_rounded,
@@ -1688,6 +1997,10 @@ class _add_staffState extends State<add_staff> {
             selectedDepartmentName =
                 dep.firstWhere((element) => element['id'] == newValue)['name'];
           });
+
+          debugPrint(
+            'SELECTED DEPARTMENT -> ID: $selectedDepartmentId | NAME: $selectedDepartmentName',
+          );
         },
         items: dep.map<DropdownMenuItem<int>>((department) {
           return DropdownMenuItem<int>(
@@ -1713,6 +2026,10 @@ class _add_staffState extends State<add_staff> {
             selectedmanagerName = manager
                 .firstWhere((element) => element['id'] == newValue)['name'];
           });
+
+          debugPrint(
+            'SELECTED MANAGER -> ID: $selectedmanagerId | NAME: $selectedmanagerName',
+          );
         },
         items: manager.map<DropdownMenuItem<int>>((manager) {
           return DropdownMenuItem<int>(
@@ -1738,6 +2055,10 @@ class _add_staffState extends State<add_staff> {
             selectedwarehouseName = Warehouses.firstWhere(
                 (element) => element['id'] == newValue)['name'];
           });
+
+          debugPrint(
+            'SELECTED WAREHOUSE -> ID: $selectedwarehouseId | NAME: $selectedwarehouseName',
+          );
         },
         items: Warehouses.map<DropdownMenuItem<int>>((warehouse) {
           return DropdownMenuItem<int>(
@@ -1962,6 +2283,18 @@ class _add_staffState extends State<add_staff> {
                           _buildTextField(grade, 'Grade',
                               icon: Icons.stacked_bar_chart_outlined),
                           _buildTextField(
+                            salary,
+                            'Salary',
+                            icon: Icons.currency_rupee_rounded,
+                            keyboardType: TextInputType.number,
+                          ),
+                          _buildTextField(
+                            paid_leaves,
+                            'Paid Leaves',
+                            icon: Icons.event_available_outlined,
+                            keyboardType: TextInputType.number,
+                          ),
+                          _buildTextField(
                             experience,
                             'Experience',
                             icon: Icons.timeline_outlined,
@@ -1981,11 +2314,7 @@ class _add_staffState extends State<add_staff> {
                             date: selecteconf,
                             onTap: () => _selectDate4(context),
                           ),
-                          _buildDateField(
-                            title: "Last day of working",
-                            date: selecteLastWorking,
-                            onTap: () => _selectLastWorkingDate(context),
-                          ),
+                          _buildOptionalLastWorkingDateField(),
                           _buildApprovalDropdown(constraints),
                         ],
                       ),
@@ -2096,33 +2425,182 @@ class _add_staffState extends State<add_staff> {
                             width: double.infinity,
                             height: 54,
                             child: ElevatedButton(
-                              onPressed: () async {
-                                setState(() => isLoading = true);
+                              onPressed: isLoading
+                                  ? null
+                                  : () async {
+                                      debugPrint('========== ADD STAFF SUBMIT ==========');
+                                      debugPrint('NAME: ${name.text}');
+                                      debugPrint('USERNAME: ${username.text}');
+                                      debugPrint('EMAIL: ${email.text}');
+                                      debugPrint('PHONE: ${phone.text}');
+                                      debugPrint('DEPARTMENT ID: $selectedDepartmentId');
+                                      debugPrint('MANAGER ID: $selectedmanagerId');
+                                      debugPrint('WAREHOUSE ID: $selectedwarehouseId');
+                                      debugPrint('FAMILY: $_selectedFamily');
+                                      debugPrint('ALLOCATED STATES: $dynamicStatid');
+                                      debugPrint('SALARY INPUT: ${salary.text}');
+                                      debugPrint('PAID LEAVES INPUT: ${paid_leaves.text}');
+                                      debugPrint('======================================');
 
-                                await RegisterUserData(
-                                  selectedDepartmentId!,
-                                  selectedDate,
-                                  selectgender,
-                                  selectmarital,
-                                  selecteExp,
-                                  selectejoin,
-                                  selecteconf,
-                                  scaffoldContext,
-                                );
+                                      if (selectedDepartmentId == null) {
+                                        ScaffoldMessenger.of(scaffoldContext)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            backgroundColor: Colors.red,
+                                            content: Text(
+                                              'Please select department.',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
 
-                                await updateStaffFiles(
-                                  staffId,
-                                  selectedImage,
-                                  selectedImage1,
-                                  selectedExpLetter,
-                                  selectedSalarySlip,
-                                  selectedAadharImage,
-                                  selectedPanImage,
-                                  scaffoldContext,
-                                );
+                                      if (name.text.trim().isEmpty) {
+                                        ScaffoldMessenger.of(scaffoldContext)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            backgroundColor: Colors.red,
+                                            content: Text(
+                                              'Please enter staff name.',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
 
-                                setState(() => isLoading = false);
-                              },
+                                      if (salary.text.trim().isEmpty) {
+                                        ScaffoldMessenger.of(scaffoldContext)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            backgroundColor: Colors.red,
+                                            content: Text(
+                                              'Please enter salary.',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final int? salaryAmount =
+                                          int.tryParse(salary.text.trim());
+
+                                      if (salaryAmount == null ||
+                                          salaryAmount <= 0) {
+                                        ScaffoldMessenger.of(scaffoldContext)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            backgroundColor: Colors.red,
+                                            content: Text(
+                                              'Please enter a valid salary.',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      setState(() => isLoading = true);
+
+                                      try {
+                                        final String? newStaffId =
+                                            await RegisterUserData(
+                                          selectedDepartmentId!,
+                                          selectedDate,
+                                          selectgender,
+                                          selectmarital,
+                                          selecteExp,
+                                          selectejoin,
+                                          selecteconf,
+                                          scaffoldContext,
+                                        );
+
+                                        if (newStaffId == null ||
+                                            newStaffId.isEmpty) {
+                                          return;
+                                        }
+
+                                        final bool salaryAdded =
+                                            await addStaffSalary(
+                                          staffId: newStaffId,
+                                          salaryAmount: salaryAmount,
+                                          scaffoldContext: scaffoldContext,
+                                        );
+
+                                        if (!salaryAdded) {
+                                          ScaffoldMessenger.of(scaffoldContext)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              backgroundColor: Colors.orange,
+                                              content: Text(
+                                                'Staff created, but salary could not be added.',
+                                              ),
+                                            ),
+                                          );
+                                          return;
+                                        }
+
+                                        final bool hasFiles =
+                                            selectedImage != null ||
+                                                selectedImage1 != null ||
+                                                selectedExpLetter != null ||
+                                                selectedSalarySlip != null ||
+                                                selectedAadharImage != null ||
+                                                selectedPanImage != null;
+
+                                        if (hasFiles) {
+                                          await updateStaffFiles(
+                                            newStaffId,
+                                            selectedImage,
+                                            selectedImage1,
+                                            selectedExpLetter,
+                                            selectedSalarySlip,
+                                            selectedAadharImage,
+                                            selectedPanImage,
+                                            scaffoldContext,
+                                          );
+                                        }
+
+                                        if (!mounted) return;
+
+                                        ScaffoldMessenger.of(scaffoldContext)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            backgroundColor: Colors.green,
+                                            content: Text(
+                                              'Staff and salary added successfully.',
+                                            ),
+                                          ),
+                                        );
+
+                                        Navigator.pushReplacement(
+                                          scaffoldContext,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const add_staff(),
+                                          ),
+                                        );
+                                      } catch (e, stackTrace) {
+                                        debugPrint('SUBMIT ERROR: $e');
+                                        debugPrint(
+                                          'SUBMIT STACKTRACE: $stackTrace',
+                                        );
+
+                                        if (!mounted) return;
+
+                                        ScaffoldMessenger.of(scaffoldContext)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: Colors.red,
+                                            content: Text(
+                                              'Something went wrong: $e',
+                                            ),
+                                          ),
+                                        );
+                                      } finally {
+                                        if (mounted) {
+                                          setState(() => isLoading = false);
+                                        }
+                                      }
+                                    },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue,
                                 foregroundColor: Colors.white,

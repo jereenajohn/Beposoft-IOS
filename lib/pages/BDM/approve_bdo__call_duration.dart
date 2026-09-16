@@ -34,6 +34,7 @@ class _approvebdocalldurationState extends State<approvebdocallduration> {
   bool isLoadingMore = false;
   bool hasNextPage = true;
   bool isExporting = false;
+  bool isBdoSalesExporting = false;
   bool isStaffLoading = false;
   bool isStateLoading = false;
   bool isDistrictLoading = false;
@@ -3202,6 +3203,431 @@ tempStaffHourlySummaryList.add({
       ],
     );
   }
+Future<void> exportBdoSalesReportExcel() async {
+  try {
+    if (filteredDsrList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text("No data available to export"),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isBdoSalesExporting = true;
+    });
+
+    final ex.Excel excel = ex.Excel.createExcel();
+    final String? defaultSheet = excel.getDefaultSheet();
+    if (defaultSheet != null) {
+      excel.delete(defaultSheet);
+    }
+
+    final ex.Sheet sheet = excel["Sheet1"];
+
+    // Same BDO SALES REPORT format, with STAFF NAME added before CONTACT PERSON.
+    sheet.setColWidth(0, 6.0);   // SL
+    sheet.setColWidth(1, 20.0);  // STAFF NAME
+    sheet.setColWidth(2, 24.0);  // CONTACT PERSON
+    sheet.setColWidth(3, 15.0);  // CONTACT NO
+    sheet.setColWidth(4, 12.0);  // STATE
+    sheet.setColWidth(5, 12.0);  // DIST
+    sheet.setColWidth(6, 10.0);  // CD
+    sheet.setColWidth(7, 10.0);  // PC
+    sheet.setColWidth(8, 15.0);  // INV NO
+    sheet.setColWidth(9, 14.0);  // INV AMT
+
+    final ex.Border thinBorder = ex.Border(
+      borderStyle: ex.BorderStyle.Thin,
+    );
+
+    final ex.CellStyle topStyle = ex.CellStyle(
+      backgroundColorHex: '#DDEBF7',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 11,
+      horizontalAlign: ex.HorizontalAlign.Center,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle dateStyle = ex.CellStyle(
+      backgroundColorHex: '#DDEBF7',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 11,
+      horizontalAlign: ex.HorizontalAlign.Left,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle teamStyle = ex.CellStyle(
+      backgroundColorHex: '#DDEBF7',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 11,
+      horizontalAlign: ex.HorizontalAlign.Left,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle headerStyle = ex.CellStyle(
+      backgroundColorHex: '#FF0000',
+      fontColorHex: '#FFFFFF',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 11,
+      horizontalAlign: ex.HorizontalAlign.Center,
+      verticalAlign: ex.VerticalAlign.Center,
+      textWrapping: ex.TextWrapping.WrapText,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle bodyCenterStyle = ex.CellStyle(
+      backgroundColorHex: '#FFFFFF',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      fontSize: 10,
+      horizontalAlign: ex.HorizontalAlign.Center,
+      verticalAlign: ex.VerticalAlign.Center,
+      textWrapping: ex.TextWrapping.WrapText,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle bodyLeftStyle = ex.CellStyle(
+      backgroundColorHex: '#FFFFFF',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      fontSize: 10,
+      horizontalAlign: ex.HorizontalAlign.Left,
+      verticalAlign: ex.VerticalAlign.Center,
+      textWrapping: ex.TextWrapping.WrapText,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle serialStyle = ex.CellStyle(
+      backgroundColorHex: '#FFFFFF',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 10,
+      horizontalAlign: ex.HorizontalAlign.Center,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle amountStyle = ex.CellStyle(
+      backgroundColorHex: '#FFFFFF',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      fontSize: 10,
+      horizontalAlign: ex.HorizontalAlign.Right,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle totalLabelStyle = ex.CellStyle(
+      backgroundColorHex: '#FFF200',
+      fontColorHex: '#FF0000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 11,
+      horizontalAlign: ex.HorizontalAlign.Left,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    final ex.CellStyle totalValueStyle = ex.CellStyle(
+      backgroundColorHex: '#FFF200',
+      fontColorHex: '#000000',
+      fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+      bold: true,
+      fontSize: 10,
+      horizontalAlign: ex.HorizontalAlign.Center,
+      verticalAlign: ex.VerticalAlign.Center,
+      leftBorder: thinBorder,
+      rightBorder: thinBorder,
+      topBorder: thinBorder,
+      bottomBorder: thinBorder,
+    );
+
+    void writeCell(
+      int column,
+      int row,
+      String value,
+      ex.CellStyle style,
+    ) {
+      final cell = sheet.cell(
+        ex.CellIndex.indexByColumnRow(
+          columnIndex: column,
+          rowIndex: row,
+        ),
+      );
+      cell.value = value;
+      cell.cellStyle = style;
+    }
+
+    String cleanExcelText(dynamic value) {
+      if (value == null) return '';
+      return value.toString().trim();
+    }
+
+    // Resolve the team name from the API summary first, then current filtered rows.
+    String teamName = summaryTeamName.trim();
+    if (teamName.isEmpty && filteredDsrList.isNotEmpty) {
+      teamName = cleanExcelText(filteredDsrList.first['team_name']);
+    }
+    if (teamName.isEmpty) {
+      teamName = '-';
+    }
+
+    String reportDateText;
+    if (selectedDateRange != null) {
+      final String startText = formatDateOnly(selectedDateRange!.start);
+      final String endText = formatDateOnly(selectedDateRange!.end);
+      reportDateText = startText == endText
+          ? startText
+          : '$startText to $endText';
+    } else {
+      reportDateText = formatDateOnly(DateTime.now());
+    }
+
+    // Row 1: same report title + date structure.
+    for (int column = 0; column <= 6; column++) {
+      writeCell(column, 0, '', topStyle);
+    }
+    writeCell(0, 0, 'BDO SALES REPORT', topStyle);
+    sheet.merge(
+      ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+      ex.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+    );
+
+    for (int column = 7; column <= 9; column++) {
+      writeCell(column, 0, '', dateStyle);
+    }
+    writeCell(7, 0, 'DATE : $reportDateText', dateStyle);
+    sheet.merge(
+      ex.CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: 0),
+      ex.CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: 0),
+    );
+
+    // Row 2: Team name shown at the top as requested.
+    for (int column = 0; column <= 9; column++) {
+      writeCell(column, 1, '', teamStyle);
+    }
+    writeCell(0, 1, 'TEAM NAME : $teamName', teamStyle);
+    sheet.merge(
+      ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1),
+      ex.CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: 1),
+    );
+
+    const List<String> headers = [
+      'SL',
+      'STAFF NAME',
+      'CONTACT PERSON',
+      'CONTACT NO',
+      'STATE',
+      'DIST',
+      'CD',
+      'PC',
+      'INV NO',
+      'INV AMT',
+    ];
+
+    for (int column = 0; column < headers.length; column++) {
+      writeCell(column, 2, headers[column], headerStyle);
+    }
+
+    // Keep at least 10 numbered rows just like the supplied template.
+    final int bodyRowCount = filteredDsrList.length < 10
+        ? 10
+        : filteredDsrList.length;
+
+    int totalCallSeconds = 0;
+    int totalProductiveCalls = 0;
+    double totalInvoiceAmount = 0.0;
+
+    for (int i = 0; i < bodyRowCount; i++) {
+      final int rowIndex = i + 3;
+
+      if (i < filteredDsrList.length) {
+        final Map<String, dynamic> item = filteredDsrList[i];
+
+        final String staffName = cleanExcelText(item['created_by_name']);
+        final String customerName = cleanExcelText(item['customer_name']);
+        final String phone = cleanExcelText(item['phone']);
+        final String state = cleanExcelText(item['state_name']);
+        final String district = cleanExcelText(item['district_name']);
+        final String duration = cleanExcelText(item['call_duration']);
+        final String callStatus =
+            cleanExcelText(item['call_status']).toLowerCase();
+        final bool isProductive = callStatus == 'productive';
+        final String invoiceNumber = cleanExcelText(item['invoice_no']);
+        final double invoiceAmount = double.tryParse(
+              cleanExcelText(item['invoice_amount']).replaceAll(',', ''),
+            ) ??
+            0.0;
+
+        if (duration.isNotEmpty) {
+          totalCallSeconds += _durationToSeconds(duration);
+        }
+        if (isProductive) {
+          totalProductiveCalls++;
+        }
+        totalInvoiceAmount += invoiceAmount;
+
+        writeCell(0, rowIndex, '${i + 1}', serialStyle);
+        writeCell(1, rowIndex, staffName, bodyLeftStyle);
+        writeCell(2, rowIndex, customerName, bodyLeftStyle);
+        writeCell(3, rowIndex, phone, bodyCenterStyle);
+        writeCell(4, rowIndex, state, bodyCenterStyle);
+        writeCell(5, rowIndex, district, bodyCenterStyle);
+        writeCell(6, rowIndex, duration, bodyCenterStyle);
+        writeCell(
+          7,
+          rowIndex,
+          isProductive ? 'Productive' : '',
+          bodyCenterStyle,
+        );
+        writeCell(8, rowIndex, invoiceNumber, bodyCenterStyle);
+        writeCell(
+          9,
+          rowIndex,
+          invoiceAmount > 0 ? invoiceAmount.toStringAsFixed(2) : '',
+          amountStyle,
+        );
+      } else {
+        writeCell(0, rowIndex, '${i + 1}', serialStyle);
+        for (int column = 1; column <= 9; column++) {
+          writeCell(column, rowIndex, '', bodyCenterStyle);
+        }
+      }
+    }
+
+    final int totalRowIndex = bodyRowCount + 3;
+
+    for (int column = 0; column <= 9; column++) {
+      writeCell(
+        column,
+        totalRowIndex,
+        '',
+        column == 0 ? totalLabelStyle : totalValueStyle,
+      );
+    }
+
+    writeCell(0, totalRowIndex, 'TOTAL', totalLabelStyle);
+    writeCell(
+      6,
+      totalRowIndex,
+      _secondsToDuration(totalCallSeconds),
+      totalValueStyle,
+    );
+    writeCell(
+      7,
+      totalRowIndex,
+      totalProductiveCalls.toString(),
+      totalValueStyle,
+    );
+    writeCell(
+      9,
+      totalRowIndex,
+      totalInvoiceAmount.toStringAsFixed(2),
+      totalValueStyle,
+    );
+
+    final List<int>? fileBytes = excel.encode();
+    if (fileBytes == null) {
+      throw Exception('Unable to generate Excel file');
+    }
+
+    final Directory directory = await getApplicationDocumentsDirectory();
+
+    String safeTeamForFile = teamName
+        .replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (safeTeamForFile.isEmpty || safeTeamForFile == '-') {
+      safeTeamForFile = 'Team';
+    }
+
+    final String fileDate = formatDateOnly(DateTime.now());
+    final String fileName =
+        'BDO Sales Report - $safeTeamForFile - $fileDate.xlsx';
+    final String filePath = '${directory.path}/$fileName';
+
+    final File file = File(filePath);
+    await file.writeAsBytes(fileBytes, flush: true);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.green,
+        content: Text('$fileName generated successfully'),
+      ),
+    );
+
+    await Share.shareXFiles(
+      [
+        XFile(
+          file.path,
+          mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
+      ],
+    );
+  } catch (e, stackTrace) {
+    print('BDO SALES REPORT EXPORT ERROR: $e');
+    print(stackTrace);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red,
+        content: Text('BDO Sales Report export failed: $e'),
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        isBdoSalesExporting = false;
+      });
+    }
+  }
+}
+
 Future<void> exportToExcel() async {
   try {
     if (filteredDsrList.isEmpty) {
@@ -3911,6 +4337,30 @@ Future<void> exportToExcel() async {
                   size: 20,
                 ),
               ),
+            ),
+            const SizedBox(width: 2),
+            IconButton(
+              onPressed:
+                  isBdoSalesExporting ? null : exportBdoSalesReportExcel,
+              tooltip: "Download BDO Sales Report",
+              icon: isBdoSalesExporting
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.table_view_outlined,
+                        color: Colors.redAccent,
+                        size: 20,
+                      ),
+                    ),
             ),
             const SizedBox(width: 2),
             IconButton(

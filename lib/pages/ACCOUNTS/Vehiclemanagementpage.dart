@@ -58,6 +58,24 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
   final TextEditingController kmSearchController =
       TextEditingController();
 
+  final TextEditingController serviceTypeController =
+      TextEditingController();
+
+  final TextEditingController serviceCenterController =
+      TextEditingController();
+
+  final TextEditingController serviceOdometerController =
+      TextEditingController();
+
+  final TextEditingController serviceCostController =
+      TextEditingController();
+
+  final TextEditingController serviceDescriptionController =
+      TextEditingController();
+
+  final TextEditingController serviceSearchController =
+      TextEditingController();
+
   // ===========================================================================
   // DATA
   // ===========================================================================
@@ -68,15 +86,29 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
   List<Map<String, dynamic>> filteredVehicles = [];
   List<Map<String, dynamic>> filteredKmEntries = [];
 
+  List<Map<String, dynamic>> serviceHistory = [];
+  List<Map<String, dynamic>> filteredServiceHistory = [];
+
+  Map<String, dynamic> kmSummary = {};
+  List<Map<String, dynamic>> kmVehicleSummary = [];
+
+  int kmTotalCount = 0;
+  String? kmNextUrl;
+  String? kmPreviousUrl;
+  int kmCurrentPage = 1;
+
   // ===========================================================================
   // PAGE STATE
   // ===========================================================================
 
   bool isVehicleLoading = true;
   bool isKmLoading = true;
+  bool isKmPageLoading = false;
+  bool isServiceLoading = true;
 
   bool isVehicleSubmitting = false;
   bool isKmSubmitting = false;
+  bool isServiceSubmitting = false;
 
   int selectedTab = 0;
 
@@ -84,7 +116,12 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
   int? editingVehicleId;
   int? editingKmEntryId;
 
+  int? selectedServiceVehicleId;
+  int? editingServiceHistoryId;
+
   DateTime selectedDate = DateTime.now();
+  DateTime? selectedServiceDate;
+  DateTime? selectedNextServiceDate;
 
   final ImagePicker _imagePicker = ImagePicker();
   XFile? selectedVehicleImage;
@@ -101,6 +138,7 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
 
     getVehicles();
     getKmEntries();
+    getServiceHistory();
 
     startingKmController.addListener(calculateUsedKm);
     endKmController.addListener(calculateUsedKm);
@@ -126,6 +164,13 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
 
     vehicleSearchController.dispose();
     kmSearchController.dispose();
+
+    serviceTypeController.dispose();
+    serviceCenterController.dispose();
+    serviceOdometerController.dispose();
+    serviceCostController.dispose();
+    serviceDescriptionController.dispose();
+    serviceSearchController.dispose();
 
     super.dispose();
   }
@@ -1103,22 +1148,39 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
   // GET api/vehicle/km/entry/
   // ===========================================================================
 
-  Future<void> getKmEntries() async {
+  Future<void> getKmEntries({
+    String? pageUrl,
+    bool showMainLoader = true,
+  }) async {
     if (!mounted) return;
 
-    setState(() {
-      isKmLoading = true;
-    });
+    if (showMainLoader) {
+      setState(() {
+        isKmLoading = true;
+      });
+    } else {
+      setState(() {
+        isKmPageLoading = true;
+      });
+    }
 
     try {
-      final token = await gettokenFromPrefs();
+      final String? token = await gettokenFromPrefs();
 
-      final String url =
-          '$api/api/vehicle/km/entry/';
+      if (token == null || token.trim().isEmpty) {
+        throw Exception(
+          'Authentication token not found.',
+        );
+      }
+
+      final String url = pageUrl == null || pageUrl.trim().isEmpty
+          ? '$api/api/vehicle/km/entry/'
+          : resolvePaginationUrl(pageUrl);
 
       final Map<String, String> headers = {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       };
 
       debugPrint(
@@ -1131,7 +1193,7 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
         'GET KM ENTRIES HEADERS: $headers',
       );
 
-      final response = await http.get(
+      final http.Response response = await http.get(
         Uri.parse(url),
         headers: headers,
       );
@@ -1153,85 +1215,169 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
       );
 
       if (response.statusCode == 200) {
-        final parsed = jsonDecode(response.body);
+        final dynamic parsed = jsonDecode(
+          response.body,
+        );
 
         List<dynamic> entryData = [];
+        Map<String, dynamic> summaryData = {};
+        List<dynamic> vehicleSummaryData = [];
 
-        if (parsed is List) {
-          entryData = parsed;
-        } else if (parsed is Map<String, dynamic>) {
-          if (parsed['results'] is List) {
-            entryData = parsed['results'];
-          } else if (parsed['data'] is List) {
-            entryData = parsed['data'];
-          } else if (parsed['entries'] is List) {
-            entryData = parsed['entries'];
+        int totalCount = 0;
+        String? nextUrl;
+        String? previousUrl;
+
+        if (parsed is Map<String, dynamic>) {
+          totalCount = parseInt(
+                parsed['count'],
+              ) ??
+              0;
+
+          nextUrl = parsed['next']?.toString();
+          previousUrl = parsed['previous']?.toString();
+
+          final dynamic results = parsed['results'];
+
+          if (results is Map) {
+            final Map<String, dynamic> resultMap =
+                Map<String, dynamic>.from(
+              results,
+            );
+
+            if (resultMap['data'] is List) {
+              entryData = List<dynamic>.from(
+                resultMap['data'],
+              );
+            }
+
+            if (resultMap['summary'] is Map) {
+              summaryData = Map<String, dynamic>.from(
+                resultMap['summary'],
+              );
+            }
+
+            if (resultMap['vehicle_summary'] is List) {
+              vehicleSummaryData = List<dynamic>.from(
+                resultMap['vehicle_summary'],
+              );
+            }
+
+            debugPrint(
+              'GET KM ENTRIES API STATUS: ${resultMap['status']}',
+            );
+            debugPrint(
+              'GET KM ENTRIES API MESSAGE: ${resultMap['message']}',
+            );
+            debugPrint(
+              'GET KM ENTRIES FILTERS: ${resultMap['filters']}',
+            );
+            debugPrint(
+              'GET KM ENTRIES SUMMARY: $summaryData',
+            );
+            debugPrint(
+              'GET KM ENTRIES VEHICLE SUMMARY: $vehicleSummaryData',
+            );
+          } else if (results is List) {
+            // Backward-compatible fallback only.
+            entryData = List<dynamic>.from(
+              results,
+            );
           }
+        } else if (parsed is List) {
+          // Backward-compatible fallback only.
+          entryData = parsed;
+          totalCount = parsed.length;
         }
 
-        List<Map<String, dynamic>> entryList = [];
+        final List<Map<String, dynamic>> entryList = [];
 
-        for (var item in entryData) {
-          if (item is Map<String, dynamic>) {
-            dynamic vehicleData = item['vehicle'];
-
-            int? vehicleId;
-            String vehicleName = '';
-            String registrationNumber = '';
-
-            if (vehicleData is Map<String, dynamic>) {
-              vehicleId = parseInt(
-                vehicleData['id'],
-              );
-
-              vehicleName =
-                  vehicleData['name']?.toString() ?? '';
-
-              registrationNumber =
-                  vehicleData['registration_number']
-                          ?.toString() ??
-                      '';
-            } else {
-              vehicleId = parseInt(
-                vehicleData,
-              );
-            }
-
-            if (vehicleName.isEmpty &&
-                item['vehicle_name'] != null) {
-              vehicleName =
-                  item['vehicle_name'].toString();
-            }
-
-            if (registrationNumber.isEmpty &&
-                item['vehicle_registration_number'] != null) {
-              registrationNumber =
-                  item['vehicle_registration_number']
-                      .toString();
-            }
-
-            entryList.add({
-              'id': item['id'],
-              'date': item['date']?.toString() ?? '',
-              'vehicle': vehicleId,
-              'vehicle_name': vehicleName,
-              'registration_number': registrationNumber,
-              'starting_km':
-                  parseDouble(item['starting_km']),
-              'end_km': parseDouble(item['end_km']),
-              'used_km': parseDouble(item['used_km']),
-              'petrol': parseDouble(item['petrol']),
-            });
+        for (final dynamic itemValue in entryData) {
+          if (itemValue is! Map) {
+            continue;
           }
+
+          final Map<String, dynamic> item =
+              Map<String, dynamic>.from(
+            itemValue,
+          );
+
+          final dynamic vehicleData = item['vehicle'];
+
+          int? vehicleId;
+          String vehicleName = '';
+          String registrationNumber = '';
+
+          if (vehicleData is Map) {
+            final Map<String, dynamic> vehicleMap =
+                Map<String, dynamic>.from(
+              vehicleData,
+            );
+
+            vehicleId = parseInt(
+              vehicleMap['id'],
+            );
+
+            vehicleName =
+                vehicleMap['name']?.toString() ?? '';
+
+            registrationNumber =
+                vehicleMap['registration_number']
+                        ?.toString() ??
+                    '';
+          } else {
+            vehicleId = parseInt(
+              vehicleData,
+            );
+          }
+
+          if (vehicleName.trim().isEmpty) {
+            vehicleName =
+                item['vehicle_name']?.toString() ?? '';
+          }
+
+          if (registrationNumber.trim().isEmpty) {
+            registrationNumber =
+                item['registration_number']?.toString() ??
+                    item['vehicle_registration_number']
+                        ?.toString() ??
+                    '';
+          }
+
+          entryList.add({
+            'id': item['id'],
+            'date': item['date']?.toString() ?? '',
+            'vehicle': vehicleId,
+            'vehicle_name': vehicleName,
+            'registration_number': registrationNumber,
+            'starting_km': parseDouble(
+              item['starting_km'],
+            ),
+            'end_km': parseDouble(
+              item['end_km'],
+            ),
+            'used_km': parseDouble(
+              item['used_km'],
+            ),
+            'petrol': parseDouble(
+              item['petrol'],
+            ),
+            'created_by': item['created_by'],
+            'created_by_name':
+                item['created_by_name']?.toString() ?? '',
+            'created_at':
+                item['created_at']?.toString() ?? '',
+            'updated_at':
+                item['updated_at']?.toString() ?? '',
+          });
         }
 
         entryList.sort(
           (a, b) {
-            DateTime? dateA = DateTime.tryParse(
+            final DateTime? dateA = DateTime.tryParse(
               a['date']?.toString() ?? '',
             );
 
-            DateTime? dateB = DateTime.tryParse(
+            final DateTime? dateB = DateTime.tryParse(
               b['date']?.toString() ?? '',
             );
 
@@ -1239,12 +1385,30 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
               return dateB.compareTo(dateA);
             }
 
-            return parseInt(b['id'])
-                    ?.compareTo(
-                      parseInt(a['id']) ?? 0,
-                    ) ??
-                0;
+            return (parseInt(b['id']) ?? 0).compareTo(
+              parseInt(a['id']) ?? 0,
+            );
           },
+        );
+
+        final List<Map<String, dynamic>>
+            parsedVehicleSummary = [];
+
+        for (final dynamic summaryItem
+            in vehicleSummaryData) {
+          if (summaryItem is Map) {
+            parsedVehicleSummary.add(
+              Map<String, dynamic>.from(
+                summaryItem,
+              ),
+            );
+          }
+        }
+
+        final int resolvedPage =
+            getPageNumberFromUrl(
+          url,
+          fallback: pageUrl == null ? 1 : kmCurrentPage,
         );
 
         if (!mounted) return;
@@ -1252,33 +1416,143 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
         setState(() {
           kmEntries = entryList;
           filteredKmEntries = entryList;
+
+          kmTotalCount = totalCount;
+          kmNextUrl = normalizeNullableUrl(
+            nextUrl,
+          );
+          kmPreviousUrl = normalizeNullableUrl(
+            previousUrl,
+          );
+          kmCurrentPage = resolvedPage;
+
+          kmSummary = summaryData;
+          kmVehicleSummary = parsedVehicleSummary;
+
           isKmLoading = false;
+          isKmPageLoading = false;
         });
+
+        if (kmSearchController.text.trim().isNotEmpty) {
+          searchKmEntries(
+            kmSearchController.text,
+          );
+        }
       } else {
         if (!mounted) return;
 
         setState(() {
           isKmLoading = false;
+          isKmPageLoading = false;
         });
 
         showErrorSnackBar(
           getApiErrorMessage(response),
         );
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
       debugPrint(
         'GET KM ENTRIES ERROR: $error',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
       );
 
       if (!mounted) return;
 
       setState(() {
         isKmLoading = false;
+        isKmPageLoading = false;
       });
 
       showErrorSnackBar(
-        'Unable to load KM entries. Please try again.',
+        error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
       );
+    }
+  }
+
+  Future<void> loadNextKmPage() async {
+    if (isKmLoading ||
+        isKmPageLoading ||
+        kmNextUrl == null) {
+      return;
+    }
+
+    await getKmEntries(
+      pageUrl: kmNextUrl,
+      showMainLoader: false,
+    );
+  }
+
+  Future<void> loadPreviousKmPage() async {
+    if (isKmLoading ||
+        isKmPageLoading ||
+        kmPreviousUrl == null) {
+      return;
+    }
+
+    await getKmEntries(
+      pageUrl: kmPreviousUrl,
+      showMainLoader: false,
+    );
+  }
+
+  String? normalizeNullableUrl(
+    dynamic value,
+  ) {
+    final String text =
+        value?.toString().trim() ?? '';
+
+    if (text.isEmpty ||
+        text.toLowerCase() == 'null') {
+      return null;
+    }
+
+    return text;
+  }
+
+  String resolvePaginationUrl(
+    String value,
+  ) {
+    final String url = value.trim();
+
+    if (url.startsWith('http://') ||
+        url.startsWith('https://')) {
+      return url;
+    }
+
+    final String base = api.endsWith('/')
+        ? api.substring(
+            0,
+            api.length - 1,
+          )
+        : api;
+
+    if (url.startsWith('/')) {
+      return '$base$url';
+    }
+
+    return '$base/$url';
+  }
+
+  int getPageNumberFromUrl(
+    String url, {
+    int fallback = 1,
+  }) {
+    try {
+      final Uri uri = Uri.parse(
+        url,
+      );
+
+      return int.tryParse(
+            uri.queryParameters['page'] ?? '',
+          ) ??
+          fallback;
+    } catch (_) {
+      return fallback;
     }
   }
 
@@ -3082,6 +3356,2464 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
     });
   }
 
+
+
+  // ===========================================================================
+  // GET SINGLE / LATEST KM ENTRY BY VEHICLE
+  //
+  // API:
+  // GET api/vehicle/km/entry/single/?vehicle_id=<vehicle_id>
+  //
+  // Used by Service edit/open flow to resolve the selected vehicle and
+  // prefill the latest odometer KM without depending on a service-history ID.
+  // ===========================================================================
+
+  Future<Map<String, dynamic>?> getSingleKmEntryByVehicle(
+    int vehicleId,
+  ) async {
+    try {
+      final String? token =
+          await gettokenFromPrefs();
+
+      if (token == null ||
+          token.trim().isEmpty) {
+        showErrorSnackBar(
+          'Authentication token not found.',
+        );
+        return null;
+      }
+
+      final Uri uri = Uri.parse(
+        '$api/api/vehicle/km/entry/single/',
+      ).replace(
+        queryParameters: {
+          'vehicle_id': vehicleId.toString(),
+        },
+      );
+
+      final Map<String, String> headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      debugPrint(
+        '=========== GET SINGLE KM BY VEHICLE REQUEST ===========',
+      );
+      debugPrint(
+        'GET SINGLE KM URL: $uri',
+      );
+      debugPrint(
+        'GET SINGLE KM HEADERS: $headers',
+      );
+
+      final http.Response response =
+          await http.get(
+        uri,
+        headers: headers,
+      );
+
+      debugPrint(
+        '========== GET SINGLE KM BY VEHICLE RESPONSE ===========',
+      );
+      debugPrint(
+        'GET SINGLE KM STATUS: ${response.statusCode}',
+      );
+      debugPrint(
+        'GET SINGLE KM HEADERS RESPONSE: ${response.headers}',
+      );
+      debugPrint(
+        'GET SINGLE KM BODY: ${response.body}',
+      );
+      debugPrint(
+        '=======================================================',
+      );
+
+      if (response.statusCode != 200) {
+        showErrorSnackBar(
+          getApiErrorMessage(response),
+        );
+        return null;
+      }
+
+      final dynamic parsed =
+          jsonDecode(
+        response.body,
+      );
+
+      Map<String, dynamic>? rawEntry;
+
+      if (parsed is Map) {
+        final Map<String, dynamic> map =
+            Map<String, dynamic>.from(
+          parsed,
+        );
+
+        if (map['data'] is Map) {
+          rawEntry =
+              Map<String, dynamic>.from(
+            map['data'],
+          );
+        } else if (map['result'] is Map) {
+          rawEntry =
+              Map<String, dynamic>.from(
+            map['result'],
+          );
+        } else if (map['results'] is Map) {
+          final Map<String, dynamic> results =
+              Map<String, dynamic>.from(
+            map['results'],
+          );
+
+          if (results['data'] is Map) {
+            rawEntry =
+                Map<String, dynamic>.from(
+              results['data'],
+            );
+          } else if (results.containsKey(
+            'vehicle',
+          )) {
+            rawEntry = results;
+          }
+        } else if (map.containsKey(
+              'vehicle',
+            ) ||
+            map.containsKey(
+              'vehicle_id',
+            )) {
+          rawEntry = map;
+        }
+      }
+
+      if (rawEntry == null) {
+        return null;
+      }
+
+      final dynamic vehicleData =
+          rawEntry['vehicle'];
+
+      int? resolvedVehicleId;
+      String vehicleName = '';
+      String registrationNumber = '';
+
+      if (vehicleData is Map) {
+        final Map<String, dynamic>
+            vehicleMap =
+            Map<String, dynamic>.from(
+          vehicleData,
+        );
+
+        resolvedVehicleId =
+            parseInt(
+          vehicleMap['id'],
+        );
+
+        vehicleName =
+            vehicleMap['name']
+                    ?.toString() ??
+                '';
+
+        registrationNumber =
+            vehicleMap[
+                        'registration_number']
+                    ?.toString() ??
+                '';
+      } else {
+        resolvedVehicleId =
+            parseInt(
+          vehicleData,
+        );
+      }
+
+      resolvedVehicleId ??=
+          parseInt(
+        rawEntry['vehicle_id'],
+      );
+
+      resolvedVehicleId ??=
+          vehicleId;
+
+      if (vehicleName.trim().isEmpty) {
+        vehicleName =
+            rawEntry['vehicle_name']
+                    ?.toString() ??
+                '';
+      }
+
+      if (registrationNumber
+          .trim()
+          .isEmpty) {
+        registrationNumber =
+            rawEntry[
+                        'registration_number']
+                    ?.toString() ??
+                rawEntry[
+                            'vehicle_registration_number']
+                        ?.toString() ??
+                    '';
+      }
+
+      return {
+        'id': rawEntry['id'],
+        'vehicle': resolvedVehicleId,
+        'vehicle_name': vehicleName,
+        'registration_number':
+            registrationNumber,
+        'date':
+            rawEntry['date']
+                    ?.toString() ??
+                '',
+        'starting_km':
+            parseDouble(
+          rawEntry['starting_km'],
+        ),
+        'end_km':
+            parseDouble(
+          rawEntry['end_km'],
+        ),
+        'used_km':
+            parseDouble(
+          rawEntry['used_km'],
+        ),
+        'petrol':
+            parseDouble(
+          rawEntry['petrol'],
+        ),
+        'created_by':
+            rawEntry['created_by'],
+        'created_by_name':
+            rawEntry['created_by_name']
+                    ?.toString() ??
+                '',
+        'created_at':
+            rawEntry['created_at']
+                    ?.toString() ??
+                '',
+        'updated_at':
+            rawEntry['updated_at']
+                    ?.toString() ??
+                '',
+      };
+    } catch (error, stackTrace) {
+      debugPrint(
+        'GET SINGLE KM BY VEHICLE ERROR: $error',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      showErrorSnackBar(
+        'Unable to load latest vehicle KM details.',
+      );
+
+      return null;
+    }
+  }
+
+  int? getServiceVehicleId(
+    Map<String, dynamic> service,
+  ) {
+    int? vehicleId =
+        parseInt(
+      service['vehicle_id'],
+    );
+
+    vehicleId ??=
+        parseInt(
+      service['vehicle'],
+    );
+
+    if (vehicleId != null) {
+      return vehicleId;
+    }
+
+    final String registration =
+        getServiceVehicleRegistration(
+      service,
+    ).trim().toLowerCase();
+
+    final String vehicleName =
+        getServiceVehicleName(
+      service,
+    ).trim().toLowerCase();
+
+    for (final Map<String, dynamic> vehicle
+        in vehicles) {
+      final String currentRegistration =
+          vehicle['registration_number']
+                  ?.toString()
+                  .trim()
+                  .toLowerCase() ??
+              '';
+
+      final String currentName =
+          vehicle['name']
+                  ?.toString()
+                  .trim()
+                  .toLowerCase() ??
+              '';
+
+      if (registration.isNotEmpty &&
+          currentRegistration ==
+              registration) {
+        return parseInt(
+          vehicle['id'],
+        );
+      }
+
+      if (vehicleName.isNotEmpty &&
+          currentName ==
+              vehicleName) {
+        return parseInt(
+          vehicle['id'],
+        );
+      }
+    }
+
+    return null;
+  }
+
+  // ===========================================================================
+  // VEHICLE SERVICE HISTORY
+  //
+  // GET / POST:
+  // api/vehicle/service/history/
+  //
+  // GET / PUT:
+  // api/vehicle/service/history/edit/<pk>/
+  //
+  // fields:
+  // vehicle
+  // service_date
+  // service_type
+  // service_center
+  // odometer_km
+  // service_cost
+  // description
+  // next_service_date
+  // ===========================================================================
+
+  bool isServiceHistoryRecord(
+    Map<String, dynamic> item,
+  ) {
+    const List<String> serviceKeys = [
+      'service_date',
+      'service_type',
+      'service_center',
+      'odometer_km',
+      'service_cost',
+      'description',
+      'next_service_date',
+    ];
+
+    return serviceKeys.any(
+      (key) => item.containsKey(key),
+    );
+  }
+
+  List<dynamic> extractServiceHistoryData(
+    dynamic parsed,
+  ) {
+    final List<Map<String, dynamic>> records = [];
+
+    void walk(dynamic value) {
+      if (value is List) {
+        for (final dynamic item in value) {
+          walk(item);
+        }
+        return;
+      }
+
+      if (value is! Map) {
+        return;
+      }
+
+      final Map<String, dynamic> map =
+          Map<String, dynamic>.from(
+        value,
+      );
+
+      if (isServiceHistoryRecord(map)) {
+        records.add(map);
+        return;
+      }
+
+      // Prefer known containers first.
+      const List<String> preferredKeys = [
+        'service_history',
+        'services',
+        'results',
+        'data',
+        'items',
+      ];
+
+      bool preferredFound = false;
+
+      for (final String key in preferredKeys) {
+        if (map.containsKey(key)) {
+          preferredFound = true;
+          walk(
+            map[key],
+          );
+        }
+      }
+
+      // If the backend uses another wrapper key, inspect nested values,
+      // but only service-history shaped maps will be accepted.
+      if (!preferredFound) {
+        for (final dynamic child
+            in map.values) {
+          if (child is Map ||
+              child is List) {
+            walk(
+              child,
+            );
+          }
+        }
+      }
+    }
+
+    walk(
+      parsed,
+    );
+
+    debugPrint(
+      'SERVICE HISTORY EXTRACTED RECORD COUNT: ${records.length}',
+    );
+
+    for (int index = 0;
+        index < records.length;
+        index++) {
+      debugPrint(
+        'SERVICE HISTORY RAW RECORD [$index]: ${records[index]}',
+      );
+    }
+
+    return records;
+  }
+
+  Map<String, dynamic>? extractServiceHistoryDetail(
+    dynamic parsed,
+  ) {
+    debugPrint(
+      'SERVICE DETAIL RAW PARSED: $parsed',
+    );
+
+    Map<String, dynamic>? found;
+
+    void walk(dynamic value) {
+      if (found != null) {
+        return;
+      }
+
+      if (value is List) {
+        for (final dynamic item in value) {
+          walk(
+            item,
+          );
+
+          if (found != null) {
+            return;
+          }
+        }
+        return;
+      }
+
+      if (value is! Map) {
+        return;
+      }
+
+      final Map<String, dynamic> map =
+          Map<String, dynamic>.from(
+        value,
+      );
+
+      if (isServiceHistoryRecord(map)) {
+        found = map;
+        return;
+      }
+
+      const List<String> preferredKeys = [
+        'service',
+        'service_history',
+        'result',
+        'results',
+        'data',
+        'item',
+      ];
+
+      for (final String key in preferredKeys) {
+        if (map.containsKey(key)) {
+          walk(
+            map[key],
+          );
+
+          if (found != null) {
+            return;
+          }
+        }
+      }
+
+      for (final dynamic child
+          in map.values) {
+        if (child is Map ||
+            child is List) {
+          walk(
+            child,
+          );
+
+          if (found != null) {
+            return;
+          }
+        }
+      }
+    }
+
+    walk(
+      parsed,
+    );
+
+    debugPrint(
+      'SERVICE DETAIL EXTRACTED: $found',
+    );
+
+    return found;
+  }
+
+  Map<String, dynamic> normalizeServiceHistoryItem(
+    Map<String, dynamic> item,
+  ) {
+    debugPrint(
+      'NORMALIZE SERVICE HISTORY INPUT: $item',
+    );
+
+    dynamic vehicleData =
+        item['vehicle'];
+
+    int? vehicleId =
+        parseInt(
+      item['vehicle_id'],
+    );
+
+    String vehicleName =
+        item['vehicle_name']?.toString() ?? '';
+
+    String registrationNumber =
+        item['registration_number']
+                ?.toString() ??
+            item['vehicle_registration_number']
+                ?.toString() ??
+            '';
+
+    if (vehicleData is Map) {
+      final Map<String, dynamic> vehicleMap =
+          Map<String, dynamic>.from(
+        vehicleData,
+      );
+
+      vehicleId ??=
+          parseInt(
+        vehicleMap['id'],
+      );
+
+      if (vehicleName.trim().isEmpty) {
+        vehicleName =
+            vehicleMap['name']?.toString() ?? '';
+      }
+
+      if (registrationNumber.trim().isEmpty) {
+        registrationNumber =
+            vehicleMap['registration_number']
+                    ?.toString() ??
+                '';
+      }
+    } else {
+      vehicleId ??=
+          parseInt(
+        vehicleData,
+      );
+    }
+
+    final int? serviceId =
+        parseInt(
+          item['id'],
+        ) ??
+        parseInt(
+          item['service_id'],
+        ) ??
+        parseInt(
+          item['service_history_id'],
+        ) ??
+        parseInt(
+          item['pk'],
+        );
+
+    final Map<String, dynamic> normalized = {
+      'id': serviceId,
+      'vehicle_id': vehicleId,
+      'vehicle': vehicleId,
+      'vehicle_name': vehicleName,
+      'registration_number':
+          registrationNumber,
+      'service_date':
+          item['service_date']?.toString() ?? '',
+      'service_type':
+          item['service_type']?.toString() ?? '',
+      'service_center':
+          item['service_center']?.toString() ?? '',
+      'odometer_km':
+          parseInt(
+        item['odometer_km'],
+      ),
+      'service_cost':
+          item['service_cost'],
+      'description':
+          item['description']?.toString() ?? '',
+      'next_service_date':
+          item['next_service_date']?.toString() ?? '',
+      'created_by':
+          item['created_by'],
+      'created_by_name':
+          item['created_by_name']?.toString() ??
+              getCreatedByName(
+                item['created_by'],
+              ),
+      'created_at':
+          item['created_at']?.toString() ?? '',
+      'updated_at':
+          item['updated_at']?.toString() ?? '',
+    };
+
+    debugPrint(
+      'NORMALIZE SERVICE HISTORY OUTPUT: $normalized',
+    );
+
+    return normalized;
+  }
+
+  Future<void> getServiceHistory() async {
+    if (!mounted) return;
+
+    setState(() {
+      isServiceLoading = true;
+    });
+
+    try {
+      final String? token =
+          await gettokenFromPrefs();
+
+      if (token == null ||
+          token.trim().isEmpty) {
+        throw Exception(
+          'Authentication token not found.',
+        );
+      }
+
+      final String url =
+          '$api/api/vehicle/service/history/';
+
+      final Map<String, String> headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      debugPrint(
+        '============= GET SERVICE HISTORY REQUEST =============',
+      );
+      debugPrint(
+        'GET SERVICE HISTORY URL: $url',
+      );
+      debugPrint(
+        'GET SERVICE HISTORY HEADERS: $headers',
+      );
+
+      final http.Response response =
+          await http.get(
+        Uri.parse(url),
+        headers: headers,
+      );
+
+      debugPrint(
+        '============= GET SERVICE HISTORY RESPONSE ============',
+      );
+      debugPrint(
+        'GET SERVICE HISTORY STATUS: ${response.statusCode}',
+      );
+      debugPrint(
+        'GET SERVICE HISTORY HEADERS RESPONSE: ${response.headers}',
+      );
+      debugPrint(
+        'GET SERVICE HISTORY BODY: ${response.body}',
+      );
+      debugPrint(
+        '=======================================================',
+      );
+
+      if (response.statusCode != 200) {
+        if (!mounted) return;
+
+        setState(() {
+          isServiceLoading = false;
+        });
+
+        showErrorSnackBar(
+          getApiErrorMessage(response),
+        );
+        return;
+      }
+
+      final dynamic parsed = jsonDecode(
+        response.body,
+      );
+
+      debugPrint(
+        'GET SERVICE HISTORY PARSED TYPE: ${parsed.runtimeType}',
+      );
+      debugPrint(
+        'GET SERVICE HISTORY PARSED VALUE: $parsed',
+      );
+
+      final List<dynamic> rawList =
+          extractServiceHistoryData(
+        parsed,
+      );
+
+      final List<Map<String, dynamic>>
+          serviceList = [];
+
+      for (final dynamic value in rawList) {
+        if (value is Map) {
+          serviceList.add(
+            normalizeServiceHistoryItem(
+              Map<String, dynamic>.from(
+                value,
+              ),
+            ),
+          );
+        }
+      }
+
+      serviceList.sort(
+        (a, b) {
+          final DateTime? dateA =
+              DateTime.tryParse(
+            a['service_date']?.toString() ?? '',
+          );
+
+          final DateTime? dateB =
+              DateTime.tryParse(
+            b['service_date']?.toString() ?? '',
+          );
+
+          if (dateA != null &&
+              dateB != null) {
+            return dateB.compareTo(
+              dateA,
+            );
+          }
+
+          return (parseInt(b['id']) ?? 0)
+              .compareTo(
+            parseInt(a['id']) ?? 0,
+          );
+        },
+      );
+
+      debugPrint(
+        'GET SERVICE HISTORY NORMALIZED COUNT: ${serviceList.length}',
+      );
+
+      for (int index = 0;
+          index < serviceList.length;
+          index++) {
+        debugPrint(
+          'GET SERVICE HISTORY NORMALIZED [$index]: ${serviceList[index]}',
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        serviceHistory = serviceList;
+        filteredServiceHistory = serviceList;
+        isServiceLoading = false;
+      });
+
+      if (serviceSearchController.text
+          .trim()
+          .isNotEmpty) {
+        searchServiceHistory(
+          serviceSearchController.text,
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        'GET SERVICE HISTORY ERROR: $error',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        isServiceLoading = false;
+      });
+
+      showErrorSnackBar(
+        error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?>
+      getServiceHistoryDetail(
+    int serviceId,
+  ) async {
+    try {
+      final String? token =
+          await gettokenFromPrefs();
+
+      if (token == null ||
+          token.trim().isEmpty) {
+        showErrorSnackBar(
+          'Authentication token not found.',
+        );
+        return null;
+      }
+
+      final String url =
+          '$api/api/vehicle/service/history/edit/$serviceId/';
+
+      final Map<String, String> headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      debugPrint(
+        '========== GET SERVICE HISTORY DETAIL REQUEST =========',
+      );
+      debugPrint(
+        'GET SERVICE DETAIL URL: $url',
+      );
+      debugPrint(
+        'GET SERVICE DETAIL HEADERS: $headers',
+      );
+
+      final http.Response response =
+          await http.get(
+        Uri.parse(url),
+        headers: headers,
+      );
+
+      debugPrint(
+        '========== GET SERVICE HISTORY DETAIL RESPONSE ========',
+      );
+      debugPrint(
+        'GET SERVICE DETAIL STATUS: ${response.statusCode}',
+      );
+      debugPrint(
+        'GET SERVICE DETAIL HEADERS RESPONSE: ${response.headers}',
+      );
+      debugPrint(
+        'GET SERVICE DETAIL BODY: ${response.body}',
+      );
+      debugPrint(
+        '=======================================================',
+      );
+
+      if (response.statusCode != 200) {
+        showErrorSnackBar(
+          getApiErrorMessage(response),
+        );
+        return null;
+      }
+
+      final dynamic parsed = jsonDecode(
+        response.body,
+      );
+
+      debugPrint(
+        'GET SERVICE DETAIL PARSED TYPE: ${parsed.runtimeType}',
+      );
+      debugPrint(
+        'GET SERVICE DETAIL PARSED VALUE: $parsed',
+      );
+
+      final Map<String, dynamic>? detail =
+          extractServiceHistoryDetail(
+        parsed,
+      );
+
+      if (detail == null) {
+        showErrorSnackBar(
+          'Unable to load service details.',
+        );
+        return null;
+      }
+
+      return normalizeServiceHistoryItem(
+        detail,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        'GET SERVICE HISTORY DETAIL ERROR: $error',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      showErrorSnackBar(
+        'Unable to load service details. Please try again.',
+      );
+
+      return null;
+    }
+  }
+
+  Future<bool> addServiceHistory() async {
+    if (selectedServiceVehicleId == null) {
+      showErrorSnackBar(
+        'Please select vehicle.',
+      );
+      return false;
+    }
+
+    final String odometerText =
+        serviceOdometerController.text.trim();
+
+    final String costText =
+        serviceCostController.text.trim();
+
+    int? odometer;
+
+    if (odometerText.isNotEmpty) {
+      odometer = int.tryParse(
+        odometerText,
+      );
+
+      if (odometer == null ||
+          odometer < 0) {
+        showErrorSnackBar(
+          'Please enter a valid odometer KM.',
+        );
+        return false;
+      }
+    }
+
+    double? serviceCost;
+
+    if (costText.isNotEmpty) {
+      serviceCost = double.tryParse(
+        costText,
+      );
+
+      if (serviceCost == null ||
+          serviceCost < 0) {
+        showErrorSnackBar(
+          'Please enter a valid service cost.',
+        );
+        return false;
+      }
+    }
+
+    if (isServiceSubmitting) {
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        isServiceSubmitting = true;
+      });
+    }
+
+    try {
+      final String? token =
+          await gettokenFromPrefs();
+
+      if (token == null ||
+          token.trim().isEmpty) {
+        throw Exception(
+          'Authentication token not found.',
+        );
+      }
+
+      final String url =
+          '$api/api/vehicle/service/history/';
+
+      final Map<String, String> headers = {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      };
+
+      final Map<String, String> body = {
+        'vehicle':
+            selectedServiceVehicleId.toString(),
+        'service_date':
+            selectedServiceDate == null
+                ? ''
+                : DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(
+                    selectedServiceDate!,
+                  ),
+        'service_type':
+            serviceTypeController.text.trim(),
+        'service_center':
+            serviceCenterController.text.trim(),
+        'odometer_km':
+            odometer?.toString() ?? '',
+        'service_cost':
+            serviceCost == null
+                ? ''
+                : numberToApi(
+                    serviceCost,
+                  ),
+        'description':
+            serviceDescriptionController.text.trim(),
+        'next_service_date':
+            selectedNextServiceDate == null
+                ? ''
+                : DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(
+                    selectedNextServiceDate!,
+                  ),
+      };
+
+      debugPrint(
+        'ADD SERVICE FORM VALUES -> '
+        'vehicle=$selectedServiceVehicleId, '
+        'serviceDate=$selectedServiceDate, '
+        'serviceType=${serviceTypeController.text}, '
+        'serviceCenter=${serviceCenterController.text}, '
+        'odometer=${serviceOdometerController.text}, '
+        'cost=${serviceCostController.text}, '
+        'description=${serviceDescriptionController.text}, '
+        'nextServiceDate=$selectedNextServiceDate',
+      );
+
+      debugPrint(
+        '============= ADD SERVICE HISTORY REQUEST ==============',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY URL: $url',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY METHOD: POST',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY HEADERS: $headers',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY BODY: $body',
+      );
+
+      final http.Response response =
+          await http.post(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
+
+      debugPrint(
+        '============= ADD SERVICE HISTORY RESPONSE =============',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY STATUS: ${response.statusCode}',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY HEADERS RESPONSE: ${response.headers}',
+      );
+      debugPrint(
+        'ADD SERVICE HISTORY BODY RESPONSE: ${response.body}',
+      );
+      debugPrint(
+        '=======================================================',
+      );
+
+      if (response.statusCode == 200 ||
+          response.statusCode == 201) {
+        clearServiceForm();
+
+        await getServiceHistory();
+
+        if (!mounted) return true;
+
+        setState(() {
+          isServiceSubmitting = false;
+        });
+
+        showSuccessSnackBar(
+          'Vehicle service added successfully',
+        );
+
+        return true;
+      }
+
+      if (!mounted) return false;
+
+      setState(() {
+        isServiceSubmitting = false;
+      });
+
+      showErrorSnackBar(
+        getApiErrorMessage(response),
+      );
+
+      return false;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'ADD SERVICE HISTORY ERROR: $error',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      if (!mounted) return false;
+
+      setState(() {
+        isServiceSubmitting = false;
+      });
+
+      showErrorSnackBar(
+        error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+      );
+
+      return false;
+    }
+  }
+
+  Future<bool> updateServiceHistory() async {
+    if (editingServiceHistoryId == null) {
+      return false;
+    }
+
+    if (selectedServiceVehicleId == null) {
+      showErrorSnackBar(
+        'Please select vehicle.',
+      );
+      return false;
+    }
+
+    final String odometerText =
+        serviceOdometerController.text.trim();
+
+    final String costText =
+        serviceCostController.text.trim();
+
+    int? odometer;
+
+    if (odometerText.isNotEmpty) {
+      odometer = int.tryParse(
+        odometerText,
+      );
+
+      if (odometer == null ||
+          odometer < 0) {
+        showErrorSnackBar(
+          'Please enter a valid odometer KM.',
+        );
+        return false;
+      }
+    }
+
+    double? serviceCost;
+
+    if (costText.isNotEmpty) {
+      serviceCost = double.tryParse(
+        costText,
+      );
+
+      if (serviceCost == null ||
+          serviceCost < 0) {
+        showErrorSnackBar(
+          'Please enter a valid service cost.',
+        );
+        return false;
+      }
+    }
+
+    if (isServiceSubmitting) {
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        isServiceSubmitting = true;
+      });
+    }
+
+    try {
+      final String? token =
+          await gettokenFromPrefs();
+
+      if (token == null ||
+          token.trim().isEmpty) {
+        throw Exception(
+          'Authentication token not found.',
+        );
+      }
+
+      final String url =
+          '$api/api/vehicle/service/history/edit/$editingServiceHistoryId/';
+
+      final Map<String, String> headers = {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      };
+
+      final Map<String, String> body = {
+        'vehicle':
+            selectedServiceVehicleId.toString(),
+        'service_date':
+            selectedServiceDate == null
+                ? ''
+                : DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(
+                    selectedServiceDate!,
+                  ),
+        'service_type':
+            serviceTypeController.text.trim(),
+        'service_center':
+            serviceCenterController.text.trim(),
+        'odometer_km':
+            odometer?.toString() ?? '',
+        'service_cost':
+            serviceCost == null
+                ? ''
+                : numberToApi(
+                    serviceCost,
+                  ),
+        'description':
+            serviceDescriptionController.text.trim(),
+        'next_service_date':
+            selectedNextServiceDate == null
+                ? ''
+                : DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(
+                    selectedNextServiceDate!,
+                  ),
+      };
+
+      debugPrint(
+        'UPDATE SERVICE FORM VALUES -> '
+        'serviceId=$editingServiceHistoryId, '
+        'vehicle=$selectedServiceVehicleId, '
+        'serviceDate=$selectedServiceDate, '
+        'serviceType=${serviceTypeController.text}, '
+        'serviceCenter=${serviceCenterController.text}, '
+        'odometer=${serviceOdometerController.text}, '
+        'cost=${serviceCostController.text}, '
+        'description=${serviceDescriptionController.text}, '
+        'nextServiceDate=$selectedNextServiceDate',
+      );
+
+      debugPrint(
+        '============ UPDATE SERVICE HISTORY REQUEST ============',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY URL: $url',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY METHOD: PUT',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY HEADERS: $headers',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY BODY: $body',
+      );
+
+      final http.Response response =
+          await http.put(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
+
+      debugPrint(
+        '============ UPDATE SERVICE HISTORY RESPONSE ===========',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY STATUS: ${response.statusCode}',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY HEADERS RESPONSE: ${response.headers}',
+      );
+      debugPrint(
+        'UPDATE SERVICE HISTORY BODY RESPONSE: ${response.body}',
+      );
+      debugPrint(
+        '=======================================================',
+      );
+
+      if (response.statusCode == 200 ||
+          response.statusCode == 202) {
+        clearServiceForm();
+
+        await getServiceHistory();
+
+        if (!mounted) return true;
+
+        setState(() {
+          isServiceSubmitting = false;
+        });
+
+        showSuccessSnackBar(
+          'Vehicle service updated successfully',
+        );
+
+        return true;
+      }
+
+      if (!mounted) return false;
+
+      setState(() {
+        isServiceSubmitting = false;
+      });
+
+      showErrorSnackBar(
+        getApiErrorMessage(response),
+      );
+
+      return false;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'UPDATE SERVICE HISTORY ERROR: $error',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      if (!mounted) return false;
+
+      setState(() {
+        isServiceSubmitting = false;
+      });
+
+      showErrorSnackBar(
+        error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+      );
+
+      return false;
+    }
+  }
+
+  void searchServiceHistory(
+    String query,
+  ) {
+    if (query.trim().isEmpty) {
+      setState(() {
+        filteredServiceHistory =
+            serviceHistory;
+      });
+      return;
+    }
+
+    final String search =
+        query.toLowerCase().trim();
+
+    setState(() {
+      filteredServiceHistory =
+          serviceHistory.where(
+        (service) {
+          final String vehicleName =
+              getServiceVehicleName(
+            service,
+          ).toLowerCase();
+
+          final String registration =
+              getServiceVehicleRegistration(
+            service,
+          ).toLowerCase();
+
+          final String serviceType =
+              service['service_type']
+                      ?.toString()
+                      .toLowerCase() ??
+                  '';
+
+          final String serviceCenter =
+              service['service_center']
+                      ?.toString()
+                      .toLowerCase() ??
+                  '';
+
+          final String description =
+              service['description']
+                      ?.toString()
+                      .toLowerCase() ??
+                  '';
+
+          final String serviceDate =
+              service['service_date']
+                      ?.toString()
+                      .toLowerCase() ??
+                  '';
+
+          return vehicleName.contains(
+                search,
+              ) ||
+              registration.contains(
+                search,
+              ) ||
+              serviceType.contains(
+                search,
+              ) ||
+              serviceCenter.contains(
+                search,
+              ) ||
+              description.contains(
+                search,
+              ) ||
+              serviceDate.contains(
+                search,
+              );
+        },
+      ).toList();
+    });
+  }
+
+  String getServiceVehicleName(
+    Map<String, dynamic> service,
+  ) {
+    final String name =
+        service['vehicle_name']?.toString() ?? '';
+
+    if (name.trim().isNotEmpty) {
+      return name;
+    }
+
+    final Map<String, dynamic>? vehicle =
+        getVehicleById(
+      parseInt(
+        service['vehicle'],
+      ),
+    );
+
+    return vehicle?['name']?.toString() ??
+        'Unknown Vehicle';
+  }
+
+  String getServiceVehicleRegistration(
+    Map<String, dynamic> service,
+  ) {
+    final String registration =
+        service['registration_number']
+                ?.toString() ??
+            '';
+
+    if (registration.trim().isNotEmpty) {
+      return registration;
+    }
+
+    final Map<String, dynamic>? vehicle =
+        getVehicleById(
+      parseInt(
+        service['vehicle'],
+      ),
+    );
+
+    return vehicle?['registration_number']
+            ?.toString() ??
+        '';
+  }
+
+  void clearServiceForm() {
+    selectedServiceVehicleId = null;
+    selectedServiceDate = null;
+    selectedNextServiceDate = null;
+    editingServiceHistoryId = null;
+
+    serviceTypeController.clear();
+    serviceCenterController.clear();
+    serviceOdometerController.clear();
+    serviceCostController.clear();
+    serviceDescriptionController.clear();
+  }
+
+  Future<void> openServiceForm({
+    Map<String, dynamic>? service,
+  }) async {
+    if (vehicles.isEmpty) {
+      showErrorSnackBar(
+        'Please add a vehicle first.',
+      );
+      return;
+    }
+
+    debugPrint(
+      '================ OPEN SERVICE FORM =====================',
+    );
+    debugPrint(
+      'OPEN SERVICE FORM INPUT: $service',
+    );
+
+    final bool isEditing =
+        service != null;
+
+    Map<String, dynamic>? serviceForEdit;
+
+    if (isEditing) {
+      final int? serviceId =
+          parseInt(
+            service['id'],
+          ) ??
+          parseInt(
+            service['service_id'],
+          ) ??
+          parseInt(
+            service['service_history_id'],
+          ) ??
+          parseInt(
+            service['pk'],
+          );
+
+      debugPrint(
+        'OPEN SERVICE FORM RESOLVED SERVICE ID: $serviceId',
+      );
+
+      if (serviceId == null) {
+        debugPrint(
+          'OPEN SERVICE FORM ERROR: Service record has no valid ID.',
+        );
+
+        showErrorSnackBar(
+          'Service history ID missing in API response.',
+        );
+        return;
+      }
+
+      final Map<String, dynamic>? latestService =
+          await getServiceHistoryDetail(
+        serviceId,
+      );
+
+      if (!mounted) return;
+
+      debugPrint(
+        'OPEN SERVICE FORM FETCHED DETAIL: $latestService',
+      );
+
+      if (latestService == null) {
+        return;
+      }
+
+      serviceForEdit =
+          latestService;
+
+      editingServiceHistoryId =
+          serviceId;
+
+      selectedServiceVehicleId =
+          parseInt(
+            latestService['vehicle'],
+          ) ??
+          parseInt(
+            latestService['vehicle_id'],
+          );
+
+      selectedServiceDate =
+          DateTime.tryParse(
+        latestService['service_date']
+                ?.toString() ??
+            '',
+      );
+
+      selectedNextServiceDate =
+          DateTime.tryParse(
+        latestService['next_service_date']
+                ?.toString() ??
+            '',
+      );
+
+      serviceTypeController.text =
+          latestService['service_type']
+                  ?.toString() ??
+              '';
+
+      serviceCenterController.text =
+          latestService['service_center']
+                  ?.toString() ??
+              '';
+
+      final int? odometer =
+          parseInt(
+        latestService['odometer_km'],
+      );
+
+      serviceOdometerController.text =
+          odometer?.toString() ?? '';
+
+      final dynamic rawCost =
+          latestService['service_cost'];
+
+      if (rawCost == null ||
+          rawCost.toString().trim().isEmpty ||
+          rawCost.toString().toLowerCase() ==
+              'null') {
+        serviceCostController.clear();
+      } else {
+        serviceCostController.text =
+            formatNumber(
+          parseDouble(
+            rawCost,
+          ),
+        );
+      }
+
+      serviceDescriptionController.text =
+          latestService['description']
+                  ?.toString() ??
+              '';
+
+      debugPrint(
+        'OPEN SERVICE FORM PREFILL -> '
+        'serviceId=$editingServiceHistoryId, '
+        'vehicle=$selectedServiceVehicleId, '
+        'serviceDate=$selectedServiceDate, '
+        'serviceType=${serviceTypeController.text}, '
+        'serviceCenter=${serviceCenterController.text}, '
+        'odometer=${serviceOdometerController.text}, '
+        'cost=${serviceCostController.text}, '
+        'description=${serviceDescriptionController.text}, '
+        'nextServiceDate=$selectedNextServiceDate',
+      );
+    } else {
+      clearServiceForm();
+
+      selectedServiceDate =
+          DateTime.now();
+
+      if (vehicles.isNotEmpty) {
+        selectedServiceVehicleId =
+            parseInt(
+          vehicles.first['id'],
+        );
+      }
+
+      debugPrint(
+        'OPEN SERVICE FORM NEW -> '
+        'vehicle=$selectedServiceVehicleId, '
+        'serviceDate=$selectedServiceDate',
+      );
+    }
+
+    final Map<String, dynamic>?
+        editServiceData =
+        serviceForEdit;
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor:
+          Colors.transparent,
+      builder: (
+        bottomSheetContext,
+      ) {
+        return StatefulBuilder(
+          builder: (
+            context,
+            setModalState,
+          ) {
+            Widget dateSelector({
+              required String title,
+              required DateTime? value,
+              required ValueChanged<DateTime?>
+                  onChanged,
+              required bool allowClear,
+            }) {
+              return Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style:
+                        const TextStyle(
+                      fontSize: 13,
+                      fontWeight:
+                          FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 8,
+                  ),
+                  InkWell(
+                    onTap: () async {
+                      final DateTime?
+                          pickedDate =
+                          await showDatePicker(
+                        context: context,
+                        initialDate:
+                            value ??
+                                DateTime.now(),
+                        firstDate:
+                            DateTime(2000),
+                        lastDate:
+                            DateTime(2100),
+                      );
+
+                      if (pickedDate !=
+                          null) {
+                        setModalState(
+                          () {
+                            onChanged(
+                              pickedDate,
+                            );
+                          },
+                        );
+                      }
+                    },
+                    child: Container(
+                      height: 53,
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal: 15,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xFFF9FAFB,
+                        ),
+                        border:
+                            Border.all(
+                          color:
+                              const Color(
+                            0xFFE5E7EB,
+                          ),
+                        ),
+                        borderRadius:
+                            BorderRadius
+                                .circular(
+                          12,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons
+                                .calendar_today_outlined,
+                            size: 19,
+                            color:
+                                Color(
+                              0xFF6B7280,
+                            ),
+                          ),
+                          const SizedBox(
+                            width: 12,
+                          ),
+                          Expanded(
+                            child: Text(
+                              value == null
+                                  ? 'Select date'
+                                  : DateFormat(
+                                      'dd-MM-yyyy',
+                                    ).format(
+                                      value,
+                                    ),
+                              style:
+                                  TextStyle(
+                                fontSize: 14,
+                                fontWeight:
+                                    FontWeight
+                                        .w600,
+                                color: value ==
+                                        null
+                                    ? const Color(
+                                        0xFF9CA3AF,
+                                      )
+                                    : const Color(
+                                        0xFF111827,
+                                      ),
+                              ),
+                            ),
+                          ),
+                          if (allowClear &&
+                              value != null)
+                            IconButton(
+                              padding:
+                                  EdgeInsets
+                                      .zero,
+                              constraints:
+                                  const BoxConstraints(),
+                              onPressed:
+                                  () {
+                                setModalState(
+                                  () {
+                                    onChanged(
+                                      null,
+                                    );
+                                  },
+                                );
+                              },
+                              icon:
+                                  const Icon(
+                                Icons.close,
+                                size: 18,
+                                color:
+                                    Color(
+                                  0xFF6B7280,
+                                ),
+                              ),
+                            )
+                          else
+                            const Icon(
+                              Icons
+                                  .keyboard_arrow_down,
+                              color:
+                                  Color(
+                                0xFF6B7280,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Container(
+              constraints:
+                  BoxConstraints(
+                maxHeight:
+                    MediaQuery.of(
+                          context,
+                        ).size.height *
+                        0.95,
+              ),
+              decoration:
+                  const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.vertical(
+                  top:
+                      Radius.circular(
+                    25,
+                  ),
+                ),
+              ),
+              child:
+                  SingleChildScrollView(
+                padding:
+                    EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 15,
+                  bottom: MediaQuery.of(
+                            context,
+                          )
+                              .viewInsets
+                              .bottom +
+                      25,
+                ),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 45,
+                        height: 5,
+                        decoration:
+                            BoxDecoration(
+                          color: Colors
+                              .grey.shade300,
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 22,
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                const Color(
+                              0xFFFFF7ED,
+                            ),
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              14,
+                            ),
+                          ),
+                          child:
+                              const Icon(
+                            Icons
+                                .build_circle_outlined,
+                            color:
+                                Color(
+                              0xFFEA580C,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 12,
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .start,
+                            children: [
+                              Text(
+                                isEditing
+                                    ? 'Edit Vehicle Service'
+                                    : 'Add Vehicle Service',
+                                style:
+                                    const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+                                  color:
+                                      Color(
+                                    0xFF111827,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(
+                                height: 3,
+                              ),
+                              Text(
+                                isEditing
+                                    ? 'Update service information'
+                                    : 'Add vehicle service history',
+                                style:
+                                    const TextStyle(
+                                  fontSize: 12,
+                                  color:
+                                      Color(
+                                    0xFF6B7280,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(
+                      height: 25,
+                    ),
+                    const Text(
+                      'Vehicle',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 8,
+                    ),
+                    DropdownButtonFormField<
+                        int>(
+                      value: vehicles.any(
+                        (vehicle) =>
+                            parseInt(
+                              vehicle['id'],
+                            ) ==
+                            selectedServiceVehicleId,
+                      )
+                          ? selectedServiceVehicleId
+                          : null,
+                      isExpanded: true,
+                      decoration:
+                          inputDecoration(
+                        labelText:
+                            'Select vehicle',
+                        icon: Icons
+                            .directions_car_outlined,
+                      ),
+                      items: vehicles.map(
+                        (vehicle) {
+                          final int? id =
+                              parseInt(
+                            vehicle['id'],
+                          );
+
+                          return DropdownMenuItem<
+                              int>(
+                            value: id,
+                            child: Text(
+                              [
+                                vehicle['name']
+                                        ?.toString()
+                                        .trim() ??
+                                    '',
+                                vehicle['model']
+                                        ?.toString()
+                                        .trim() ??
+                                    '',
+                                vehicle[
+                                            'registration_number']
+                                        ?.toString()
+                                        .trim() ??
+                                    '',
+                              ]
+                                  .where(
+                                    (value) =>
+                                        value
+                                            .isNotEmpty,
+                                  )
+                                  .join(
+                                    ' - ',
+                                  ),
+                              maxLines: 1,
+                              overflow:
+                                  TextOverflow
+                                      .ellipsis,
+                            ),
+                          );
+                        },
+                      ).toList(),
+                      onChanged:
+                          (value) {
+                        setModalState(
+                          () {
+                            selectedServiceVehicleId =
+                                value;
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(
+                      height: 18,
+                    ),
+                    dateSelector(
+                      title:
+                          'Service Date',
+                      value:
+                          selectedServiceDate,
+                      onChanged:
+                          (value) {
+                        selectedServiceDate =
+                            value;
+                      },
+                      allowClear: true,
+                    ),
+                    const SizedBox(
+                      height: 18,
+                    ),
+                    const Text(
+                      'Service Type',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 8,
+                    ),
+                    TextField(
+                      controller:
+                          serviceTypeController,
+                      textCapitalization:
+                          TextCapitalization
+                              .words,
+                      decoration:
+                          inputDecoration(
+                        labelText:
+                            'Enter service type',
+                        icon: Icons
+                            .build_outlined,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 18,
+                    ),
+                    const Text(
+                      'Service Center',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 8,
+                    ),
+                    TextField(
+                      controller:
+                          serviceCenterController,
+                      textCapitalization:
+                          TextCapitalization
+                              .words,
+                      decoration:
+                          inputDecoration(
+                        labelText:
+                            'Enter service center',
+                        icon: Icons
+                            .location_city_outlined,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 18,
+                    ),
+                    Row(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .start,
+                            children: [
+                              const Text(
+                                'Odometer KM',
+                                style:
+                                    TextStyle(
+                                  fontSize:
+                                      13,
+                                  fontWeight:
+                                      FontWeight
+                                          .w600,
+                                ),
+                              ),
+                              const SizedBox(
+                                height: 8,
+                              ),
+                              TextField(
+                                controller:
+                                    serviceOdometerController,
+                                keyboardType:
+                                    TextInputType
+                                        .number,
+                                decoration:
+                                    inputDecoration(
+                                  labelText:
+                                      'Odometer',
+                                  icon: Icons
+                                      .speed_outlined,
+                                  suffixText:
+                                      'KM',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 10,
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .start,
+                            children: [
+                              const Text(
+                                'Service Cost',
+                                style:
+                                    TextStyle(
+                                  fontSize:
+                                      13,
+                                  fontWeight:
+                                      FontWeight
+                                          .w600,
+                                ),
+                              ),
+                              const SizedBox(
+                                height: 8,
+                              ),
+                              TextField(
+                                controller:
+                                    serviceCostController,
+                                keyboardType:
+                                    const TextInputType
+                                        .numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration:
+                                    inputDecoration(
+                                  labelText:
+                                      'Cost',
+                                  icon: Icons
+                                      .currency_rupee_outlined,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(
+                      height: 18,
+                    ),
+                    const Text(
+                      'Description',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 8,
+                    ),
+                    TextField(
+                      controller:
+                          serviceDescriptionController,
+                      minLines: 3,
+                      maxLines: 5,
+                      textCapitalization:
+                          TextCapitalization
+                              .sentences,
+                      decoration:
+                          inputDecoration(
+                        labelText:
+                            'Enter service description',
+                        icon: Icons
+                            .description_outlined,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 18,
+                    ),
+                    dateSelector(
+                      title:
+                          'Next Service Date',
+                      value:
+                          selectedNextServiceDate,
+                      onChanged:
+                          (value) {
+                        selectedNextServiceDate =
+                            value;
+                      },
+                      allowClear: true,
+                    ),
+                    if (isEditing) ...[
+                      const SizedBox(
+                        height: 16,
+                      ),
+                      Container(
+                        width:
+                            double.infinity,
+                        padding:
+                            const EdgeInsets
+                                .all(
+                          12,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xFFF8FAFC,
+                          ),
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            12,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                const Color(
+                              0xFFE5E7EB,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+                          children: [
+                            if ((editServiceData?[
+                                            'created_by_name']
+                                        ?.toString()
+                                        .trim() ??
+                                    '')
+                                .isNotEmpty)
+                              Text(
+                                'Created by: ${editServiceData?['created_by_name']}',
+                                style:
+                                    const TextStyle(
+                                  fontSize:
+                                      11,
+                                  color:
+                                      Color(
+                                    0xFF6B7280,
+                                  ),
+                                ),
+                              ),
+                            if ((editServiceData?[
+                                            'created_at']
+                                        ?.toString()
+                                        .trim() ??
+                                    '')
+                                .isNotEmpty) ...[
+                              const SizedBox(
+                                height: 5,
+                              ),
+                              Text(
+                                'Created: ${formatDateTimeValue(editServiceData?['created_at'])}',
+                                style:
+                                    const TextStyle(
+                                  fontSize:
+                                      11,
+                                  color:
+                                      Color(
+                                    0xFF6B7280,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if ((editServiceData?[
+                                            'updated_at']
+                                        ?.toString()
+                                        .trim() ??
+                                    '')
+                                .isNotEmpty) ...[
+                              const SizedBox(
+                                height: 5,
+                              ),
+                              Text(
+                                'Updated: ${formatDateTimeValue(editServiceData?['updated_at'])}',
+                                style:
+                                    const TextStyle(
+                                  fontSize:
+                                      11,
+                                  color:
+                                      Color(
+                                    0xFF6B7280,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(
+                      height: 25,
+                    ),
+                    SizedBox(
+                      width:
+                          double.infinity,
+                      height: 52,
+                      child:
+                          ElevatedButton(
+                        onPressed:
+                            isServiceSubmitting
+                                ? null
+                                : () async {
+                                    final bool
+                                        success =
+                                        isEditing
+                                            ? await updateServiceHistory()
+                                            : await addServiceHistory();
+
+                                    if (success &&
+                                        bottomSheetContext
+                                            .mounted) {
+                                      Navigator.pop(
+                                        bottomSheetContext,
+                                      );
+                                    } else {
+                                      setModalState(
+                                        () {},
+                                      );
+                                    }
+                                  },
+                        style:
+                            ElevatedButton
+                                .styleFrom(
+                          backgroundColor:
+                              const Color(
+                            0xFFEA580C,
+                          ),
+                          foregroundColor:
+                              Colors.white,
+                          shape:
+                              RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              12,
+                            ),
+                          ),
+                        ),
+                        child: isServiceSubmitting
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth:
+                                      2,
+                                  color:
+                                      Colors.white,
+                                ),
+                              )
+                            : Text(
+                                isEditing
+                                    ? 'Update Service'
+                                    : 'Save Service',
+                                style:
+                                    const TextStyle(
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(
+      () {
+        clearServiceForm();
+
+        if (mounted) {
+          setState(
+            () {
+              isServiceSubmitting =
+                  false;
+            },
+          );
+        }
+      },
+    );
+  }
+
   // ===========================================================================
   // INPUT DECORATION
   // ===========================================================================
@@ -3279,9 +6011,15 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
   // ===========================================================================
 
   double get totalUsedKm {
+    if (kmSummary.containsKey('total_used_km')) {
+      return parseDouble(
+        kmSummary['total_used_km'],
+      );
+    }
+
     double total = 0;
 
-    for (var entry in kmEntries) {
+    for (final entry in kmEntries) {
       total += parseDouble(
         entry['used_km'],
       );
@@ -3291,15 +6029,41 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
   }
 
   double get totalPetrol {
+    if (kmSummary.containsKey('total_petrol')) {
+      return parseDouble(
+        kmSummary['total_petrol'],
+      );
+    }
+
     double total = 0;
 
-    for (var entry in kmEntries) {
+    for (final entry in kmEntries) {
       total += parseDouble(
         entry['petrol'],
       );
     }
 
     return total;
+  }
+
+  Map<String, dynamic>? getVehicleKmSummary(
+    int? vehicleId,
+  ) {
+    if (vehicleId == null) {
+      return null;
+    }
+
+    for (final Map<String, dynamic> item
+        in kmVehicleSummary) {
+      if (parseInt(
+            item['vehicle_id'],
+          ) ==
+          vehicleId) {
+        return item;
+      }
+    }
+
+    return null;
   }
 
   // ===========================================================================
@@ -3366,6 +6130,7 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
             onPressed: () async {
               await getVehicles();
               await getKmEntries();
+              await getServiceHistory();
             },
             icon: const Icon(
               Icons.refresh,
@@ -3548,6 +6313,14 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
                           .speed_outlined,
                     ),
                   ),
+                  Expanded(
+                    child: tabButton(
+                      index: 2,
+                      text: 'Service',
+                      icon: Icons
+                          .build_outlined,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -3560,7 +6333,9 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
           Expanded(
             child: selectedTab == 0
                 ? buildVehiclesSection()
-                : buildKmSection(),
+                : selectedTab == 1
+                    ? buildKmSection()
+                    : buildServiceSection(),
           ),
         ],
       ),
@@ -3576,16 +6351,22 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
                 ? const Color(
                     0xFF2563EB,
                   )
-                : const Color(
-                    0xFF059669,
-                  ),
+                : selectedTab == 1
+                    ? const Color(
+                        0xFF059669,
+                      )
+                    : const Color(
+                        0xFFEA580C,
+                      ),
         foregroundColor:
             Colors.white,
         onPressed: () {
           if (selectedTab == 0) {
             openVehicleForm();
-          } else {
+          } else if (selectedTab == 1) {
             openKmForm();
+          } else {
+            openServiceForm();
           }
         },
         icon: const Icon(
@@ -3594,7 +6375,9 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
         label: Text(
           selectedTab == 0
               ? 'Add Vehicle'
-              : 'Add KM Entry',
+              : selectedTab == 1
+                  ? 'Add KM Entry'
+                  : 'Add Service',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -3901,26 +6684,45 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
       vehicle['id'],
     );
 
-    int entryCount = kmEntries
-        .where(
-          (entry) =>
-              parseInt(
-                entry['vehicle'],
-              ) ==
-              vehicleId,
-        )
-        .length;
+    final Map<String, dynamic>? vehicleKmSummary =
+        getVehicleKmSummary(
+      vehicleId,
+    );
 
-    double vehicleKm = 0;
+    int entryCount = parseInt(
+          vehicleKmSummary?['total_entries'],
+        ) ??
+        kmEntries
+            .where(
+              (entry) =>
+                  parseInt(
+                    entry['vehicle'],
+                  ) ==
+                  vehicleId,
+            )
+            .length;
 
-    for (var entry in kmEntries) {
-      if (parseInt(
-            entry['vehicle'],
-          ) ==
-          vehicleId) {
-        vehicleKm += parseDouble(
-          entry['used_km'],
-        );
+    double vehicleKm;
+
+    if (vehicleKmSummary != null &&
+        vehicleKmSummary.containsKey(
+          'total_used_km',
+        )) {
+      vehicleKm = parseDouble(
+        vehicleKmSummary['total_used_km'],
+      );
+    } else {
+      vehicleKm = 0;
+
+      for (final entry in kmEntries) {
+        if (parseInt(
+              entry['vehicle'],
+            ) ==
+            vehicleId) {
+          vehicleKm += parseDouble(
+            entry['used_km'],
+          );
+        }
       }
     }
 
@@ -4326,7 +7128,7 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
               subtitle:
                   'Add your first KM entry.',
             )
-          else
+          else ...[
             for (int i = 0;
                 i <
                     filteredKmEntries
@@ -4335,6 +7137,156 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
               kmEntryCard(
                 filteredKmEntries[i],
               ),
+
+            if (kmPreviousUrl != null ||
+                kmNextUrl != null ||
+                kmTotalCount >
+                    filteredKmEntries.length)
+              buildKmPagination(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget buildKmPagination() {
+    return Container(
+      margin: const EdgeInsets.only(
+        top: 4,
+        bottom: 8,
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 10,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(
+          12,
+        ),
+        border: Border.all(
+          color:
+              const Color(
+            0xFFE5E7EB,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: kmPreviousUrl == null ||
+                      isKmPageLoading
+                  ? null
+                  : loadPreviousKmPage,
+              icon: const Icon(
+                Icons.chevron_left,
+                size: 19,
+              ),
+              label: const Text(
+                'Previous',
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize:
+                    const Size(
+                  0,
+                  42,
+                ),
+                shape:
+                    RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    10,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(
+            width: 10,
+          ),
+
+          Expanded(
+            child: Column(
+              children: [
+                if (isKmPageLoading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child:
+                        CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                else
+                  Text(
+                    'Page $kmCurrentPage',
+                    style:
+                        const TextStyle(
+                      fontSize: 12,
+                      fontWeight:
+                          FontWeight.bold,
+                      color:
+                          Color(
+                        0xFF111827,
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(
+                  height: 3,
+                ),
+
+                Text(
+                  '$kmTotalCount entries',
+                  style:
+                      const TextStyle(
+                    fontSize: 10,
+                    color:
+                        Color(
+                      0xFF6B7280,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(
+            width: 10,
+          ),
+
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: kmNextUrl == null ||
+                      isKmPageLoading
+                  ? null
+                  : loadNextKmPage,
+              icon: const Icon(
+                Icons.chevron_right,
+                size: 19,
+              ),
+              label: const Text(
+                'Next',
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize:
+                    const Size(
+                  0,
+                  42,
+                ),
+                shape:
+                    RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    10,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -4651,6 +7603,725 @@ class _VehicleKmManagementPageState extends State<VehicleKmManagementPage> {
           ),
         ),
       ],
+    );
+  }
+
+
+  // ===========================================================================
+  // SERVICE HISTORY SECTION
+  // ===========================================================================
+
+  Widget buildServiceSection() {
+    return RefreshIndicator(
+      onRefresh: () async {
+        await getVehicles();
+        await getServiceHistory();
+      },
+      child: ListView(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding:
+            const EdgeInsets.fromLTRB(
+          15,
+          15,
+          15,
+          100,
+        ),
+        children: [
+          TextField(
+            controller:
+                serviceSearchController,
+            onChanged:
+                searchServiceHistory,
+            decoration:
+                InputDecoration(
+              hintText:
+                  'Search service history...',
+              prefixIcon:
+                  const Icon(
+                Icons.search,
+              ),
+              suffixIcon:
+                  serviceSearchController
+                          .text
+                          .isNotEmpty
+                      ? IconButton(
+                          onPressed:
+                              () {
+                            serviceSearchController
+                                .clear();
+
+                            searchServiceHistory(
+                              '',
+                            );
+                          },
+                          icon:
+                              const Icon(
+                            Icons.close,
+                          ),
+                        )
+                      : null,
+              filled: true,
+              fillColor:
+                  Colors.white,
+              border:
+                  OutlineInputBorder(
+                borderRadius:
+                    BorderRadius.circular(
+                  12,
+                ),
+                borderSide:
+                    const BorderSide(
+                  color:
+                      Color(
+                    0xFFE5E7EB,
+                  ),
+                ),
+              ),
+              enabledBorder:
+                  OutlineInputBorder(
+                borderRadius:
+                    BorderRadius.circular(
+                  12,
+                ),
+                borderSide:
+                    const BorderSide(
+                  color:
+                      Color(
+                    0xFFE5E7EB,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(
+            height: 15,
+          ),
+          if (isServiceLoading)
+            const Padding(
+              padding:
+                  EdgeInsets.only(
+                top: 80,
+              ),
+              child: Center(
+                child:
+                    CircularProgressIndicator(),
+              ),
+            )
+          else if (filteredServiceHistory
+              .isEmpty)
+            emptyState(
+              icon:
+                  Icons.build_outlined,
+              title:
+                  'No service history found',
+              subtitle:
+                  'Add the first vehicle service record.',
+            )
+          else
+            for (int i = 0;
+                i <
+                    filteredServiceHistory
+                        .length;
+                i++)
+              serviceHistoryCard(
+                filteredServiceHistory[i],
+              ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // SERVICE HISTORY CARD
+  // ===========================================================================
+
+  Widget serviceHistoryCard(
+    Map<String, dynamic> service,
+  ) {
+    final String vehicleName =
+        getServiceVehicleName(
+      service,
+    );
+
+    final String registration =
+        getServiceVehicleRegistration(
+      service,
+    );
+
+    final String serviceType =
+        service['service_type']
+                ?.toString()
+                .trim() ??
+            '';
+
+    final String serviceCenter =
+        service['service_center']
+                ?.toString()
+                .trim() ??
+            '';
+
+    final String description =
+        service['description']
+                ?.toString()
+                .trim() ??
+            '';
+
+    final int? odometer =
+        parseInt(
+      service['odometer_km'],
+    );
+
+    final dynamic rawServiceCost =
+        service['service_cost'];
+
+    final double? serviceCost =
+        rawServiceCost == null ||
+                rawServiceCost.toString().trim().isEmpty ||
+                rawServiceCost.toString().toLowerCase() == 'null'
+            ? null
+            : parseDouble(
+                rawServiceCost,
+              );
+
+    final DateTime? serviceDate =
+        DateTime.tryParse(
+      service['service_date']
+              ?.toString() ??
+          '',
+    );
+
+    final DateTime? nextServiceDate =
+        DateTime.tryParse(
+      service['next_service_date']
+              ?.toString() ??
+          '',
+    );
+
+    final String formattedServiceDate =
+        serviceDate == null
+            ? (service['service_date']
+                    ?.toString() ??
+                '')
+            : DateFormat(
+                'dd-MM-yyyy',
+              ).format(
+                serviceDate,
+              );
+
+    final String formattedNextDate =
+        nextServiceDate == null
+            ? ''
+            : DateFormat(
+                'dd-MM-yyyy',
+              ).format(
+                nextServiceDate,
+              );
+
+    final String createdBy =
+        service['created_by_name']
+                ?.toString()
+                .trim() ??
+            '';
+
+    final String updatedAt =
+        formatDateTimeValue(
+      service['updated_at'],
+    );
+
+    return InkWell(
+      borderRadius:
+          BorderRadius.circular(
+        15,
+      ),
+      onTap: () {
+        debugPrint(
+          'SERVICE CARD TAPPED: $service',
+        );
+
+        openServiceForm(
+          service: service,
+        );
+      },
+      child: Container(
+        margin:
+            const EdgeInsets.only(
+          bottom: 12,
+        ),
+        padding:
+            const EdgeInsets.all(
+          15,
+        ),
+        decoration:
+            BoxDecoration(
+          color: Colors.white,
+          borderRadius:
+              BorderRadius.circular(
+            15,
+          ),
+          border: Border.all(
+            color:
+                const Color(
+              0xFFE5E7EB,
+            ),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 45,
+                  height: 45,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        const Color(
+                      0xFFFFF7ED,
+                    ),
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                      12,
+                    ),
+                  ),
+                  child:
+                      const Icon(
+                    Icons
+                        .build_circle_outlined,
+                    color:
+                        Color(
+                      0xFFEA580C,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 10,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
+                    children: [
+                      Text(
+                        vehicleName,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            const TextStyle(
+                          fontSize: 15,
+                          fontWeight:
+                              FontWeight
+                                  .bold,
+                          color:
+                              Color(
+                            0xFF111827,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 4,
+                      ),
+                      Text(
+                        [
+                          registration,
+                          formattedServiceDate,
+                        ]
+                            .where(
+                              (value) =>
+                                  value
+                                      .trim()
+                                      .isNotEmpty,
+                            )
+                            .join(
+                              ' • ',
+                            ),
+                        style:
+                            const TextStyle(
+                          fontSize: 11,
+                          color:
+                              Color(
+                            0xFF6B7280,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip:
+                      'Edit Service',
+                  onPressed: () {
+                    debugPrint(
+                      'SERVICE CARD EDIT CLICKED: $service',
+                    );
+
+                    openServiceForm(
+                      service: service,
+                    );
+                  },
+                  icon:
+                      const Icon(
+                    Icons
+                        .edit_outlined,
+                    color:
+                        Color(
+                      0xFF6B7280,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (serviceType.isNotEmpty ||
+                serviceCenter
+                    .isNotEmpty) ...[
+              const SizedBox(
+                height: 14,
+              ),
+              Row(
+                children: [
+                  if (serviceType
+                      .isNotEmpty)
+                    Expanded(
+                      child:
+                          serviceInfoBox(
+                        title:
+                            'Service Type',
+                        value:
+                            serviceType,
+                        icon: Icons
+                            .build_outlined,
+                      ),
+                    ),
+                  if (serviceType
+                          .isNotEmpty &&
+                      serviceCenter
+                          .isNotEmpty)
+                    const SizedBox(
+                      width: 10,
+                    ),
+                  if (serviceCenter
+                      .isNotEmpty)
+                    Expanded(
+                      child:
+                          serviceInfoBox(
+                        title:
+                            'Service Center',
+                        value:
+                            serviceCenter,
+                        icon: Icons
+                            .location_city_outlined,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            if (odometer != null ||
+                serviceCost != null) ...[
+              const SizedBox(
+                height: 10,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child:
+                        serviceInfoBox(
+                      title:
+                          'Odometer',
+                      value: odometer ==
+                              null
+                          ? '-'
+                          : '$odometer KM',
+                      icon: Icons
+                          .speed_outlined,
+                    ),
+                  ),
+                  const SizedBox(
+                    width: 10,
+                  ),
+                  Expanded(
+                    child:
+                        serviceInfoBox(
+                      title:
+                          'Service Cost',
+                      value:
+                          serviceCost == null
+                              ? '-'
+                              : '₹${formatNumber(serviceCost)}',
+                      icon: Icons
+                          .currency_rupee_outlined,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (description
+                .isNotEmpty) ...[
+              const SizedBox(
+                height: 12,
+              ),
+              Container(
+                width:
+                    double.infinity,
+                padding:
+                    const EdgeInsets
+                        .all(
+                  12,
+                ),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      const Color(
+                    0xFFF9FAFB,
+                  ),
+                  borderRadius:
+                      BorderRadius
+                          .circular(
+                    12,
+                  ),
+                ),
+                child: Text(
+                  description,
+                  style:
+                      const TextStyle(
+                    fontSize: 11,
+                    height: 1.4,
+                    color:
+                        Color(
+                      0xFF4B5563,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (formattedNextDate
+                .isNotEmpty) ...[
+              const SizedBox(
+                height: 12,
+              ),
+              Container(
+                width:
+                    double.infinity,
+                padding:
+                    const EdgeInsets
+                        .symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      const Color(
+                    0xFFFFFBEB,
+                  ),
+                  borderRadius:
+                      BorderRadius
+                          .circular(
+                    10,
+                  ),
+                  border:
+                      Border.all(
+                    color:
+                        const Color(
+                      0xFFFDE68A,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons
+                          .event_repeat_outlined,
+                      size: 17,
+                      color:
+                          Color(
+                        0xFFD97706,
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 7,
+                    ),
+                    const Text(
+                      'Next Service',
+                      style:
+                          TextStyle(
+                        fontSize: 11,
+                        color:
+                            Color(
+                          0xFF92400E,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      formattedNextDate,
+                      style:
+                          const TextStyle(
+                        fontSize: 11,
+                        fontWeight:
+                            FontWeight
+                                .bold,
+                        color:
+                            Color(
+                          0xFF92400E,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (createdBy.isNotEmpty ||
+                updatedAt
+                    .isNotEmpty) ...[
+              const SizedBox(
+                height: 10,
+              ),
+              Row(
+                children: [
+                  if (createdBy
+                      .isNotEmpty) ...[
+                    const Icon(
+                      Icons
+                          .person_outline,
+                      size: 14,
+                      color:
+                          Color(
+                        0xFF9CA3AF,
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 4,
+                    ),
+                    Expanded(
+                      child: Text(
+                        createdBy,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            const TextStyle(
+                          fontSize: 9,
+                          color:
+                              Color(
+                            0xFF9CA3AF,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else
+                    const Spacer(),
+                  if (updatedAt
+                      .isNotEmpty)
+                    Text(
+                      'Updated $updatedAt',
+                      style:
+                          const TextStyle(
+                        fontSize: 9,
+                        color:
+                            Color(
+                          0xFF9CA3AF,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget serviceInfoBox({
+    required String title,
+    required String value,
+    required IconData icon,
+  }) {
+    return Container(
+      padding:
+          const EdgeInsets.all(
+        11,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(
+          0xFFF9FAFB,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          11,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color:
+                const Color(
+              0xFF9CA3AF,
+            ),
+          ),
+          const SizedBox(
+            width: 8,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow
+                          .ellipsis,
+                  style:
+                      const TextStyle(
+                    fontSize: 9,
+                    color:
+                        Color(
+                      0xFF9CA3AF,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  height: 3,
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow
+                          .ellipsis,
+                  style:
+                      const TextStyle(
+                    fontSize: 11,
+                    fontWeight:
+                        FontWeight
+                            .bold,
+                    color:
+                        Color(
+                      0xFF111827,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

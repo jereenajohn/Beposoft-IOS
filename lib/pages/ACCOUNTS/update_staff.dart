@@ -42,6 +42,14 @@ class _Staff_UpdateState extends State<Staff_Update> {
   final TextEditingController employment_status = TextEditingController();
   final TextEditingController designation = TextEditingController();
   final TextEditingController grade = TextEditingController();
+  final TextEditingController paid_leaves = TextEditingController();
+
+  // Salary
+  final TextEditingController salary = TextEditingController();
+  final TextEditingController incrementYear = TextEditingController();
+  final TextEditingController incrementAmount = TextEditingController();
+  final TextEditingController incrementRemarks = TextEditingController();
+
   final TextEditingController address = TextEditingController();
   final TextEditingController city = TextEditingController();
   final TextEditingController Country = TextEditingController();
@@ -137,6 +145,16 @@ class _Staff_UpdateState extends State<Staff_Update> {
 
   bool isManager = false;
 
+  int? salaryRecordId;
+  bool isSalaryLoading = false;
+  bool isSalaryCreating = false;
+  bool isSalaryUpdating = false;
+  bool isSalaryEditing = false;
+  int? editingIncrementId;
+
+  // Salary increment history from GET api/staff/salary/
+  List<Map<String, dynamic>> salaryIncrements = [];
+
   final DateFormat dateFormatter = DateFormat('yyyy-MM-dd');
 
   drower d = drower();
@@ -148,6 +166,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
   }
 
   Future<void> initdata() async {
+    debugPrint('========== UPDATE STAFF PAGE INIT ==========');
+    debugPrint('WIDGET STAFF ID: ${widget.id}');
+    debugPrint('============================================');
+
     await Future.wait([
       getdepartments(),
       getmanegers(),
@@ -158,6 +180,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
       getstaffList(),
     ]);
     await getstaff();
+    await getStaffSalary();
+
     if (mounted) {
       setState(() {
         isPageLoading = false;
@@ -167,7 +191,11 @@ class _Staff_UpdateState extends State<Staff_Update> {
 
   Future<String?> gettokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
+    final token = prefs.getString('token');
+    debugPrint(
+      'AUTH TOKEN STATUS: ${token == null || token.isEmpty ? 'MISSING' : 'AVAILABLE'}',
+    );
+    return token;
   }
 
   Future<String?> getdepFromPrefs() async {
@@ -189,13 +217,13 @@ class _Staff_UpdateState extends State<Staff_Update> {
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
-    } else if (dep == "COO") {
+    } else if (depValue == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
     }
-    else if (dep == "CSO") {
+    else if (depValue == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
@@ -370,6 +398,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
         'Authorization': 'Bearer $token',
       });
 
+      debugPrint('========== GET COUNTRY CODES ==========');
+      debugPrint('URL: $api/api/country/codes/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=======================================');
+
       List<Map<String, dynamic>> countrylist = [];
 
       if (response.statusCode == 200) {
@@ -389,7 +423,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (e) {}
+    } catch (e, stackTrace) {
+      debugPrint('GET COUNTRY ERROR: $e');
+      debugPrint('GET COUNTRY STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getwarehouse() async {
@@ -400,6 +437,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       });
+
+      debugPrint('========== GET WAREHOUSES ==========');
+      debugPrint('URL: $api/api/warehouse/add/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('====================================');
 
       List<Map<String, dynamic>> warehouselist = [];
 
@@ -420,7 +463,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (e) {}
+    } catch (e, stackTrace) {
+      debugPrint('GET WAREHOUSE ERROR: $e');
+      debugPrint('GET WAREHOUSE STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getfamily() async {
@@ -434,6 +480,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET FAMILIES ==========');
+      debugPrint('URL: $api/api/familys/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('==================================');
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
@@ -453,7 +505,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET FAMILY ERROR: $error');
+      debugPrint('GET FAMILY STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getstates() async {
@@ -467,6 +522,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET STATES ==========');
+      debugPrint('URL: $api/api/states/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('================================');
 
       List<Map<String, dynamic>> stateslist = [];
 
@@ -487,7 +548,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET STATES ERROR: $error');
+      debugPrint('GET STATES STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getdepartments() async {
@@ -501,6 +565,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET DEPARTMENTS ==========');
+      debugPrint('URL: $api/api/departments/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=====================================');
 
       List<Map<String, dynamic>> departmentlist = [];
 
@@ -521,7 +591,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET DEPARTMENTS ERROR: $error');
+      debugPrint('GET DEPARTMENTS STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getmanegers() async {
@@ -535,6 +608,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET SUPERVISORS ==========');
+      debugPrint('URL: $api/api/supervisors/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=====================================');
 
       List<Map<String, dynamic>> managerlist = [];
 
@@ -556,7 +635,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET SUPERVISORS ERROR: $error');
+      debugPrint('GET SUPERVISORS STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getstaffList() async {
@@ -570,6 +652,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
           'Content-Type': 'application/json',
         },
       );
+
+      debugPrint('========== GET STAFF LIST ==========');
+      debugPrint('URL: $api/api/staffs/');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('====================================');
 
       List<Map<String, dynamic>> stafflist = [];
 
@@ -591,7 +679,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
           });
         }
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET STAFF LIST ERROR: $error');
+      debugPrint('GET STAFF LIST STACKTRACE: $stackTrace');
+    }
   }
 
   Future<void> getstaff() async {
@@ -606,12 +697,24 @@ class _Staff_UpdateState extends State<Staff_Update> {
         },
       );
 
+      debugPrint('========== GET CURRENT STAFF ==========');
+      debugPrint('URL: $api/api/staffs/');
+      debugPrint('TARGET STAFF ID: ${widget.id}');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=======================================');
+
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         var staffDataList = parsed['data'];
 
         for (var staffData in staffDataList) {
-          if (widget.id == staffData['id']) {
+          debugPrint(
+            'CHECKING STAFF -> API ID: ${staffData['id']} | TARGET ID: ${widget.id}',
+          );
+
+          if (widget.id.toString() == staffData['id'].toString()) {
+            debugPrint('MATCHED STAFF DATA: ${jsonEncode(staffData)}');
             name.text = staffData['name']?.toString() ?? '';
             username.text = staffData['username']?.toString() ?? '';
             email.text = staffData['email']?.toString() ?? '';
@@ -625,6 +728,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
                 staffData['employment_status']?.toString() ?? '';
             designation.text = staffData['designation']?.toString() ?? '';
             grade.text = staffData['grade']?.toString() ?? '';
+            paid_leaves.text = staffData['paid_leaves']?.toString() ?? '0';
             address.text = staffData['address']?.toString() ?? '';
             city.text = staffData['city']?.toString() ?? '';
             Country.text = staffData['country']?.toString() ?? '';
@@ -763,7 +867,1495 @@ class _Staff_UpdateState extends State<Staff_Update> {
           setState(() {});
         }
       }
-    } catch (error) {}
+    } catch (error, stackTrace) {
+      debugPrint('GET CURRENT STAFF ERROR: $error');
+      debugPrint('GET CURRENT STAFF STACKTRACE: $stackTrace');
+    }
+  }
+
+
+  Future<void> getStaffSalary() async {
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        isSalaryLoading = true;
+      });
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$api/api/staff/salary/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      debugPrint('========== GET STAFF SALARY ==========');
+      debugPrint('STATUS: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('TARGET STAFF ID: ${widget.id}');
+      debugPrint('======================================');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        salaryRecordId = null;
+
+        final dynamic decoded = jsonDecode(response.body);
+
+        List<dynamic> salaryList = [];
+
+        if (decoded is List) {
+          salaryList = decoded;
+        } else if (decoded is Map<String, dynamic>) {
+          if (decoded['data'] is List) {
+            salaryList = decoded['data'];
+          } else if (decoded['results'] is List) {
+            salaryList = decoded['results'];
+          }
+        }
+
+        Map<String, dynamic>? matchedSalary;
+
+        for (final item in salaryList) {
+          if (item is! Map) continue;
+
+          final map = Map<String, dynamic>.from(item);
+
+          debugPrint('SALARY ITEM: ${jsonEncode(map)}');
+
+          dynamic staffValue = map['staff'];
+
+          int? staffValueId;
+
+          if (staffValue is Map) {
+            staffValueId = int.tryParse(
+              (staffValue['id'] ?? staffValue['staff_id'] ?? '').toString(),
+            );
+          } else {
+            staffValueId = int.tryParse(staffValue?.toString() ?? '');
+          }
+
+          debugPrint(
+            'SALARY MATCH CHECK -> STAFF VALUE: $staffValue | PARSED STAFF ID: $staffValueId | TARGET STAFF ID: ${widget.id}',
+          );
+
+          if (staffValueId == int.tryParse(widget.id.toString())) {
+            matchedSalary = map;
+            debugPrint('MATCHED SALARY RECORD: ${jsonEncode(map)}');
+            break;
+          }
+        }
+
+        if (matchedSalary != null) {
+          salaryRecordId =
+              int.tryParse(matchedSalary['id']?.toString() ?? '');
+
+          final dynamic salaryValue =
+              matchedSalary['salary'] ??
+              matchedSalary['current_salary'] ??
+              matchedSalary['amount'];
+
+          salary.text = salaryValue?.toString() ?? '';
+
+          final dynamic incrementsData = matchedSalary['increments'];
+
+          if (incrementsData is List) {
+            salaryIncrements = incrementsData
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList();
+
+            // Show latest increment first.
+            salaryIncrements.sort((a, b) {
+              final int aId =
+                  int.tryParse(a['id']?.toString() ?? '') ?? 0;
+              final int bId =
+                  int.tryParse(b['id']?.toString() ?? '') ?? 0;
+              return bId.compareTo(aId);
+            });
+          } else {
+            salaryIncrements = [];
+          }
+
+          debugPrint(
+            'SALARY INCREMENTS: ${jsonEncode(salaryIncrements)}',
+          );
+        } else {
+          salaryRecordId = null;
+          salary.clear();
+          salaryIncrements = [];
+          debugPrint(
+            'NO SALARY RECORD MATCHED FOR STAFF ID: ${widget.id}',
+          );
+        }
+
+        debugPrint('FINAL SALARY RECORD ID: $salaryRecordId');
+        debugPrint('FINAL CURRENT SALARY: ${salary.text}');
+        debugPrint(
+          'TOTAL INCREMENTS: ${salaryIncrements.length}',
+        );
+        debugPrint(
+          'SALARY UI MODE: ${salaryRecordId == null ? 'CREATE SALARY' : 'INCREMENT SALARY'}',
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('GET STAFF SALARY ERROR: $e');
+      debugPrint('GET STAFF SALARY STACKTRACE: $stackTrace');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSalaryLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> createStaffSalary(
+    BuildContext scaffoldContext,
+  ) async {
+    final String salaryText = salary.text.trim();
+
+    debugPrint('========== CREATE STAFF SALARY BUTTON ==========');
+    debugPrint('TARGET STAFF ID: ${widget.id}');
+    debugPrint('SALARY INPUT: $salaryText');
+    debugPrint('================================================');
+
+    if (salaryText.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter salary.'),
+        ),
+      );
+      return false;
+    }
+
+    final num? salaryAmount = num.tryParse(salaryText);
+
+    if (salaryAmount == null || salaryAmount <= 0) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter a valid salary.'),
+        ),
+      );
+      return false;
+    }
+
+    final int? staffPk = int.tryParse(widget.id.toString());
+
+    if (staffPk == null) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Invalid staff ID.'),
+        ),
+      );
+      return false;
+    }
+
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Authentication token not found.'),
+        ),
+      );
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        isSalaryCreating = true;
+      });
+    }
+
+    try {
+      final Map<String, dynamic> body = {
+        'staff': staffPk,
+        'salary': salaryAmount,
+      };
+
+      debugPrint('========== CREATE STAFF SALARY ==========');
+      debugPrint('URL: $api/api/staff/salary/');
+      debugPrint('REQUEST: ${jsonEncode(body)}');
+
+      final response = await http.post(
+        Uri.parse('$api/api/staff/salary/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=========================================');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        await getStaffSalary();
+
+        if (!mounted) return true;
+
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Salary added successfully.'),
+          ),
+        );
+
+        return true;
+      }
+
+      if (!mounted) return false;
+
+      String errorMessage = 'Failed to add salary.';
+
+      try {
+        final dynamic decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          final dynamic errors = decoded['errors'];
+
+          if (errors is Map) {
+            errorMessage = errors.entries.map((entry) {
+              final value = entry.value;
+              if (value is List) {
+                return '${entry.key}: ${value.join(', ')}';
+              }
+              return '${entry.key}: $value';
+            }).join('\n');
+          } else {
+            errorMessage =
+                decoded['message']?.toString() ??
+                decoded['detail']?.toString() ??
+                decoded['error']?.toString() ??
+                response.body;
+          }
+        }
+      } catch (_) {
+        errorMessage =
+            'Failed to add salary. Status: ${response.statusCode}';
+      }
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(errorMessage),
+        ),
+      );
+
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('CREATE STAFF SALARY ERROR: $e');
+      debugPrint('CREATE STAFF SALARY STACKTRACE: $stackTrace');
+
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Salary creation error: $e'),
+        ),
+      );
+
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSalaryCreating = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> updateStaffSalaryIncrement(
+    BuildContext scaffoldContext,
+  ) async {
+    debugPrint('========== SALARY INCREMENT BUTTON ==========');
+    debugPrint('TARGET STAFF ID: ${widget.id}');
+    debugPrint('SALARY RECORD ID: $salaryRecordId');
+    debugPrint('CURRENT SALARY: ${salary.text}');
+    debugPrint('INCREMENT YEAR INPUT: ${incrementYear.text}');
+    debugPrint('INCREMENT AMOUNT INPUT: ${incrementAmount.text}');
+    debugPrint('INCREMENT REMARKS INPUT: ${incrementRemarks.text}');
+    debugPrint('=============================================');
+
+    if (salaryRecordId == null) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            'Salary record not found for this staff.',
+          ),
+        ),
+      );
+      return false;
+    }
+
+    final String yearText = incrementYear.text.trim();
+    final String amountText = incrementAmount.text.trim();
+    final String remarksText = incrementRemarks.text.trim();
+
+    if (yearText.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter increment year.'),
+        ),
+      );
+      return false;
+    }
+
+    if (amountText.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter increment amount.'),
+        ),
+      );
+      return false;
+    }
+
+    final int? year = int.tryParse(yearText);
+    final num? amount = num.tryParse(amountText);
+
+    if (year == null || year < 2000 || year > 2101) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter a valid increment year.'),
+        ),
+      );
+      return false;
+    }
+
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter a valid increment amount.'),
+        ),
+      );
+      return false;
+    }
+
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Authentication token not found.'),
+        ),
+      );
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        isSalaryUpdating = true;
+      });
+    }
+
+    try {
+      final Map<String, dynamic> body = {
+        'year': year,
+        'increment_amount': amount,
+        'remarks': remarksText,
+      };
+
+      debugPrint('========== ADD STAFF SALARY INCREMENT ==========');
+      debugPrint(
+        'URL: $api/api/staff/salary/update/$salaryRecordId/',
+      );
+      debugPrint('REQUEST: ${jsonEncode(body)}');
+
+      final response = await http.put(
+        Uri.parse(
+          '$api/api/staff/salary/update/$salaryRecordId/',
+        ),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      debugPrint('STATUS: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=========================================');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        await getStaffSalary();
+
+        if (!mounted) return true;
+
+        incrementYear.clear();
+        incrementAmount.clear();
+        incrementRemarks.clear();
+
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Salary increment updated successfully.'),
+          ),
+        );
+
+        return true;
+      }
+
+      if (!mounted) return false;
+
+      String errorMessage = 'Failed to update salary increment.';
+
+      try {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          errorMessage =
+              decoded['message']?.toString() ??
+              decoded['detail']?.toString() ??
+              decoded['error']?.toString() ??
+              response.body;
+        }
+      } catch (_) {
+        errorMessage =
+            'Failed to update salary increment. Status: ${response.statusCode}';
+      }
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(errorMessage),
+        ),
+      );
+
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('UPDATE STAFF SALARY ERROR: $e');
+      debugPrint('UPDATE STAFF SALARY STACKTRACE: $stackTrace');
+
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Salary update error: $e'),
+        ),
+      );
+
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSalaryUpdating = false;
+        });
+      }
+    }
+  }
+
+
+  Future<bool> editStaffSalary({
+    required BuildContext scaffoldContext,
+    required num updatedSalary,
+  }) async {
+    if (salaryRecordId == null) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Salary record not found.'),
+        ),
+      );
+      return false;
+    }
+
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Authentication token not found.'),
+        ),
+      );
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        isSalaryEditing = true;
+      });
+    }
+
+    try {
+      final Map<String, dynamic> body = {
+        'salary': updatedSalary,
+      };
+
+      debugPrint('========== EDIT STAFF SALARY ==========');
+      debugPrint(
+        'URL: $api/api/staff/salary/edit/$salaryRecordId/',
+      );
+      debugPrint('REQUEST: ${jsonEncode(body)}');
+
+      final response = await http.put(
+        Uri.parse(
+          '$api/api/staff/salary/edit/$salaryRecordId/',
+        ),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=======================================');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        try {
+          final dynamic decoded = jsonDecode(response.body);
+
+          if (decoded is Map<String, dynamic> &&
+              decoded['data'] is Map) {
+            final Map<String, dynamic> responseData =
+                Map<String, dynamic>.from(decoded['data']);
+
+            final dynamic salaryValue =
+                responseData['salary'] ??
+                responseData['current_salary'] ??
+                responseData['amount'];
+
+            if (salaryValue != null) {
+              salary.text = salaryValue.toString();
+            }
+
+            final dynamic incrementsData =
+                responseData['increments'];
+
+            if (incrementsData is List) {
+              salaryIncrements = incrementsData
+                  .whereType<Map>()
+                  .map(
+                    (item) =>
+                        Map<String, dynamic>.from(item),
+                  )
+                  .toList();
+
+              salaryIncrements.sort((a, b) {
+                final int aId =
+                    int.tryParse(a['id']?.toString() ?? '') ?? 0;
+                final int bId =
+                    int.tryParse(b['id']?.toString() ?? '') ?? 0;
+                return bId.compareTo(aId);
+              });
+            }
+          }
+        } catch (e, stackTrace) {
+          debugPrint(
+            'EDIT SALARY RESPONSE PARSE ERROR: $e',
+          );
+          debugPrint(
+            'EDIT SALARY RESPONSE PARSE STACKTRACE: $stackTrace',
+          );
+        }
+
+        if (mounted) {
+          setState(() {});
+        }
+
+        if (!mounted) return true;
+
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Salary updated successfully.'),
+          ),
+        );
+
+        return true;
+      }
+
+      if (!mounted) return false;
+
+      String message = 'Failed to update salary.';
+
+      try {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          message =
+              decoded['message']?.toString() ??
+              decoded['detail']?.toString() ??
+              decoded['error']?.toString() ??
+              response.body;
+        }
+      } catch (_) {
+        message =
+            'Failed to update salary. Status: ${response.statusCode}';
+      }
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(message),
+        ),
+      );
+
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('EDIT STAFF SALARY ERROR: $e');
+      debugPrint('EDIT STAFF SALARY STACKTRACE: $stackTrace');
+
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Salary edit error: $e'),
+        ),
+      );
+
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSalaryEditing = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> editSalaryIncrement({
+    required BuildContext scaffoldContext,
+    required int incrementId,
+    required int year,
+    required num incrementAmountValue,
+    required String remarksValue,
+  }) async {
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Authentication token not found.'),
+        ),
+      );
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        editingIncrementId = incrementId;
+      });
+    }
+
+    try {
+      final Map<String, dynamic> body = {
+        'year': year,
+        'increment_amount': incrementAmountValue,
+        'remarks': remarksValue,
+      };
+
+      debugPrint('========== EDIT SALARY INCREMENT ==========');
+      debugPrint(
+        'URL: $api/api/staff/salary/increment/edit/$incrementId/',
+      );
+      debugPrint('REQUEST: ${jsonEncode(body)}');
+
+      final response = await http.put(
+        Uri.parse(
+          '$api/api/staff/salary/increment/edit/$incrementId/',
+        ),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('===========================================');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        await getStaffSalary();
+
+        if (!mounted) return true;
+
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Salary increment updated successfully.'),
+          ),
+        );
+
+        return true;
+      }
+
+      if (!mounted) return false;
+
+      String message = 'Failed to edit salary increment.';
+
+      try {
+        final dynamic decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          message =
+              decoded['message']?.toString() ??
+              decoded['detail']?.toString() ??
+              decoded['error']?.toString() ??
+              response.body;
+        }
+      } catch (_) {
+        message =
+            'Failed to edit salary increment. Status: ${response.statusCode}';
+      }
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(message),
+        ),
+      );
+
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('EDIT SALARY INCREMENT ERROR: $e');
+      debugPrint(
+        'EDIT SALARY INCREMENT STACKTRACE: $stackTrace',
+      );
+
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Increment edit error: $e'),
+        ),
+      );
+
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          editingIncrementId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _showEditSalaryDialog() async {
+    String editedSalary = salary.text.trim();
+    bool dialogSubmitting = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: const Text(
+                'Edit Salary',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              content: TextFormField(
+                initialValue: editedSalary,
+                enabled: !dialogSubmitting,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _inputDecoration(
+                  'Salary',
+                  icon: Icons.currency_rupee_rounded,
+                ),
+                onChanged: (value) {
+                  editedSalary = value;
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: dialogSubmitting
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: dialogSubmitting
+                      ? null
+                      : () async {
+                          final num? amount =
+                              num.tryParse(editedSalary.trim());
+
+                          if (amount == null || amount <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: Colors.red,
+                                content: Text(
+                                  'Please enter a valid salary.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            dialogSubmitting = true;
+                          });
+
+                          final bool updated = await editStaffSalary(
+                            scaffoldContext: context,
+                            updatedSalary: amount,
+                          );
+
+                          if (!dialogContext.mounted) return;
+
+                          if (updated) {
+                            Navigator.of(dialogContext).pop();
+                          } else {
+                            setDialogState(() {
+                              dialogSubmitting = false;
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: dialogSubmitting
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('Update'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditIncrementDialog(
+    Map<String, dynamic> increment,
+  ) async {
+    final int? incrementId =
+        int.tryParse(increment['id']?.toString() ?? '');
+
+    if (incrementId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Invalid increment record ID.'),
+        ),
+      );
+      return;
+    }
+
+    String editedYear =
+        increment['year']?.toString() ?? '';
+    String editedAmount =
+        increment['increment_amount']?.toString() ?? '';
+    String editedRemarks =
+        increment['remarks']?.toString() ?? '';
+    bool dialogSubmitting = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: const Text(
+                'Edit Increment',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      initialValue: editedYear,
+                      enabled: !dialogSubmitting,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputDecoration(
+                        'Increment Year',
+                        icon: Icons.calendar_today_outlined,
+                      ),
+                      onChanged: (value) {
+                        editedYear = value;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      initialValue: editedAmount,
+                      enabled: !dialogSubmitting,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: _inputDecoration(
+                        'Increment Amount',
+                        icon: Icons.trending_up_rounded,
+                      ),
+                      onChanged: (value) {
+                        editedAmount = value;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      initialValue: editedRemarks,
+                      enabled: !dialogSubmitting,
+                      maxLines: 3,
+                      decoration: _inputDecoration(
+                        'Remarks',
+                        icon: Icons.notes_outlined,
+                      ),
+                      onChanged: (value) {
+                        editedRemarks = value;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: dialogSubmitting
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: dialogSubmitting
+                      ? null
+                      : () async {
+                          final int? year =
+                              int.tryParse(editedYear.trim());
+
+                          final num? amount =
+                              num.tryParse(editedAmount.trim());
+
+                          final String remarks =
+                              editedRemarks.trim();
+
+                          if (year == null ||
+                              year < 2000 ||
+                              year > 2101) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: Colors.red,
+                                content: Text(
+                                  'Please enter a valid increment year.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (amount == null || amount <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: Colors.red,
+                                content: Text(
+                                  'Please enter a valid increment amount.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            dialogSubmitting = true;
+                          });
+
+                          final bool updated =
+                              await editSalaryIncrement(
+                            scaffoldContext: context,
+                            incrementId: incrementId,
+                            year: year,
+                            incrementAmountValue: amount,
+                            remarksValue: remarks,
+                          );
+
+                          if (!dialogContext.mounted) return;
+
+                          if (updated) {
+                            Navigator.of(dialogContext).pop();
+                          } else {
+                            setDialogState(() {
+                              dialogSubmitting = false;
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: dialogSubmitting
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('Update'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildIncrementHistory() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFBFD7FF),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.history_rounded,
+                color: Colors.blue,
+                size: 21,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Increment History',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (salaryIncrements.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No increment history added yet.',
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else
+            ...salaryIncrements.asMap().entries.map(
+              (entry) {
+                final int index = entry.key;
+                final Map<String, dynamic> increment = entry.value;
+
+                return _buildIncrementHistoryCard(
+                  increment: increment,
+                  isLast: index == salaryIncrements.length - 1,
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIncrementHistoryCard({
+    required Map<String, dynamic> increment,
+    required bool isLast,
+  }) {
+    final String year =
+        increment['year']?.toString() ?? '-';
+    final String incrementAmountValue =
+        increment['increment_amount']?.toString() ?? '-';
+    final String previousSalary =
+        increment['previous_salary']?.toString() ?? '-';
+    final String newSalary =
+        increment['new_salary']?.toString() ?? '-';
+
+    final String remarks =
+        increment['remarks']?.toString().trim().isNotEmpty == true
+            ? increment['remarks'].toString()
+            : '-';
+
+    final int? incrementId =
+        int.tryParse(increment['id']?.toString() ?? '');
+
+    final bool isEditing =
+        incrementId != null && editingIncrementId == incrementId;
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(
+        bottom: isLast ? 0 : 12,
+      ),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFD8E7FF),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF3FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.trending_up_rounded,
+                  color: Colors.blue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Increment $year',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              if (isEditing)
+                const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                )
+              else
+                IconButton(
+                  tooltip: 'Edit Increment',
+                  onPressed: () {
+                    _showEditIncrementDialog(increment);
+                  },
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _salaryHistoryRow(
+            'Year',
+            year,
+          ),
+          _salaryHistoryRow(
+            'Increment Amount',
+            '₹$incrementAmountValue',
+          ),
+          _salaryHistoryRow(
+            'Previous Salary',
+            '₹$previousSalary',
+          ),
+          _salaryHistoryRow(
+            'New Salary',
+            '₹$newSalary',
+          ),
+          _salaryHistoryRow(
+            'Remarks',
+            remarks,
+            isLastRow: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _salaryHistoryRow(
+    String label,
+    String value, {
+    bool isLastRow = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: isLastRow ? 0 : 7,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 118,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: Colors.black87,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSalarySection() {
+    final bool hasSalaryRecord = salaryRecordId != null;
+
+    return _buildSectionCard(
+      title: hasSalaryRecord ? 'Salary & Increment' : 'Salary',
+      children: [
+        if (isSalaryLoading)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 14),
+            child: LinearProgressIndicator(),
+          ),
+
+        if (!isSalaryLoading && !hasSalaryRecord)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F9FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFBFD7FF),
+              ),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: Colors.blue,
+                  size: 20,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No salary has been added for this staff. Enter the current salary below and save it first.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        _buildTextField(
+          salary,
+          hasSalaryRecord ? 'Current Salary' : 'Salary',
+          icon: Icons.currency_rupee_rounded,
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+          ),
+          readOnly: hasSalaryRecord || isSalaryLoading,
+        ),
+
+        if (!isSalaryLoading && !hasSalaryRecord)
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: isSalaryCreating
+                  ? null
+                  : () async {
+                      await createStaffSalary(context);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: isSalaryCreating
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.add_rounded),
+              label: Text(
+                isSalaryCreating ? 'Adding Salary...' : 'Add Salary',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+
+        if (!isSalaryLoading && hasSalaryRecord) ...[
+          if (salaryIncrements.isEmpty)
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: OutlinedButton.icon(
+                onPressed: isSalaryEditing
+                    ? null
+                    : _showEditSalaryDialog,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  side: const BorderSide(
+                    color: Colors.blue,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: isSalaryEditing
+                    ? const SizedBox(
+                        height: 17,
+                        width: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.edit_outlined,
+                        size: 19,
+                      ),
+                label: Text(
+                  isSalaryEditing ? 'Updating Salary...' : 'Edit Salary',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+
+          if (salaryIncrements.isEmpty)
+            const SizedBox(height: 18),
+
+          _buildTextField(
+            incrementYear,
+            'Increment Year',
+            icon: Icons.calendar_today_outlined,
+            keyboardType: TextInputType.number,
+          ),
+          _buildTextField(
+            incrementAmount,
+            'Increment Amount',
+            icon: Icons.trending_up_rounded,
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+            ),
+          ),
+          _buildTextField(
+            incrementRemarks,
+            'Remarks',
+            icon: Icons.notes_outlined,
+            maxLines: 3,
+          ),
+
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: isSalaryUpdating
+                  ? null
+                  : () async {
+                      await updateStaffSalaryIncrement(context);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: isSalaryUpdating
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.trending_up_rounded),
+              label: Text(
+                isSalaryUpdating
+                    ? 'Updating...'
+                    : 'Add Salary Increment',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+
+          _buildIncrementHistory(),
+        ],
+      ],
+    );
   }
 
   Future<bool> registerUserData(BuildContext scaffoldContext) async {
@@ -797,6 +2389,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
         'alternate_number': alternate_number.text,
         'designation': designation.text,
         'grade': grade.text,
+        'paid_leaves': int.tryParse(paid_leaves.text.trim()) ?? 0,
         'address': address.text,
         'city': city.text,
         'country': Country.text,
@@ -831,8 +2424,16 @@ class _Staff_UpdateState extends State<Staff_Update> {
 
       request.body = jsonEncode(data);
 
+      debugPrint('========== UPDATE STAFF DATA ==========');
+      debugPrint('URL: $api/api/staff/update/${widget.id}/');
+      debugPrint('REQUEST BODY: ${jsonEncode(data)}');
+
       var response = await request.send();
       var responseData = await http.Response.fromStream(response);
+
+      debugPrint('STATUS CODE: ${responseData.statusCode}');
+      debugPrint('RESPONSE: ${responseData.body}');
+      debugPrint('=======================================');
 
       if (responseData.statusCode == 200) {
         final Map<String, dynamic> responseJson = jsonDecode(responseData.body);
@@ -868,7 +2469,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
         );
         return false;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('UPDATE STAFF DATA ERROR: $e');
+      debugPrint('UPDATE STAFF DATA STACKTRACE: $stackTrace');
+
       if (!mounted) return false;
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
@@ -886,6 +2490,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
       setState(() {
         selectedAadharImage = File(result.files.single.path!);
       });
+      debugPrint('SELECTED AADHAR IMAGE: ${selectedAadharImage?.path}');
     }
   }
 
@@ -898,6 +2503,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
       setState(() {
         selectedPanImage = File(result.files.single.path!);
       });
+      debugPrint('SELECTED PAN IMAGE: ${selectedPanImage?.path}');
     }
   }
 
@@ -925,6 +2531,9 @@ class _Staff_UpdateState extends State<Staff_Update> {
           selectedSalarySlip == null &&
           selectedAadharImage == null &&
           selectedPanImage == null) {
+        debugPrint('========== UPDATE STAFF FILES ==========');
+        debugPrint('NO NEW FILES SELECTED. SKIPPING FILE UPLOAD.');
+        debugPrint('========================================');
         return true;
       }
 
@@ -986,8 +2595,21 @@ class _Staff_UpdateState extends State<Staff_Update> {
         );
       }
 
+      debugPrint('========== UPDATE STAFF FILES ==========');
+      debugPrint('URL: $api/api/staff/update/${widget.id}/');
+      debugPrint('PROFILE IMAGE: ${selectedImage?.path}');
+      debugPrint('SIGNATURE: ${selectedSignature?.path}');
+      debugPrint('EXPERIENCE LETTER: ${selectedExpLetter?.path}');
+      debugPrint('SALARY SLIP: ${selectedSalarySlip?.path}');
+      debugPrint('AADHAR IMAGE: ${selectedAadharImage?.path}');
+      debugPrint('PAN IMAGE: ${selectedPanImage?.path}');
+
       var streamedResponse = await request.send();
       var responseData = await http.Response.fromStream(streamedResponse);
+
+      debugPrint('STATUS CODE: ${responseData.statusCode}');
+      debugPrint('RESPONSE: ${responseData.body}');
+      debugPrint('========================================');
 
       if (responseData.statusCode == 200) {
         return true;
@@ -1002,7 +2624,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
         );
         return false;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('UPDATE STAFF FILES ERROR: $e');
+      debugPrint('UPDATE STAFF FILES STACKTRACE: $stackTrace');
+
       if (!mounted) return false;
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
@@ -1309,6 +2934,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
     bool obscureText = false,
     TextCapitalization textCapitalization = TextCapitalization.none,
     int maxLines = 1,
+    bool readOnly = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -1318,6 +2944,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
         obscureText: obscureText,
         textCapitalization: textCapitalization,
         maxLines: maxLines,
+        readOnly: readOnly,
         decoration: _inputDecoration(label, icon: icon),
       ),
     );
@@ -2418,6 +4045,11 @@ class _Staff_UpdateState extends State<Staff_Update> {
     employment_status.dispose();
     designation.dispose();
     grade.dispose();
+    paid_leaves.dispose();
+    salary.dispose();
+    incrementYear.dispose();
+    incrementAmount.dispose();
+    incrementRemarks.dispose();
     address.dispose();
     city.dispose();
     Country.dispose();
@@ -2595,6 +4227,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   icon: Icons.stacked_bar_chart_outlined,
                                 ),
                                 _buildTextField(
+                                  paid_leaves,
+                                  'Paid Leaves',
+                                  icon: Icons.event_available_outlined,
+                                  keyboardType: TextInputType.number,
+                                ),
+                                _buildTextField(
                                   experience,
                                   'Experience',
                                   icon: Icons.timeline_outlined,
@@ -2632,6 +4270,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                 _buildApprovalDropdown(),
                               ],
                             ),
+                            _buildSalarySection(),
                             _buildSectionCard(
                               title: "Emergency & Personal Details",
                               children: [
@@ -2798,6 +4437,16 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   height: 54,
                                   child: ElevatedButton(
                                     onPressed: () async {
+                                      debugPrint('========== UPDATE STAFF BUTTON ==========');
+                                      debugPrint('STAFF ID: ${widget.id}');
+                                      debugPrint('DEPARTMENT ID: $selectedDepartmentId');
+                                      debugPrint('MANAGER ID: $selectedManagerId');
+                                      debugPrint('WAREHOUSE ID: $selectedWarehouseId');
+                                      debugPrint('FAMILY: $selectedFamily');
+                                      debugPrint('PAID LEAVES: ${paid_leaves.text}');
+                                      debugPrint('ALLOCATED STATES: $allocated_states');
+                                      debugPrint('=========================================');
+
                                       if (selectedDepartmentId == null) {
                                         ScaffoldMessenger.of(scaffoldContext)
                                             .showSnackBar(

@@ -8277,6 +8277,7 @@ Widget _buildDashboardLineItem({
 
                   _buildDropdownTile(context, 'Daily Sales Reports', [
                     'Add Team',
+                    'Approve BDO CD',
                     'Team wise Report',
                     'View All Team Members'
                   ]),

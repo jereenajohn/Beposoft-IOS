@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/COO_dashboard.dart';
+import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
@@ -157,7 +159,14 @@ class _SdAllDsrReportPageState extends State<SdAllDsrReportPage> {
       Navigator.pushReplacement(
           context, MaterialPageRoute(builder: (_) => cso_dashboard()));
     } 
-    
+       else if (dep == 'CEO') {
+      Navigator.pushReplacement(
+          context, MaterialPageRoute(builder: (_) => ceo_dashboard()));
+    } 
+       else if (dep == 'COO') {
+      Navigator.pushReplacement(
+          context, MaterialPageRoute(builder: (_) => coo_dashboard()));
+    } 
     else if (dep == 'BDM') {
       Navigator.pushReplacement(
           context, MaterialPageRoute(builder: (_) => bdm_dashbord()));
@@ -2454,6 +2463,433 @@ class _SdAllDsrReportPageState extends State<SdAllDsrReportPage> {
     }
   }
 
+
+  Future<void> exportBdoSalesFormatExcel() async {
+    try {
+      if (filteredDsrList.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.orange,
+            content: Text('No data available to export'),
+          ),
+        );
+        return;
+      }
+
+      setState(() => isExporting = true);
+
+      final ex.Excel excel = ex.Excel.createExcel();
+
+      final String? defaultSheet = excel.getDefaultSheet();
+      if (defaultSheet != null) {
+        excel.delete(defaultSheet);
+      }
+
+      final ex.Sheet sheet = excel['Sheet1'];
+
+      sheet.setColWidth(0, 6.0);
+      sheet.setColWidth(1, 18.0);
+      sheet.setColWidth(2, 24.0);
+      sheet.setColWidth(3, 15.0);
+      sheet.setColWidth(4, 11.0);
+      sheet.setColWidth(5, 11.0);
+      sheet.setColWidth(6, 10.0);
+      sheet.setColWidth(7, 10.0);
+      sheet.setColWidth(8, 14.0);
+      sheet.setColWidth(9, 14.0);
+
+      final ex.Border thinBorder = ex.Border(
+        borderStyle: ex.BorderStyle.Thin,
+      );
+
+      final ex.CellStyle topStyle = ex.CellStyle(
+        backgroundColorHex: '#DDEBF7',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        bold: true,
+        fontSize: 11,
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle topLeftStyle = ex.CellStyle(
+        backgroundColorHex: '#DDEBF7',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        bold: true,
+        fontSize: 11,
+        horizontalAlign: ex.HorizontalAlign.Left,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle headerStyle = ex.CellStyle(
+        backgroundColorHex: '#FF0000',
+        fontColorHex: '#FFFFFF',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        bold: true,
+        fontSize: 11,
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        textWrapping: ex.TextWrapping.WrapText,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle serialStyle = ex.CellStyle(
+        backgroundColorHex: '#FFFFFF',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle bodyCenterStyle = ex.CellStyle(
+        backgroundColorHex: '#FFFFFF',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        fontSize: 10,
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        textWrapping: ex.TextWrapping.WrapText,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle bodyLeftStyle = ex.CellStyle(
+        backgroundColorHex: '#FFFFFF',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        fontSize: 10,
+        horizontalAlign: ex.HorizontalAlign.Left,
+        verticalAlign: ex.VerticalAlign.Center,
+        textWrapping: ex.TextWrapping.WrapText,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle amountStyle = ex.CellStyle(
+        backgroundColorHex: '#FFFFFF',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        fontSize: 10,
+        horizontalAlign: ex.HorizontalAlign.Right,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle totalLabelStyle = ex.CellStyle(
+        backgroundColorHex: '#FFF200',
+        fontColorHex: '#FF0000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        bold: true,
+        fontSize: 11,
+        horizontalAlign: ex.HorizontalAlign.Left,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      final ex.CellStyle totalValueStyle = ex.CellStyle(
+        backgroundColorHex: '#FFF200',
+        fontColorHex: '#000000',
+        fontFamily: ex.getFontFamily(ex.FontFamily.Calibri),
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: ex.HorizontalAlign.Center,
+        verticalAlign: ex.VerticalAlign.Center,
+        leftBorder: thinBorder,
+        rightBorder: thinBorder,
+        topBorder: thinBorder,
+        bottomBorder: thinBorder,
+      );
+
+      void writeCell(
+        int column,
+        int row,
+        String value,
+        ex.CellStyle style,
+      ) {
+        final cell = sheet.cell(
+          ex.CellIndex.indexByColumnRow(
+            columnIndex: column,
+            rowIndex: row,
+          ),
+        );
+        cell.value = value;
+        cell.cellStyle = style;
+      }
+
+      String reportDateText;
+      if (selectedDateRange != null) {
+        final String fromDate = formatDateOnly(selectedDateRange!.start);
+        final String toDate = formatDateOnly(selectedDateRange!.end);
+        reportDateText =
+            fromDate == toDate ? fromDate : '$fromDate to $toDate';
+      } else {
+        reportDateText = formatDateOnly(DateTime.now());
+      }
+
+      String reportTeamName = selectedTeamName.trim();
+      if (reportTeamName.isEmpty) {
+        final Set<String> teamNames = filteredDsrList
+            .map((e) => (e['team_name'] ?? '').toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toSet();
+
+        if (teamNames.length == 1) {
+          reportTeamName = teamNames.first;
+        } else if (teamNames.isEmpty) {
+          reportTeamName = 'NO TEAM';
+        } else {
+          reportTeamName = 'ALL TEAMS';
+        }
+      }
+
+      for (int column = 0; column <= 6; column++) {
+        writeCell(column, 0, '', topStyle);
+      }
+      writeCell(0, 0, 'BDO SALES REPORT', topStyle);
+      sheet.merge(
+        ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+        ex.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+      );
+
+      for (int column = 7; column <= 9; column++) {
+        writeCell(column, 0, '', topLeftStyle);
+      }
+      writeCell(7, 0, 'DATE : $reportDateText', topLeftStyle);
+      sheet.merge(
+        ex.CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: 0),
+        ex.CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: 0),
+      );
+
+      for (int column = 0; column <= 9; column++) {
+        writeCell(column, 1, '', topLeftStyle);
+      }
+      writeCell(0, 1, 'TEAM NAME : $reportTeamName', topLeftStyle);
+      sheet.merge(
+        ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1),
+        ex.CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: 1),
+      );
+
+      const List<String> headers = [
+        'SL',
+        'STAFF NAME',
+        'CONTACT PERSON',
+        'CONTACT NO',
+        'STATE',
+        'DIST',
+        'CD',
+        'PC',
+        'INV NO',
+        'INV AMT',
+      ];
+
+      for (int column = 0; column < headers.length; column++) {
+        writeCell(column, 2, headers[column], headerStyle);
+      }
+
+      final int bodyRowCount =
+          filteredDsrList.length < 10 ? 10 : filteredDsrList.length;
+
+      int totalCallSeconds = 0;
+      int totalProductiveCalls = 0;
+      double totalInvoiceAmount = 0.0;
+
+      for (int i = 0; i < bodyRowCount; i++) {
+        final int rowIndex = i + 3;
+
+        if (i < filteredDsrList.length) {
+          final Map<String, dynamic> item = filteredDsrList[i];
+
+          final String staffName =
+              (item['created_by_name'] ?? '').toString().trim();
+          final String customerName =
+              (item['customer_name'] ?? '').toString().trim();
+          final String phone = (item['phone'] ?? '').toString().trim();
+          final String state =
+              (item['state_name'] ?? '').toString().trim();
+          final String district =
+              (item['district_name'] ?? '').toString().trim();
+          final String duration =
+              (item['call_duration'] ?? '').toString().trim();
+          final String callStatus =
+              (item['call_status'] ?? '').toString().toLowerCase().trim();
+          final bool isProductive = callStatus == 'productive';
+          final String invoiceNumber =
+              (item['invoice_no'] ?? '').toString().trim();
+
+          final String invoiceAmountText =
+              (item['invoice_amount'] ?? '0').toString().replaceAll(',', '').trim();
+          final double invoiceAmount =
+              double.tryParse(invoiceAmountText) ?? 0.0;
+
+          if (duration.isNotEmpty) {
+            totalCallSeconds += _durationToSeconds(duration);
+          }
+
+          if (isProductive) {
+            totalProductiveCalls++;
+          }
+
+          totalInvoiceAmount += invoiceAmount;
+
+          writeCell(0, rowIndex, '${i + 1}', serialStyle);
+          writeCell(1, rowIndex, staffName, bodyLeftStyle);
+          writeCell(2, rowIndex, customerName, bodyLeftStyle);
+          writeCell(3, rowIndex, phone, bodyCenterStyle);
+          writeCell(4, rowIndex, state, bodyCenterStyle);
+          writeCell(5, rowIndex, district, bodyCenterStyle);
+          writeCell(6, rowIndex, duration, bodyCenterStyle);
+          writeCell(
+            7,
+            rowIndex,
+            isProductive ? 'Productive' : '',
+            bodyCenterStyle,
+          );
+          writeCell(8, rowIndex, invoiceNumber, bodyCenterStyle);
+          writeCell(
+            9,
+            rowIndex,
+            invoiceAmount > 0 ? invoiceAmount.toStringAsFixed(2) : '',
+            amountStyle,
+          );
+        } else {
+          writeCell(0, rowIndex, '${i + 1}', serialStyle);
+          for (int column = 1; column <= 9; column++) {
+            writeCell(column, rowIndex, '', bodyCenterStyle);
+          }
+        }
+      }
+
+      final int totalRowIndex = bodyRowCount + 3;
+
+      for (int column = 0; column <= 9; column++) {
+        writeCell(
+          column,
+          totalRowIndex,
+          '',
+          column == 0 ? totalLabelStyle : totalValueStyle,
+        );
+      }
+
+      writeCell(0, totalRowIndex, 'TOTAL', totalLabelStyle);
+      writeCell(
+        6,
+        totalRowIndex,
+        _secondsToDuration(totalCallSeconds),
+        totalValueStyle,
+      );
+      writeCell(
+        7,
+        totalRowIndex,
+        totalProductiveCalls.toString(),
+        totalValueStyle,
+      );
+      writeCell(
+        9,
+        totalRowIndex,
+        totalInvoiceAmount.toStringAsFixed(2),
+        totalValueStyle,
+      );
+
+      final List<int>? fileBytes = excel.encode();
+      if (fileBytes == null) {
+        throw Exception('Failed to generate Excel file');
+      }
+
+      final Directory directory = await getApplicationDocumentsDirectory();
+
+      String safeTeamForFile = reportTeamName
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      if (safeTeamForFile.isEmpty) {
+        safeTeamForFile = 'All Teams';
+      }
+
+      String fileDatePart;
+      if (selectedDateRange != null) {
+        final String fromDate = formatDateOnly(selectedDateRange!.start);
+        final String toDate = formatDateOnly(selectedDateRange!.end);
+        fileDatePart =
+            fromDate == toDate ? fromDate : '${fromDate}_to_$toDate';
+      } else {
+        fileDatePart = formatDateOnly(DateTime.now());
+      }
+
+      final String fileName =
+          'BDO Sales Report - $safeTeamForFile - $fileDatePart.xlsx';
+
+      final String filePath = '${directory.path}/$fileName';
+
+      final File file = File(filePath);
+      await file.writeAsBytes(fileBytes, flush: true);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('$fileName generated successfully'),
+        ),
+      );
+
+      await Share.shareXFiles(
+        [
+          XFile(
+            file.path,
+            mimeType:
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          ),
+        ],
+      );
+    } catch (e, stackTrace) {
+      debugPrint('BDO SALES FORMAT EXCEL EXPORT ERROR: $e');
+      debugPrint('$stackTrace');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('BDO Sales Report export failed: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isExporting = false);
+      }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -2497,6 +2933,20 @@ class _SdAllDsrReportPageState extends State<SdAllDsrReportPage> {
                     ? const Color(0xff2196F3)
                     : Colors.black87,
               ),
+            ),
+            IconButton(
+              tooltip: 'Export BDO Sales Format',
+              onPressed: isExporting ? null : exportBdoSalesFormatExcel,
+              icon: isExporting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(
+                      Icons.table_view_outlined,
+                      color: Colors.redAccent,
+                    ),
             ),
             IconButton(
               tooltip: 'Export',

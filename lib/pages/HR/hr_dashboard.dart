@@ -7,6 +7,8 @@ import 'package:beposoft/pages/ADMIN/add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/all_local_purchases_screen.dart';
 import 'package:beposoft/pages/ADMIN/localpurchaseorderscreen.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
+import 'package:beposoft/pages/HR/staff_month_salary_report_page.dart';
+import 'package:beposoft/pages/HR/staff_monthly_salary_page.dart';
 import 'package:beposoft/pages/api.dart';
 import 'package:beposoft/pages/auth_status_checker.dart';
 import 'package:beposoft/loginpage.dart';
@@ -1149,6 +1151,15 @@ void dispose() {
             'title': 'Add Staff',
             'icon': Icons.person_add_alt_1_outlined,
           },
+        
+          {
+            'title': 'Payroll',
+            'icon': Icons.payments_outlined,
+          },
+            {
+            'title': 'Payroll Reports',
+            'icon': Icons.payments_outlined,
+          },
           {
             'title': 'Add Staff Exit Form',
             'icon': Icons.exit_to_app_rounded,
@@ -1192,6 +1203,18 @@ void dispose() {
         );
         return;
 
+         case 'Payroll':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => StaffMonthlySalaryPage()),
+        );
+        return;
+    case 'Payroll Reports':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => StaffMonthlySalaryReportPage()),
+        );
+        return;
       case 'Add Staff Exit Form':
         Navigator.push(
           context,

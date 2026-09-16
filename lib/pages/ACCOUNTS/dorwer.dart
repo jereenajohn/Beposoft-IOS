@@ -1,4 +1,5 @@
 import 'package:beposoft/Sales%20Directors/DSR_BDO_List.dart';
+import 'package:beposoft/Sales%20Directors/sd_all_dsr_reportpage.dart';
 import 'package:beposoft/Sales%20Directors/sd_confirm_call_duration.dart';
 import 'package:beposoft/pages/ACCOUNTS/BDO_call_List.dart';
 import 'package:beposoft/pages/ACCOUNTS/Dispatched_Pending_Orders_Summary_Report.dart';
@@ -176,6 +177,14 @@ class drower {
           MaterialPageRoute(
               builder: (context) =>
                   CyclingskatingCategoryDailyProductwiseReport()),
+        );
+        break;
+            case 'Approve BDO CD':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) =>
+                  SdAllDsrReportPage()),
         );
         break;
       case 'Add Department & Managers':
