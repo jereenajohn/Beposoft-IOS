@@ -74,13 +74,14 @@ class _ProformaInvoiceListState extends State<ProformaInvoiceList> {
 
   static const int _invoicePageSize = 10;
 
-  static const Set<String> _allInvoiceDepartments = {
-    'ADMIN',
-    'CEO',
-    'COO',
-    'CSO',
-    'SD',
-  };
+static const Set<String> _allInvoiceDepartments = {
+  'ADMIN',
+  'CEO',
+  'COO',
+  'CSO',
+  'SD',
+  'ACCOUNTS / ACCOUNTING',
+};
 
   bool get canViewAllInvoices {
     final String department = dep?.trim().toUpperCase() ?? '';
