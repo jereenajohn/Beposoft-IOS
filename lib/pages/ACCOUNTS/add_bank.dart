@@ -49,6 +49,8 @@ class _add_bankState extends State<add_bank> {
 
   List<Map<String, dynamic>> bank = [];
   List<Map<String, dynamic>> banktypes = [];
+  List<Map<String, dynamic>> company = [];
+  int? selectedCompanyId;
   int? selectedBankTypeId;
   String? selectedBankTypeName;
 
@@ -62,6 +64,7 @@ class _add_bankState extends State<add_bank> {
     super.initState();
     getbank();
     getbanktype();
+    getcompany();
   }
 
   Future<void> getbanktype() async {
@@ -97,9 +100,55 @@ class _add_bankState extends State<add_bank> {
     }
   }
 
+  Future<void> getcompany() async {
+    try {
+      final token = await gettoken();
+      if (token == null) return;
+
+      final response = await http.get(
+        Uri.parse('$api/api/company/data/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        final List<Map<String, dynamic>> companylist = [];
+
+        for (final item in parsed['data']) {
+          companylist.add({
+            'id': item['id'],
+            'name': item['name'],
+          });
+        }
+
+        if (!mounted) return;
+        setState(() {
+          company = companylist;
+        });
+      } else {
+        debugPrint('Failed to load companies: ${response.statusCode} ${response.body}');
+      }
+    } catch (error) {
+      debugPrint('Error loading companies: $error');
+    }
+  }
+
   Future<void> Addbank(
     BuildContext scaffoldContext,
   ) async {
+    if (selectedCompanyId == null) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please select a company.'),
+        ),
+      );
+      return;
+    }
+
     final token = await gettoken();
     try {
       final response = await http.post(Uri.parse('$api/api/add/bank/'),
@@ -115,6 +164,7 @@ class _add_bankState extends State<add_bank> {
             'open_balance': balance.text,
             'interest_rate': interest.text,
             'account_type': selectedBankTypeId,
+            'company': selectedCompanyId,
           }));
 
 
@@ -156,7 +206,9 @@ class _add_bankState extends State<add_bank> {
           banklist.add({
             'id': productData['id'],
             'name': productData['name'],
-            'branch': productData['branch']
+            'branch': productData['branch'],
+            'company': productData['company'],
+            'company_name': productData['company_name'],
           });
         }
 
@@ -165,6 +217,31 @@ class _add_bankState extends State<add_bank> {
         });
       }
     } catch (e) {}
+  }
+
+  String bankCompanyName(Map<String, dynamic> bankData) {
+    final companyValue = bankData['company'];
+    final companyName = bankData['company_name'];
+
+    if (companyName != null && companyName.toString().trim().isNotEmpty) {
+      return companyName.toString();
+    }
+
+    if (companyValue is Map) {
+      final nestedName = companyValue['name'];
+      if (nestedName != null && nestedName.toString().trim().isNotEmpty) {
+        return nestedName.toString();
+      }
+    }
+
+    final companyId = companyValue is Map ? companyValue['id'] : companyValue;
+    for (final item in company) {
+      if (item['id'].toString() == companyId?.toString()) {
+        return item['name']?.toString() ?? '-';
+      }
+    }
+
+    return '-';
   }
 
   void logout() async {
@@ -422,6 +499,44 @@ class _add_bankState extends State<add_bank> {
                           height: 10,
                         ),
                         Text(
+                          "Company",
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 5),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: selectedCompanyId,
+                                hint: Text(
+                                  "Select Company",
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                isExpanded: true,
+                                items: company.map((item) {
+                                  return DropdownMenuItem<int>(
+                                    value: item['id'],
+                                    child: Text(item['name'].toString()),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedCompanyId = value;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Text(
                           "Interest",
                           style: TextStyle(
                               fontSize: 12, fontWeight: FontWeight.bold),
@@ -608,12 +723,10 @@ class _add_bankState extends State<add_bank> {
                   border: TableBorder.all(
                       color: Color.fromARGB(255, 214, 213, 213)),
                   columnWidths: {
-                    0: FixedColumnWidth(
-                        40.0), // Fixed width for the first column (No.)
-                    1: FlexColumnWidth(
-                        2), // Flex width for the second column (Department Name)
-                    2: FixedColumnWidth(
-                        50.0), // Fixed width for the third column (Edit)
+                    0: FixedColumnWidth(40.0),
+                    1: FlexColumnWidth(2),
+                    2: FlexColumnWidth(2),
+                    3: FixedColumnWidth(50.0),
                   },
                   children: [
                     const TableRow(
@@ -633,7 +746,16 @@ class _add_bankState extends State<add_bank> {
                         Padding(
                           padding: EdgeInsets.all(8.0),
                           child: Text(
-                            "Department Name",
+                            "Bank Name",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Text(
+                            "Company Name",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white),
@@ -660,6 +782,10 @@ class _add_bankState extends State<add_bank> {
                           Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: Text(bank[i]['name']),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(bankCompanyName(bank[i])),
                           ),
                           Padding(
                             padding: const EdgeInsets.all(8.0),

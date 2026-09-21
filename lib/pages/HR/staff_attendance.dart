@@ -82,6 +82,12 @@ class _HrTeamAttendanceScreenState extends State<HrTeamAttendanceScreen> {
   void initState() {
     super.initState();
 
+    // Default view: today's attendance across ALL departments.
+    // No department or staff is selected until the user applies a filter.
+    final today = DateTime.now();
+    startDate = DateTime(today.year, today.month, today.day);
+    endDate = DateTime(today.year, today.month, today.day);
+
     Future.microtask(() async {
       await Future.wait([
         fetchTeams(),
@@ -696,8 +702,10 @@ class _HrTeamAttendanceScreenState extends State<HrTeamAttendanceScreen> {
     setState(() {
       selectedTeamId = null;
       selectedMemberId = null;
-      startDate = null;
-      endDate = null;
+      // Reset to today's attendance for all departments, not all dates.
+      final today = DateTime.now();
+      startDate = DateTime(today.year, today.month, today.day);
+      endDate = DateTime(today.year, today.month, today.day);
     });
 
     await getAllAttendance();

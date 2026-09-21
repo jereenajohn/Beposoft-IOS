@@ -81,6 +81,9 @@ class admin_dashboard extends StatefulWidget {
 class _admin_dashboardState extends State<admin_dashboard>
     with WidgetsBindingObserver {
   List<String> statusOptions = ["pending", "approved", "rejected"];
+  List<Map<String, dynamic>> company = [];
+  bool isCompanyLoading = false;
+  String? companyError;
   List<Map<String, dynamic>> grvlist = [];
   List<Map<String, dynamic>> proforma = [];
   List<Map<String, dynamic>> salesReportList = [];
@@ -121,6 +124,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     WidgetsBinding.instance.addObserver(this);
     _getUsername(); // Get the username when the page loads
     getGrvList();
+    getcompany();
     getProfile();
     fetchproformaData();
     getSalesReport();
@@ -168,6 +172,52 @@ class _admin_dashboardState extends State<admin_dashboard>
     if (state == AppLifecycleState.resumed) {
       fetchInboxMailCount();
       fetchMyOrderSummary();
+    }
+  }
+
+  Future<void> getcompany() async {
+    if (!mounted) return;
+    setState(() {
+      isCompanyLoading = true;
+      companyError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view companies.');
+      }
+      final response = await http.get(
+        Uri.parse('$api/api/company/data/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 25));
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load companies (${response.statusCode}).');
+      }
+      final parsed = jsonDecode(response.body);
+      if (parsed is! Map || parsed['data'] is! List) {
+        throw const FormatException('Invalid company response.');
+      }
+      final companies = <Map<String, dynamic>>[];
+      for (final item in parsed['data'] as List) {
+        if (item is Map &&
+            item['id'] != null &&
+            item['name']?.toString().trim().toLowerCase() != 'test company') {
+          companies.add({
+            'id': item['id'],
+            'name': item['name']?.toString() ?? 'Unnamed company',
+          });
+        }
+      }
+      if (!mounted) return;
+      setState(() => company = companies);
+    } catch (error) {
+      debugPrint('COMPANY FETCH ERROR: $error');
+      if (mounted) setState(() => companyError = error.toString());
+    } finally {
+      if (mounted) setState(() => isCompanyLoading = false);
     }
   }
 
@@ -434,8 +484,20 @@ class _admin_dashboardState extends State<admin_dashboard>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.blue,
         borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2C74FF).withOpacity(0.28),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: 10,
@@ -1787,7 +1849,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'Delivery Note',
                   [
                     'Delivery Order (DO)',
-                    // 'Delivery Order(Packing under Progress)',
+                    'Delivery Order(Printed)',
                     'Packed For Delivery(PFD)',
                     'Out For Delivery(OFD)',
                     'Return From Delivery (RFD)',
@@ -1803,7 +1865,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'Pre Booked',
                   'Waiting For Confirmation',
                   'DO(Delivery Order)',
-                  // 'Packing Under Progress',
+                  'Printed',
                   'PFD (Packed For Delivery)',
                   'OFD (Out For Delivery)',
                   'Return From Delivery',
@@ -2415,8 +2477,9 @@ class _admin_dashboardState extends State<admin_dashboard>
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.9,
+                    mainAxisExtent: 185,
                     children: [
+                      _buildCompanyGridCard(),
                       // Display the count of today's shipped orders
                       GestureDetector(
                         onTap: () {
@@ -2520,54 +2583,926 @@ class _admin_dashboardState extends State<admin_dashboard>
     );
   }
 
+  // Companies are displayed directly in the dashboard card. Selecting a
+  // company opens its finance report without an intermediate list screen.
+  Widget _buildCompanyGridCard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool compact = constraints.maxWidth < 160;
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 10 : 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Company',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: compact ? 32 : 34,
+                      height: compact ? 32 : 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.22),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.business_rounded,
+                        color: Colors.white,
+                        size: 19,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: isCompanyLoading && company.isEmpty
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : companyError != null && company.isEmpty
+                          ? Center(
+                              child: TextButton(
+                                onPressed: getcompany,
+                                child: const Text(
+                                  'Retry loading companies',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            )
+                          : company.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'No companies found',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  physics: const ClampingScrollPhysics(),
+                                  itemCount: company.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 5),
+                                  itemBuilder: (context, index) {
+                                    final item = company[index];
+                                    final id = int.tryParse(
+                                      item['id']?.toString() ?? '',
+                                    );
+                                    final name = item['name']?.toString() ??
+                                        'Unnamed company';
+                                    return Material(
+                                      color: Colors.white.withOpacity(0.14),
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(10),
+                                        onTap: id == null
+                                            ? null
+                                            : () => Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        CompanyFinanceReportPage(
+                                                      companyId: id,
+                                                      companyName: name,
+                                                    ),
+                                                  ),
+                                                ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 8,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  name,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: compact ? 10 : 10.5,
+                                                    height: 1.2,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 3),
+                                              const Icon(
+                                                Icons.chevron_right_rounded,
+                                                color: Colors.white,
+                                                size: 17,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildGridItem(IconData icon, String title, [int? count]) {
-    return Card(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Stack(
-          clipBehavior: Clip.none, // Prevents the badge from clipping the card
-          children: [
-            // Main content of the card - Center the text and icon
-            Center(
-              // Wrap the Column in a Center widget
-              child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center, // Vertically center
-                crossAxisAlignment:
-                    CrossAxisAlignment.center, // Horizontally center
-                children: [
-                  Icon(icon, size: 36, color: Colors.blue),
-                  SizedBox(height: 8),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isVerySmallPhone = constraints.maxWidth < 160;
+
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(isVerySmallPhone ? 10 : 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isVerySmallPhone ? 11.5 : 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: isVerySmallPhone ? 32 : 34,
+                      height: isVerySmallPhone ? 32 : 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.22),
+                        ),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: isVerySmallPhone ? 18 : 19,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: Center(
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isVerySmallPhone ? 10 : 12,
+                        vertical: isVerySmallPhone ? 8 : 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.11),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.24),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Total',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Spacer(),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                (count ?? 0).toString(),
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isVerySmallPhone ? 17 : 20,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+
+// ============================================================
+// COMPANY FINANCE - COMPANY SELECTION
+// ============================================================
+class CompanyFinanceListPage extends StatefulWidget {
+  final List<Map<String, dynamic>> initialCompanies;
+
+  const CompanyFinanceListPage({
+    Key? key,
+    required this.initialCompanies,
+  }) : super(key: key);
+
+  @override
+  State<CompanyFinanceListPage> createState() => _CompanyFinanceListPageState();
+}
+
+class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
+  late List<Map<String, dynamic>> companies;
+  bool loading = false;
+  String? error;
+  String search = '';
+  final searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    companies = List<Map<String, dynamic>>.from(widget.initialCompanies)
+        .where((item) =>
+            item['name']?.toString().trim().toLowerCase() != 'test company')
+        .toList();
+    _fetchCompanies();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchCompanies() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again.');
+      }
+      final response = await http.get(
+        Uri.parse('$api/api/company/data/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 25));
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load companies (${response.statusCode}).');
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['data'] is! List) {
+        throw const FormatException('Invalid company response.');
+      }
+      final items = <Map<String, dynamic>>[];
+      for (final raw in decoded['data'] as List) {
+        if (raw is Map &&
+            raw['id'] != null &&
+            raw['name']?.toString().trim().toLowerCase() != 'test company') {
+          items.add({
+            'id': raw['id'],
+            'name': raw['name']?.toString() ?? 'Unnamed company',
+          });
+        }
+      }
+      if (!mounted) return;
+      setState(() => companies = items);
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = companies.where((c) =>
+      (c['name']?.toString() ?? '').toLowerCase().contains(search.toLowerCase()),
+    ).toList();
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F6FC),
+      appBar: AppBar(
+        title: const Text('Company', style: TextStyle(fontWeight: FontWeight.w700)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF17345C),
+        elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Refresh companies',
+            onPressed: loading ? null : _fetchCompanies,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _fetchCompanies,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(
+                  color: const Color(0xFF2C74FF).withOpacity(.20),
+                  blurRadius: 16,
+                  offset: const Offset(0, 7),
+                )],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.account_balance_rounded, color: Colors.white, size: 36),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Company Finance', style: TextStyle(
+                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800,
+                      )),
+                      const SizedBox(height: 5),
+                      Text('${companies.length} companies • Select to view bank balances',
+                        style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+                    ],
+                  )),
                 ],
               ),
             ),
-            // Notification Badge
-            if (count != null && count > 0)
-              Positioned(
-                top: -8,
-                right: -8,
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Colors.grey[600],
-                  child: Text(
-                    count.toString(),
-                    style: TextStyle(fontSize: 10, color: Colors.white),
-                  ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: searchController,
+              onChanged: (value) => setState(() => search = value),
+              decoration: InputDecoration(
+                hintText: 'Search company',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: search.isEmpty ? null : IconButton(
+                  onPressed: () {
+                    searchController.clear();
+                    setState(() => search = '');
+                  },
+                  icon: const Icon(Icons.close_rounded),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
                 ),
               ),
+            ),
+            if (loading) const Padding(
+              padding: EdgeInsets.all(16),
+              child: LinearProgressIndicator(color: Color(0xFF2C74FF)),
+            ),
+            if (error != null) Padding(
+              padding: const EdgeInsets.only(top: 18),
+              child: _FinanceMessage(
+                message: error!,
+                onRetry: _fetchCompanies,
+              ),
+            ),
+            if (!loading && error == null && filtered.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 36),
+                child: Center(child: Text('No companies found.')),
+              ),
+            const SizedBox(height: 12),
+            ...filtered.map((c) {
+              final id = int.tryParse(c['id'].toString());
+              final name = c['name']?.toString() ?? 'Unnamed company';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(17),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(17),
+                    onTap: id == null ? null : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => CompanyFinanceReportPage(
+                        companyId: id,
+                        companyName: name,
+                      )),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+                      child: Row(children: [
+                        Container(
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAF2FF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.business_rounded, color: Color(0xFF2C74FF)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(name, style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700,
+                          color: Color(0xFF17345C),
+                        ))),
+                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF2C74FF)),
+                      ]),
+                    ),
+                  ),
+                ),
+              );
+            }),
           ],
         ),
       ),
     );
   }
+}
+
+// ============================================================
+// COMPANY FINANCE - DATE-RANGE BANK REPORT
+// ============================================================
+class CompanyFinanceReportPage extends StatefulWidget {
+  final int companyId;
+  final String companyName;
+
+  const CompanyFinanceReportPage({
+    Key? key,
+    required this.companyId,
+    required this.companyName,
+  }) : super(key: key);
+
+  @override
+  State<CompanyFinanceReportPage> createState() => _CompanyFinanceReportPageState();
+}
+
+class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
+  static const Color blue = Color(0xFF2C74FF);
+  static const Color navy = Color(0xFF17345C);
+  late DateTime startDate;
+  late DateTime endDate;
+  Map<String, dynamic>? report;
+  String? error;
+  bool loading = true;
+  int requestVersion = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final today = DateTime.now();
+    startDate = DateTime(today.year, today.month, today.day);
+    endDate = startDate;
+    _fetchReport();
+  }
+
+  @override
+  void dispose() {
+    requestVersion++;
+    super.dispose();
+  }
+
+  String _apiDate(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+  String _displayDate(DateTime date) => DateFormat('dd MMM yyyy').format(date);
+
+  String _money(dynamic raw) {
+    final text = raw?.toString() ?? '0';
+    final negative = text.trim().startsWith('-');
+    final cleaned = text.replaceAll(',', '').replaceAll('₹', '').trim();
+    final unsigned = cleaned.startsWith('-') ? cleaned.substring(1) : cleaned;
+    final pieces = unsigned.split('.');
+    final digits = pieces.first.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return '₹0.00';
+    final fraction = pieces.length > 1
+        ? (pieces[1].replaceAll(RegExp(r'[^0-9]'), '') + '00').substring(0, 2)
+        : '00';
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final remaining = digits.length - i;
+      if (i > 0 && (remaining == 3 || (remaining > 3 && (remaining - 3) % 2 == 0))) {
+        buffer.write(',');
+      }
+      buffer.write(digits[i]);
+    }
+    return '${negative ? '-' : ''}₹${buffer.toString()}.$fraction';
+  }
+
+  Future<void> _fetchReport() async {
+    final version = ++requestVersion;
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view this report.');
+      }
+      final uri = Uri.parse(
+        '$api/api/finance/report/company/wise/${widget.companyId}/',
+      ).replace(queryParameters: {
+        'start_date': _apiDate(startDate),
+        'end_date': _apiDate(endDate),
+      });
+      final response = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load finance report (${response.statusCode}).');
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['status'] != 'success' || decoded['data'] is! Map) {
+        throw const FormatException('Invalid finance report response.');
+      }
+      final data = Map<String, dynamic>.from(decoded['data'] as Map);
+      if (data['banks'] is! List) {
+        throw const FormatException('Bank details are missing from the report.');
+      }
+      if (!mounted || version != requestVersion) return;
+      setState(() => report = Map<String, dynamic>.from(decoded));
+    } catch (e) {
+      if (mounted && version == requestVersion) {
+        setState(() => error = e.toString());
+      }
+    } finally {
+      if (mounted && version == requestVersion) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  Future<void> _selectDateRange() async {
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: DateTimeRange(start: startDate, end: endDate),
+      helpText: 'Select finance report period',
+      saveText: 'APPLY',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: blue),
+        ),
+        child: child!,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      startDate = selected.start;
+      endDate = selected.end;
+    });
+    await _fetchReport();
+  }
+
+  Widget _metric(String label, dynamic value, IconData icon, {
+    Color? color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE7EDF7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, color: color ?? blue, size: 19),
+          const SizedBox(width: 6),
+          Expanded(child: Text(label, style: const TextStyle(
+            fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600,
+          ))),
+        ]),
+        const SizedBox(height: 13),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(_money(value), style: TextStyle(
+            fontSize: 19, color: color ?? navy, fontWeight: FontWeight.w800,
+          )),
+        ),
+      ]),
+    );
+  }
+
+  Widget _bankCard(Map<String, dynamic> bank) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 13),
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE7EDF7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF2FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.account_balance_rounded, color: blue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(bank['name']?.toString() ?? 'Unnamed bank',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: navy))),
+        ]),
+        const SizedBox(height: 15),
+        const Divider(height: 1),
+        const SizedBox(height: 13),
+        _bankLine('Opening Balance', bank['opening_balance']),
+        _bankLine('Credit', bank['credit'], valueColor: const Color(0xFF15803D)),
+        _bankLine('Debit', bank['debit'], valueColor: const Color(0xFFDC2626)),
+        const Divider(height: 17),
+        _bankLine('Closing Balance', bank['closing_balance'], bold: true),
+      ]),
+    );
+  }
+
+  Widget _bankLine(String label, dynamic amount, {Color? valueColor, bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Expanded(child: Text(label, style: TextStyle(
+          color: bold ? navy : const Color(0xFF64748B),
+          fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+          fontSize: 13,
+        ))),
+        Flexible(child: Text(_money(amount), textAlign: TextAlign.right,
+          style: TextStyle(fontSize: 13, color: valueColor ?? navy,
+            fontWeight: bold ? FontWeight.w800 : FontWeight.w700))),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = report?['data'] is Map
+        ? Map<String, dynamic>.from(report!['data'] as Map)
+        : <String, dynamic>{};
+    final banks = data['banks'] is List
+        ? (data['banks'] as List).whereType<Map>().map(
+            (item) => Map<String, dynamic>.from(item),
+          ).toList()
+        : <Map<String, dynamic>>[];
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F6FC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: navy,
+        elevation: 0,
+        title: const Text('Company Finance', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(
+            tooltip: 'Select date range',
+            onPressed: _selectDateRange,
+            icon: const Icon(Icons.date_range_rounded, color: blue),
+          ),
+          IconButton(
+            tooltip: 'Refresh report',
+            onPressed: loading ? null : _fetchReport,
+            icon: const Icon(Icons.refresh_rounded, color: blue),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _fetchReport,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF56AFFF), blue],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(
+                  color: blue.withOpacity(.22), blurRadius: 16,
+                  offset: const Offset(0, 7),
+                )],
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('COMPANY FINANCIAL OVERVIEW', style: TextStyle(
+                  color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                )),
+                const SizedBox(height: 10),
+                Text(data['company_name']?.toString() ?? widget.companyName,
+                  style: const TextStyle(color: Colors.white, fontSize: 20,
+                    fontWeight: FontWeight.w800)),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.13),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: Colors.white.withOpacity(.23)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Closing Balance', style: TextStyle(
+                      color: Colors.white70, fontSize: 12,
+                    )),
+                    const SizedBox(height: 5),
+                    FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                      child: Text(loading && report == null ? 'Loading...' : _money(data['closing_balance']),
+                        style: const TextStyle(color: Colors.white, fontSize: 29,
+                          fontWeight: FontWeight.w900))),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+                Row(children: [
+                  const Icon(Icons.account_balance_rounded, color: Colors.white, size: 17),
+                  const SizedBox(width: 7),
+                  Text('${data['total_banks'] ?? banks.length} Banks',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 15),
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              child: InkWell(
+                onTap: _selectDateRange,
+                borderRadius: BorderRadius.circular(15),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_month_rounded, color: blue),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Report Period', style: TextStyle(
+                          color: Color(0xFF64748B), fontSize: 11,
+                        )),
+                        const SizedBox(height: 3),
+                        Text('${_displayDate(startDate)}  –  ${_displayDate(endDate)}',
+                          style: const TextStyle(fontWeight: FontWeight.w700,
+                            color: navy, fontSize: 13)),
+                      ],
+                    )),
+                    const Icon(Icons.tune_rounded, color: blue),
+                  ]),
+                ),
+              ),
+            ),
+            if (loading) const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: LinearProgressIndicator(color: blue),
+            ),
+            if (error != null) Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: _FinanceMessage(message: error!, onRetry: _fetchReport),
+            ),
+            if (report != null) ...[
+              const SizedBox(height: 21),
+              const Text('Balance Summary', style: TextStyle(
+                color: navy, fontSize: 18, fontWeight: FontWeight.w800,
+              )),
+              const SizedBox(height: 12),
+              LayoutBuilder(builder: (context, constraints) {
+                final width = (constraints.maxWidth - 12) / 2;
+                return Wrap(spacing: 12, runSpacing: 12, children: [
+                  SizedBox(width: width, child: _metric('Opening Balance',
+                    data['opening_balance'], Icons.account_balance_wallet_outlined)),
+                  SizedBox(width: width, child: _metric('Credit',
+                    data['credit'], Icons.south_west_rounded,
+                    color: const Color(0xFF15803D))),
+                  SizedBox(width: width, child: _metric('Debit',
+                    data['debit'], Icons.north_east_rounded,
+                    color: const Color(0xFFDC2626))),
+                  SizedBox(width: width, child: _metric('Closing Balance',
+                    data['closing_balance'], Icons.payments_outlined)),
+                ]);
+              }),
+              const SizedBox(height: 25),
+              Row(children: [
+                const Expanded(child: Text('Bank-wise Breakdown', style: TextStyle(
+                  color: navy, fontSize: 18, fontWeight: FontWeight.w800,
+                ))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('${data['total_banks'] ?? banks.length} banks',
+                    style: const TextStyle(color: blue, fontWeight: FontWeight.w800)),
+                ),
+              ]),
+              const SizedBox(height: 13),
+              if (banks.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 30),
+                  child: Center(child: Text('No banks found for this company.')),
+                ),
+              ...banks.map(_bankCard),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinanceMessage extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _FinanceMessage({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(children: [
+      const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 30),
+      const SizedBox(height: 8),
+      Text(message, textAlign: TextAlign.center),
+      const SizedBox(height: 10),
+      TextButton.icon(
+        onPressed: onRetry,
+        icon: const Icon(Icons.refresh_rounded),
+        label: const Text('Retry'),
+      ),
+    ]),
+  );
 }

@@ -46,6 +46,7 @@ class _update_bankState extends State<update_bank> {
     super.initState();
     getbank();
     getBankTypes();
+    getcompany();
   }
 
   var url = "$api/api/add/department/";
@@ -59,6 +60,8 @@ class _update_bankState extends State<update_bank> {
   TextEditingController interest = TextEditingController();
 
   List<Map<String, dynamic>> bankTypes = [];
+  List<Map<String, dynamic>> company = [];
+  int? selectedCompanyId;
 
   int? selectedBankTypeId;
   String? selectedBankTypeName;
@@ -97,6 +100,36 @@ class _update_bankState extends State<update_bank> {
         });
       }
     } catch (e) {
+    }
+  }
+
+  Future<void> getcompany() async {
+    try {
+      final token = await gettokenFromPrefs();
+      final response = await http.get(
+        Uri.parse('$api/api/company/data/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        final List<Map<String, dynamic>> companylist = [];
+        for (final item in parsed['data']) {
+          companylist.add({
+            'id': item['id'],
+            'name': item['name'],
+          });
+        }
+        if (!mounted) return;
+        setState(() {
+          company = companylist;
+        });
+      }
+    } catch (error) {
+      debugPrint('Error fetching companies: $error');
     }
   }
 
@@ -157,7 +190,9 @@ class _update_bankState extends State<update_bank> {
           banklist.add({
             'id': productData['id'],
             'name': productData['name'],
-            'branch': productData['branch']
+            'branch': productData['branch'],
+            'company': productData['company'],
+            'company_name': productData['company_name'],
           });
 
           if (widget.id == productData['id']) {
@@ -166,7 +201,13 @@ class _update_bankState extends State<update_bank> {
             branch.text = productData['branch'] ?? '';
             ifsc.text = productData['ifsc_code'] ?? '';
             balance.text = productData['open_balance'].toString() ?? '';
-            selectedBankTypeId = productData['account_type'];
+            selectedBankTypeId = productData['account_type'] is Map
+                ? productData['account_type']['id']
+                : productData['account_type'];
+            final savedCompany = productData['company'];
+            selectedCompanyId = savedCompany is Map
+                ? savedCompany['id']
+                : savedCompany;
             interest.text = productData['interest_rate']?.toString() ?? '';
           }
         }
@@ -178,7 +219,34 @@ class _update_bankState extends State<update_bank> {
     } catch (e) {}
   }
 
+  String companyNameForBank(Map<String, dynamic> bankData) {
+    final companyValue = bankData['company'];
+    final directName = bankData['company_name'];
+    if (directName != null && directName.toString().trim().isNotEmpty) {
+      return directName.toString();
+    }
+    if (companyValue is Map) {
+      final nestedName = companyValue['name'];
+      if (nestedName != null && nestedName.toString().trim().isNotEmpty) {
+        return nestedName.toString();
+      }
+    }
+    final companyId = companyValue is Map ? companyValue['id'] : companyValue;
+    for (final item in company) {
+      if (item['id'].toString() == companyId?.toString()) {
+        return item['name']?.toString() ?? '-';
+      }
+    }
+    return '-';
+  }
+
   Future<void> updatebank() async {
+    if (selectedCompanyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a company')),
+      );
+      return;
+    }
     try {
       final token = await gettokenFromPrefs();
 
@@ -196,6 +264,7 @@ class _update_bankState extends State<update_bank> {
             'ifsc_code': ifsc.text,
             'open_balance': balance.text,
             'account_type': selectedBankTypeId,
+            'company': selectedCompanyId,
             'interest_rate': double.tryParse(interest.text) ?? 0,
 
           },
@@ -479,6 +548,49 @@ class _update_bankState extends State<update_bank> {
                                 ),
                               ),
 
+                              SizedBox(height: 10),
+                              Text(
+                                "Company",
+                                style: TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 5),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int>(
+                                      value: company.any((item) =>
+                                              item['id'] == selectedCompanyId)
+                                          ? selectedCompanyId
+                                          : null,
+                                      hint: Text(
+                                        "Select Company",
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      isExpanded: true,
+                                      items: company.map((item) {
+                                        return DropdownMenuItem<int>(
+                                          value: item['id'],
+                                          child: Text(item['name'].toString()),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          selectedCompanyId = value;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 10),
                               Text(
                                 "Branch",
                                 style: TextStyle(
@@ -638,7 +750,8 @@ class _update_bankState extends State<update_bank> {
                         columnWidths: {
                           0: FixedColumnWidth(40.0),
                           1: FlexColumnWidth(),
-                          2: FixedColumnWidth(50.0),
+                          2: FlexColumnWidth(),
+                          3: FixedColumnWidth(50.0),
                         },
                         children: [
                           const TableRow(
@@ -667,6 +780,15 @@ class _update_bankState extends State<update_bank> {
                               Padding(
                                 padding: EdgeInsets.all(8.0),
                                 child: Text(
+                                  "Company Name",
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white),
+                                ),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Text(
                                   "Edit",
                                   style: TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -685,6 +807,10 @@ class _update_bankState extends State<update_bank> {
                                 Padding(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Text(banks[i]['name']),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(companyNameForBank(banks[i])),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.all(8.0),
