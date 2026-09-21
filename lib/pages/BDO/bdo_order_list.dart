@@ -91,22 +91,29 @@ class _bod_oredr_listState extends State<bod_oredr_list> {
     return prefs.getString('department');
   }
 
-  String getDisplayStatus(dynamic rawStatus) {
-    final String status = (rawStatus ?? '').toString().trim();
+String getDisplayStatus(dynamic rawStatus) {
+  final String status = (rawStatus ?? '').toString().trim();
 
-    switch (status) {
-      case 'Invoice Created':
-        return 'Waiting For Approval';
-      case 'To Print':
-        return 'Delivery Order (DO)';
-      case 'Packed':
-        return 'Packed For Delivery (PFD)';
-      case 'Ready to ship':
-        return 'Out For Delivery (OFD)';
-      default:
-        return status;
-    }
+  switch (status) {
+    case 'Invoice Created':
+      return 'Waiting For Approval';
+
+    case 'To Print':
+      return 'Delivery Order (DO)';
+
+    case 'Packing under progress':
+      return 'Printed';
+
+    case 'Packed':
+      return 'Packed For Delivery (PFD)';
+
+    case 'Ready to ship':
+      return 'Out For Delivery (OFD)';
+
+    default:
+      return status;
   }
+}
 
   Future<void> fetchOrderData({int page = 1}) async {
     try {

@@ -470,7 +470,7 @@ class drower {
                   )),
         );
         break;
-      case 'Delivery Order(Packing under Progress)':
+      case 'Delivery Order(Printed)':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -575,7 +575,7 @@ class drower {
                   )),
         );
         break;
-      case 'Packing Under Progress':
+      case 'Printed':
         Navigator.push(
           context,
           MaterialPageRoute(

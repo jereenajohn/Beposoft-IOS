@@ -30,22 +30,29 @@ class WarehouseOrderReview extends StatefulWidget {
 }
 
 class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
-  String getStatusDisplayName(dynamic status) {
-    final String value = status?.toString().trim() ?? '';
+String getStatusDisplayName(dynamic status) {
+  final String value = status?.toString().trim() ?? '';
 
-    switch (value) {
-      case 'To Print':
-        return 'Delivery Order (DO)';
-      case 'Packed':
-        return 'Packed For Delivery (PFD)';
-      case 'Ready to ship':
-        return 'Out For Delivery (OFD)';
-      case 'Return From Delivery':
-        return 'Return From Delivery';
-      default:
-        return value;
-    }
+  switch (value) {
+    case 'To Print':
+      return 'Delivery Order (DO)';
+
+    case 'Packing under progress':
+      return 'Printed';
+
+    case 'Packed':
+      return 'Packed For Delivery (PFD)';
+
+    case 'Ready to ship':
+      return 'Out For Delivery (OFD)';
+
+    case 'Return From Delivery':
+      return 'Return From Delivery';
+
+    default:
+      return value;
   }
+}
 
   Drawer d = Drawer();
   var ord;
@@ -548,7 +555,7 @@ class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
 
  final List<String> statuses = [
   'To Print',
-  // 'Packing under progress',
+  'Packing under progress',
   'Packed',
   'Ready to ship',
   'Return From Delivery',
@@ -560,13 +567,19 @@ List<String> getAvailableOrderStatuses() {
 
   switch (currentStatus) {
     case 'To Print':
-      // DO -> PFD only
+      // DO -> Printed
+      return [
+        'Packing under progress',
+      ];
+
+    case 'Packing under progress':
+      // Printed -> PFD
       return [
         'Packed',
       ];
 
     case 'Packed':
-      // PFD -> OFD only
+      // PFD -> OFD
       return [
         'Ready to ship',
       ];
@@ -579,13 +592,13 @@ List<String> getAvailableOrderStatuses() {
       ];
 
     case 'Return From Delivery':
-      // RFD -> OFD only
+      // RFD -> OFD
       return [
         'Ready to ship',
       ];
 
     case 'Shipped':
-      // Final status - no further status change
+      // Final status
       return const [];
 
     default:

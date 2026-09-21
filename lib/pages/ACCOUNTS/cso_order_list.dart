@@ -65,7 +65,7 @@ class _CsoOrderListState extends State<CsoOrderList> {
     'Invoice Created',
     'Invoice Approved',
     'Waiting For Confirmation',
-    // 'Packing under progress',
+    'Packing under progress',
     'Packed',
     'Ready to ship',
     'Return From Delivery',
@@ -125,30 +125,32 @@ class _CsoOrderListState extends State<CsoOrderList> {
     return prefs.getString('department');
   }
 
-  String getDisplayStatus(dynamic rawStatus) {
-    final String status = (rawStatus ?? '').toString().trim();
+String getDisplayStatus(dynamic rawStatus) {
+  final String status = (rawStatus ?? '').toString().trim();
 
-    switch (status) {
-      case 'Invoice Created':
-        return 'Waiting For Approval';
+  switch (status) {
+    case 'Invoice Created':
+      return 'Waiting For Approval';
 
-      case 'To Print':
-        return 'Delivery Order (DO)';
+    case 'To Print':
+      return 'Delivery Order (DO)';
 
-      case 'Packed':
-        return 'Packed For Delivery (PFD)';
+    case 'Packing under progress':
+      return 'Printed';
 
-      case 'Ready to ship':
-        return 'Out For Delivery (OFD)';
+    case 'Packed':
+      return 'Packed For Delivery (PFD)';
 
-      case 'Return From Delivery':
-        return 'Return From Delivery';
+    case 'Ready to ship':
+      return 'Out For Delivery (OFD)';
 
-      default:
-        return status;
-    }
+    case 'Return From Delivery':
+      return 'Return From Delivery';
+
+    default:
+      return status;
   }
-
+}
   Future<void> getstaff() async {
     try {
       final token = await getTokenFromPrefs();

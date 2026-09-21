@@ -81,7 +81,7 @@ class _WarehouseDashboardState extends State<WarehouseDashboard>
 
 static const List<String> warehouseDashboardStatuses = [
   'To Print',
-  // 'Packing under progress',
+  'Packing under progress',
   'Packed',
   'Ready to ship',
   'Return From Delivery',
@@ -970,7 +970,7 @@ static const List<String> warehouseDashboardStatuses = [
         return 'Delivery Order (DO)';
 
       case 'Packing under progress':
-        return 'Delivery Order (Packing under Progress)';
+        return 'Delivery Order (Printed)';
 
       case 'Packed':
         return 'Packed For Delivery (PFD)';
@@ -1195,14 +1195,14 @@ static const List<String> warehouseDashboardStatuses = [
           ),
         );
 
-        // dashboardCards.add(
-        //   _buildTodayStatusCard(
-        //     status: 'Packing under progress',
-        //     todayCount: todayCountMap['Packing under progress'] ?? 0,
-        //     allCount: allCountMap['Packing under progress'] ?? 0,
-        //     isVerySmallPhone: isVerySmallPhone,
-        //   ),
-        // );
+        dashboardCards.add(
+          _buildTodayStatusCard(
+            status: 'Packing under progress',
+            todayCount: todayCountMap['Packing under progress'] ?? 0,
+            allCount: allCountMap['Packing under progress'] ?? 0,
+            isVerySmallPhone: isVerySmallPhone,
+          ),
+        );
 
         dashboardCards.add(
           _buildTodayStatusCard(

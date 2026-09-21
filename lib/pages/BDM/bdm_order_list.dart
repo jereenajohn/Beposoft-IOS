@@ -79,7 +79,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
   final List<String> statusOptions = [
     'Invoice Created',
     'Invoice Approved',
-    // 'Packing under progress',
+    'Packing under progress',
     'Packed',
     'Ready to ship',
     'Return From Delivery',
@@ -141,29 +141,32 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
     return prefs.getString('department');
   }
 
-  String getDisplayStatus(dynamic rawStatus) {
-    final String status = (rawStatus ?? '').toString().trim();
+ String getDisplayStatus(dynamic rawStatus) {
+  final String status = (rawStatus ?? '').toString().trim();
 
-    switch (status) {
-      case 'Invoice Created':
-        return 'Waiting For Approval';
+  switch (status) {
+    case 'Invoice Created':
+      return 'Waiting For Approval';
 
-      case 'To Print':
-        return 'Delivery Order (DO)';
+    case 'To Print':
+      return 'Delivery Order (DO)';
 
-      case 'Packed':
-        return 'Packed For Delivery (PFD)';
+    case 'Packing under progress':
+      return 'Printed';
 
-      case 'Ready to ship':
-        return 'Out For Delivery (OFD)';
+    case 'Packed':
+      return 'Packed For Delivery (PFD)';
 
-      case 'Return From Delivery':
-        return 'Return From Delivery';
+    case 'Ready to ship':
+      return 'Out For Delivery (OFD)';
 
-      default:
-        return status;
-    }
+    case 'Return From Delivery':
+      return 'Return From Delivery';
+
+    default:
+      return status;
   }
+}
 
   var family = '';
   String familyName = '';

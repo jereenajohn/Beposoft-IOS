@@ -86,6 +86,9 @@ class _WarehouseOrderViewState extends State<WarehouseOrderView> {
       case 'To Print':
         return 'Delivery Order (DO)';
 
+          case 'Packing under progress':
+      return 'Printed';
+
       case 'Packed':
         return 'Packed For Delivery (PFD)';
 

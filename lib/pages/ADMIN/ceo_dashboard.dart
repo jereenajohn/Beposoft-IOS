@@ -27,6 +27,7 @@ import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_team_staff.dart';
 import 'package:beposoft/pages/ADMIN/all_local_purchases_screen.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard_all_sections_single_page.dart';
+import 'package:beposoft/pages/ADMIN/divisionwise_invoices_page.dart';
 import 'package:beposoft/pages/ADMIN/family_date_summary_page.dart';
 import 'package:beposoft/pages/ADMIN/grv_sales_return_summary.dart';
 import 'package:beposoft/pages/ADMIN/localpurchaseorderscreen.dart';
@@ -243,6 +244,9 @@ double monthAttendancePercentage = 0.0;
   List<Map<String, dynamic>> departmentAttendanceCards = [];
 
   bool assetLoading = false;
+  int todayDivisionWiseInvoiceTotal = 0;
+bool divisionWiseInvoiceLoading = false;
+List<Map<String, dynamic>> todayDivisionWiseFamilyData = [];
   // int getFamilyPresentCount(String familyName) {
   //   return familyAttendanceData.where((item) {
   //     final family =
@@ -337,6 +341,7 @@ double monthAttendancePercentage = 0.0;
     fetchInventoryAmountSummary();
     // fetchFamilyWiseInventorySummary();
     fetchMainCategoryInventorySummary();
+    fetchTodayDivisionWiseInvoiceTotal();
 
     //   fetchInternalTransfersData(
     // getdgnvd);
@@ -385,7 +390,207 @@ double monthAttendancePercentage = 0.0;
     // fetchorders();
     await fetchReport();
   }
+Future<void> fetchTodayDivisionWiseInvoiceTotal() async {
+  if (!mounted) return;
 
+  setState(() {
+    divisionWiseInvoiceLoading = true;
+  });
+
+  try {
+    final String? token = await getTokenFromPrefs();
+
+    if (token == null || token.trim().isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        todayDivisionWiseInvoiceTotal = 0;
+        todayDivisionWiseFamilyData = [];
+        divisionWiseInvoiceLoading = false;
+      });
+
+      return;
+    }
+
+    final DateTime now = DateTime.now();
+
+    final String today = DateFormat(
+      'yyyy-MM-dd',
+    ).format(now);
+
+    final Uri uri = Uri.parse(
+      '$api/api/orders/hourly/summary/',
+    ).replace(
+      queryParameters: {
+        'start_date': today,
+        'end_date': today,
+      },
+    );
+
+    debugPrint('==========================================');
+    debugPrint('TODAY DIVISION WISE INVOICES');
+    debugPrint('URL: $uri');
+
+    final http.Response response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    );
+
+    debugPrint(
+      'STATUS CODE: ${response.statusCode}',
+    );
+
+    debugPrint(
+      'RESPONSE: ${response.body}',
+    );
+
+    debugPrint('==========================================');
+
+    if (response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(
+        response.body,
+      );
+
+      final Map<String, dynamic> responseData =
+          decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : <String, dynamic>{};
+
+      final List<Map<String, dynamic>> rawFamilyData =
+          responseData['data'] is List
+              ? (responseData['data'] as List)
+                  .whereType<Map>()
+                  .map(
+                    (item) => Map<String, dynamic>.from(
+                      item,
+                    ),
+                  )
+                  .toList()
+              : <Map<String, dynamic>>[];
+
+      // ---------------------------------------------------------------
+      // EXCLUDE FITNESS
+      // ---------------------------------------------------------------
+
+      final List<Map<String, dynamic>> visibleFamilyData =
+          rawFamilyData.where(
+        (Map<String, dynamic> family) {
+          final String familyName =
+              (family['family_name'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
+
+          return familyName != 'fitness';
+        },
+      ).toList();
+
+      // ---------------------------------------------------------------
+      // SORT HIGHEST ORDER COUNT FIRST
+      // ---------------------------------------------------------------
+
+      visibleFamilyData.sort(
+        (
+          Map<String, dynamic> a,
+          Map<String, dynamic> b,
+        ) {
+          final Map<String, dynamic> aSummary =
+              a['summary'] is Map
+                  ? Map<String, dynamic>.from(
+                      a['summary'],
+                    )
+                  : <String, dynamic>{};
+
+          final Map<String, dynamic> bSummary =
+              b['summary'] is Map
+                  ? Map<String, dynamic>.from(
+                      b['summary'],
+                    )
+                  : <String, dynamic>{};
+
+          final int aTotal = _asInt(
+            aSummary['total_orders'],
+          );
+
+          final int bTotal = _asInt(
+            bSummary['total_orders'],
+          );
+
+          return bTotal.compareTo(aTotal);
+        },
+      );
+
+      // ---------------------------------------------------------------
+      // TOTAL MUST MATCH THE VISIBLE DIVISIONS
+      // FITNESS IS EXCLUDED
+      // ---------------------------------------------------------------
+
+      final int visibleTotal =
+          visibleFamilyData.fold<int>(
+        0,
+        (
+          int total,
+          Map<String, dynamic> family,
+        ) {
+          final Map<String, dynamic> familySummary =
+              family['summary'] is Map
+                  ? Map<String, dynamic>.from(
+                      family['summary'],
+                    )
+                  : <String, dynamic>{};
+
+          return total +
+              _asInt(
+                familySummary['total_orders'],
+              );
+        },
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        todayDivisionWiseInvoiceTotal = visibleTotal;
+        todayDivisionWiseFamilyData = visibleFamilyData;
+        divisionWiseInvoiceLoading = false;
+      });
+
+      return;
+    }
+
+    debugPrint(
+      'TODAY DIVISION WISE INVOICES API FAILED: '
+      '${response.statusCode} ${response.body}',
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      todayDivisionWiseInvoiceTotal = 0;
+      todayDivisionWiseFamilyData = [];
+      divisionWiseInvoiceLoading = false;
+    });
+  } catch (e, stackTrace) {
+    debugPrint(
+      'fetchTodayDivisionWiseInvoiceTotal ERROR: $e',
+    );
+
+    debugPrint(
+      'STACK TRACE: $stackTrace',
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      todayDivisionWiseInvoiceTotal = 0;
+      todayDivisionWiseFamilyData = [];
+      divisionWiseInvoiceLoading = false;
+    });
+  }
+}
   Future<void> getAssetDashboardData() async {
     try {
       final token = await getTokenFromPrefs();
@@ -4610,6 +4815,110 @@ Widget _buildDashboardLineItem({
               );
             },
           ),
+_buildDashboardCard(
+  title: "Division wise Invoices",
+  value: divisionWiseInvoiceLoading
+      ? "..."
+      : NumberFormat.decimalPattern(
+          'en_IN',
+        ).format(
+          todayDivisionWiseInvoiceTotal,
+        ),
+  valueLabel: "T.Total",
+  greenValueTab: true,
+  lines: const [],
+  bottomTopSpacing: 2,
+  bottom: divisionWiseInvoiceLoading
+      ? const Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: 12,
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        )
+      : todayDivisionWiseFamilyData.isEmpty
+          ? Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(
+                  0.14,
+                ),
+                borderRadius: BorderRadius.circular(
+                  12,
+                ),
+                border: Border.all(
+                  color: Colors.white.withOpacity(
+                    0.22,
+                  ),
+                ),
+              ),
+              child: const Text(
+                "No invoice data",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          : Column(
+              children:
+                  todayDivisionWiseFamilyData.map(
+                (
+                  Map<String, dynamic> family,
+                ) {
+                  final String familyName =
+                      (family['family_name'] ??
+                              'Unknown Division')
+                          .toString()
+                          .trim();
+
+                  final Map<String, dynamic>
+                      familySummary =
+                      family['summary'] is Map
+                          ? Map<String, dynamic>.from(
+                              family['summary'],
+                            )
+                          : <String, dynamic>{};
+
+                  final int familyTotal =
+                      _asInt(
+                    familySummary[
+                        'total_orders'],
+                  );
+
+                  return _buildDivisionInvoiceFamilyRow(
+                    familyName: familyName,
+                    totalOrders: familyTotal,
+                  );
+                },
+              ).toList(),
+            ),
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            const DivisionWiseInvoicesPage(),
+      ),
+    ).then((_) {
+      fetchTodayDivisionWiseInvoiceTotal();
+    });
+  },
+),
         ],
       ),
     );
@@ -6778,6 +7087,64 @@ Widget _buildDashboardLineItem({
     );
   }
 
+  Widget _buildDivisionInvoiceFamilyRow({
+  required String familyName,
+  required int totalOrders,
+}) {
+  return Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(
+      bottom: 8,
+    ),
+    padding: const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 11,
+    ),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.14),
+      borderRadius: BorderRadius.circular(
+        12,
+      ),
+      border: Border.all(
+        color: Colors.white.withOpacity(
+          0.28,
+        ),
+      ),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            familyName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(
+          width: 8,
+        ),
+        Text(
+          NumberFormat.decimalPattern(
+            'en_IN',
+          ).format(
+            totalOrders,
+          ),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
   Widget buildFamilyAnalysisCards() {
     if (familyAnalysisLoading) {
       return const Padding(
@@ -8236,6 +8603,7 @@ Widget _buildDashboardLineItem({
                 [
                   'Delivery Order (DO)',
                   // 'Delivery Order(Packing under Progress)',
+                  'Delivery Order(Printed)',
                   'Packed For Delivery(PFD)',
                   'Out For Delivery(OFD)',
                   'Delivery Order(Shipped)',
@@ -8250,7 +8618,7 @@ Widget _buildDashboardLineItem({
                     'Pre Booked',
                     'Waiting For Confirmation',
                     'DO(Delivery Order)',
-                    // 'Packing Under Progress',
+                    'Printed',
                     'PFD (Packed For Delivery)',
                      'OFD (Out For Delivery)',
                      'Return From Delivery',

@@ -1772,7 +1772,7 @@ class _admin_dashboardState extends State<dashboard>
                 'Delivery Note',
                 [
                   'Delivery Order (DO)',
-                  // 'Delivery Order(Packing under Progress)',
+                  'Delivery Order(Printed)',
                   'Packed For Delivery(PFD)',
                   'Out For Delivery(OFD)',
                   'Return From Delivery (RFD)',
