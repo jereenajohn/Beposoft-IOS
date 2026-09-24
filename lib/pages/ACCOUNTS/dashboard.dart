@@ -4,6 +4,7 @@ import 'package:beposoft/pages/ACCOUNTS/Vehiclemanagementpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_main_category.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_self_attendance.dart';
 import 'package:beposoft/pages/ACCOUNTS/mailboxpage..dart';
+import 'package:beposoft/pages/ACCOUNTS/product_list.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/add_staffwise_department.dart';
 import 'package:beposoft/pages/ADMIN/add_team_staff.dart';
@@ -39,6 +40,7 @@ import 'package:beposoft/pages/ACCOUNTS/daily_bdo_sales_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/dailyproductcategorywisecyclingskating.dart';
 // import 'package:beposoft/pages/ACCOUNTS/call_log.dart';
 import 'package:beposoft/pages/ACCOUNTS/graph.dart';
+import 'package:beposoft/pages/ACCOUNTS/finance_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/grv_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/seller_purchase_invoice_list.dart';
@@ -81,6 +83,9 @@ class _admin_dashboardState extends State<dashboard>
   List<Map<String, dynamic>> company = [];
   bool isCompanyLoading = false;
   String? companyError;
+  Map<String, dynamic> beposoftSummary = {};
+  bool isFinanceLoading = false;
+  String? financeError;
   List<Map<String, dynamic>> grvlist = [];
   List<Map<String, dynamic>> proforma = [];
   List<Map<String, dynamic>> salesReportList = [];
@@ -128,6 +133,7 @@ class _admin_dashboardState extends State<dashboard>
     _getUsername();
     getGrvList();
     getcompany();
+    fetchBeposoftSummary();
     fetchproformaData();
     getSalesReport();
     getProfile();
@@ -159,6 +165,7 @@ class _admin_dashboardState extends State<dashboard>
     if (state == AppLifecycleState.resumed) {
       fetchInboxMailCount();
       fetchMyOrderSummary();
+      fetchBeposoftSummary();
     }
   }
 
@@ -216,6 +223,42 @@ class _admin_dashboardState extends State<dashboard>
       if (mounted) setState(() => companyError = error.toString());
     } finally {
       if (mounted) setState(() => isCompanyLoading = false);
+    }
+  }
+
+  // Uses the same finance summary endpoint and fields as the CEO dashboard.
+  Future<void> fetchBeposoftSummary() async {
+    if (!mounted) return;
+    setState(() {
+      isFinanceLoading = true;
+      financeError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view finance.');
+      }
+      final response = await http.get(
+        Uri.parse('$api/api/beposoft/summary/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load finance (${response.statusCode}).');
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        throw const FormatException('Invalid finance summary response.');
+      }
+      if (!mounted) return;
+      setState(() => beposoftSummary = Map<String, dynamic>.from(decoded));
+    } catch (error) {
+      debugPrint('ADMIN FINANCE SUMMARY ERROR: $error');
+      if (mounted) setState(() => financeError = error.toString());
+    } finally {
+      if (mounted) setState(() => isFinanceLoading = false);
     }
   }
 
@@ -2495,23 +2538,26 @@ class _admin_dashboardState extends State<dashboard>
                     mainAxisExtent: 185,
                     children: [
                       _buildCompanyGridCard(),
+                      _buildFinanceGridCard(),
+                      _buildPurchaseGridCard(),
+                      _buildGstGridCard(),
                       // Display the count of today's shipped orders
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => today_shipped_OrderList(
-                                      status: "Shipped",
-                                    )),
-                          );
-                        },
-                        child: _buildGridItem(
-                            Icons.local_shipping,
-                            'Todays Shipped Orders',
-                            todayShippedCount // Pass the length of today's shipped orders
-                            ),
-                      ),
+                      // GestureDetector(
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //           builder: (context) => today_shipped_OrderList(
+                      //                 status: "Shipped",
+                      //               )),
+                      //     );
+                      //   },
+                      //   child: _buildGridItem(
+                      //       Icons.local_shipping,
+                      //       'Todays Shipped Orders',
+                      //       todayShippedCount // Pass the length of today's shipped orders
+                      //       ),
+                      // ),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
@@ -2536,19 +2582,19 @@ class _admin_dashboardState extends State<dashboard>
                         child: _buildGridItem(
                             Icons.receipt_long, 'GRV Created', grvlist.length),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => GrvList(
-                                      status: "pending",
-                                    )),
-                          );
-                        },
-                        child: _buildGridItem(Icons.pending_actions,
-                            'GRV Waiting For Approval', grv),
-                      ),
+                      // GestureDetector(
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //           builder: (context) => GrvList(
+                      //                 status: "pending",
+                      //               )),
+                      //     );
+                      //   },
+                      //   child: _buildGridItem(Icons.pending_actions,
+                      //       'GRV Waiting For Approval', grv),
+                      // ),
                     ],
                   ),
                 ),
@@ -2598,6 +2644,356 @@ class _admin_dashboardState extends State<dashboard>
           ),
         ),
       ],
+    );
+  }
+
+  // CEO Finance card: TCB, TCT, TDT, DAC, MCT, MDT and MAC.
+  Widget _buildFinanceGridCard() {
+    Map<String, dynamic> asMap(dynamic value) => value is Map
+        ? Map<String, dynamic>.from(value)
+        : <String, dynamic>{};
+
+    double asDouble(dynamic value) =>
+        double.tryParse(value?.toString().replaceAll(',', '') ?? '') ?? 0.0;
+
+    final bankSummary = asMap(beposoftSummary['bank_summary']);
+    final todayData = asMap(bankSummary['today_data']);
+    final monthData = asMap(bankSummary['current_month_data']);
+    final todayBank = asMap(todayData['with_internal_transfer']);
+    final monthBank = asMap(monthData['with_internal_transfer']);
+
+    final todayCredit = asDouble(todayBank['credit']);
+    final todayDebit = asDouble(todayBank['debit']);
+    final monthCredit = asDouble(monthBank['credit']);
+    final monthDebit = asDouble(monthBank['debit']);
+
+    String formatAmount(double value) {
+      final absolute = value.abs();
+      final sign = value < 0 ? '-' : '';
+      if (absolute >= 10000000) {
+        return '$sign₹${(absolute / 10000000).toStringAsFixed(2)} Cr';
+      }
+      if (absolute >= 100000) {
+        return '$sign₹${(absolute / 100000).toStringAsFixed(2)} L';
+      }
+      if (absolute >= 1000) {
+        return '$sign₹${(absolute / 1000).toStringAsFixed(2)}K';
+      }
+      return '$sign₹${absolute.toStringAsFixed(2)}';
+    }
+
+    // Identical to the CEO dashboard's _buildDashboardLineItem.
+    Widget financeLine(String title, double value) => Container(
+          width: double.infinity,
+          height: 26,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.22)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.88),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                formatAmount(value),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => FinancialReport()),
+          );
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Finance',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const SizedBox(height: 5),
+                if (isFinanceLoading && beposoftSummary.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                else if (financeError != null && beposoftSummary.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: TextButton(
+                        onPressed: fetchBeposoftSummary,
+                        child: const Text(
+                          'Retry finance',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  Container(
+                    width: double.infinity,
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.35),
+                      ),
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'TCB - ${formatAmount(asDouble(todayBank['closing_balance']))}',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      primary: false,
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          financeLine('TCT', todayCredit),
+                          const SizedBox(height: 6),
+                          financeLine('TDT', todayDebit),
+                          const SizedBox(height: 6),
+                          financeLine('DAC', todayCredit - todayDebit),
+                          const SizedBox(height: 6),
+                          financeLine('MCT', monthCredit),
+                          const SizedBox(height: 6),
+                          financeLine('MDT', monthDebit),
+                          const SizedBox(height: 6),
+                          financeLine('MAC', monthCredit - monthDebit),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Purchase and GST dashboard shortcuts.
+  Widget _buildPurchaseGridCard() {
+    return _buildShortcutGridCard(
+      title: 'Purchase',
+      icon: Icons.shopping_cart_outlined,
+      children: [
+        _buildShortcutOption(
+          label: 'PO - Local',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AllLocalPurchaseOrderScreen(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildShortcutOption(
+          label: 'PO - Internal',
+         onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => Product_List(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGstGridCard() {
+    return _buildShortcutGridCard(
+      title: 'GST',
+      icon: Icons.receipt_long_outlined,
+      children: [
+        _buildShortcutOption(
+          label: 'GST Report',
+          onTap: () => d.navigateToSelectedPage(context, 'GST Report'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShortcutGridCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2C74FF).withOpacity(0.28),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: Colors.white.withOpacity(0.22)),
+                ),
+                child: Icon(icon, color: Colors.white, size: 19),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShortcutOption({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withOpacity(0.14),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 38),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.22)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white, size: 17),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

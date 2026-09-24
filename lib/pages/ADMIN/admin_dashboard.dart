@@ -19,6 +19,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supplier.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_team.dart';
 import 'package:beposoft/pages/ACCOUNTS/mailboxpage..dart';
+import 'package:beposoft/pages/ACCOUNTS/product_list.dart';
 import 'package:beposoft/pages/ADMIN/add_staffwise_department.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/all_local_purchases_screen.dart';
@@ -39,6 +40,7 @@ import 'package:beposoft/pages/ACCOUNTS/categorywise_sales_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/daily_bdo_sales_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/dailyproductcategorywisecyclingskating.dart';
 import 'package:beposoft/pages/ACCOUNTS/graph.dart';
+import 'package:beposoft/pages/ACCOUNTS/finance_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/grv_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/monthlyproductcategorycyclingskating.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
@@ -83,6 +85,9 @@ class _admin_dashboardState extends State<admin_dashboard>
   List<String> statusOptions = ["pending", "approved", "rejected"];
   List<Map<String, dynamic>> company = [];
   bool isCompanyLoading = false;
+  Map<String, dynamic> beposoftSummary = {};
+  bool isFinanceLoading = false;
+  String? financeError;
   String? companyError;
   List<Map<String, dynamic>> grvlist = [];
   List<Map<String, dynamic>> proforma = [];
@@ -125,6 +130,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     _getUsername(); // Get the username when the page loads
     getGrvList();
     getcompany();
+    fetchBeposoftSummary();
     getProfile();
     fetchproformaData();
     getSalesReport();
@@ -172,6 +178,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     if (state == AppLifecycleState.resumed) {
       fetchInboxMailCount();
       fetchMyOrderSummary();
+      fetchBeposoftSummary();
     }
   }
 
@@ -218,6 +225,42 @@ class _admin_dashboardState extends State<admin_dashboard>
       if (mounted) setState(() => companyError = error.toString());
     } finally {
       if (mounted) setState(() => isCompanyLoading = false);
+    }
+  }
+
+  // Uses the same finance summary endpoint and fields as the CEO dashboard.
+  Future<void> fetchBeposoftSummary() async {
+    if (!mounted) return;
+    setState(() {
+      isFinanceLoading = true;
+      financeError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view finance.');
+      }
+      final response = await http.get(
+        Uri.parse('$api/api/beposoft/summary/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load finance (${response.statusCode}).');
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        throw const FormatException('Invalid finance summary response.');
+      }
+      if (!mounted) return;
+      setState(() => beposoftSummary = Map<String, dynamic>.from(decoded));
+    } catch (error) {
+      debugPrint('ADMIN FINANCE SUMMARY ERROR: $error');
+      if (mounted) setState(() => financeError = error.toString());
+    } finally {
+      if (mounted) setState(() => isFinanceLoading = false);
     }
   }
 
@@ -2480,20 +2523,23 @@ class _admin_dashboardState extends State<admin_dashboard>
                     mainAxisExtent: 185,
                     children: [
                       _buildCompanyGridCard(),
+                      _buildFinanceGridCard(),
+                      _buildPurchaseGridCard(),
+                      _buildGstGridCard(),
                       // Display the count of today's shipped orders
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => today_shipped_OrderList(
-                                      status: "Shipped",
-                                    )),
-                          );
-                        },
-                        child: _buildGridItem(Icons.local_shipping,
-                            'Todays Shipped Orders', todayShippedCount),
-                      ),
+                      // GestureDetector(
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //           builder: (context) => today_shipped_OrderList(
+                      //                 status: "Shipped",
+                      //               )),
+                      //     );
+                      //   },
+                      //   child: _buildGridItem(Icons.local_shipping,
+                      //       'Todays Shipped Orders', todayShippedCount),
+                      // ),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
@@ -2518,19 +2564,19 @@ class _admin_dashboardState extends State<admin_dashboard>
                         child: _buildGridItem(
                             Icons.receipt_long, 'GRV Created', grvlist.length),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => GrvList(
-                                      status: "pending",
-                                    )),
-                          );
-                        },
-                        child: _buildGridItem(Icons.pending_actions,
-                            'GRV Waiting For Approval', grv),
-                      ),
+                      // GestureDetector(
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //           builder: (context) => GrvList(
+                      //                 status: "pending",
+                      //               )),
+                      //     );
+                      //   },
+                      //   child: _buildGridItem(Icons.pending_actions,
+                      //       'GRV Waiting For Approval', grv),
+                      // ),
                     ],
                   ),
                 ),
@@ -2737,6 +2783,448 @@ class _admin_dashboardState extends State<admin_dashboard>
           ),
         );
       },
+    );
+  }
+
+  // Finance card: same layout and styling as the CEO dashboard Finance card.
+  Widget _buildFinanceGridCard() {
+    Map<String, dynamic> asMap(dynamic value) => value is Map
+        ? Map<String, dynamic>.from(value)
+        : <String, dynamic>{};
+
+    double asDouble(dynamic value) =>
+        double.tryParse(value?.toString().replaceAll(',', '') ?? '') ?? 0.0;
+
+    final bankSummary = asMap(beposoftSummary['bank_summary']);
+    final todayData = asMap(bankSummary['today_data']);
+    final monthData = asMap(bankSummary['current_month_data']);
+    final todayBank = asMap(todayData['with_internal_transfer']);
+    final monthBank = asMap(monthData['with_internal_transfer']);
+
+    final todayCredit = asDouble(todayBank['credit']);
+    final todayDebit = asDouble(todayBank['debit']);
+    final monthCredit = asDouble(monthBank['credit']);
+    final monthDebit = asDouble(monthBank['debit']);
+
+    String formatAmount(double value) {
+      final absolute = value.abs();
+      final sign = value < 0 ? '-' : '';
+      if (absolute >= 10000000) {
+        return '$sign₹${(absolute / 10000000).toStringAsFixed(2)} Cr';
+      }
+      if (absolute >= 100000) {
+        return '$sign₹${(absolute / 100000).toStringAsFixed(2)} L';
+      }
+      if (absolute >= 1000) {
+        return '$sign₹${(absolute / 1000).toStringAsFixed(2)}K';
+      }
+      return '$sign₹${absolute.toStringAsFixed(2)}';
+    }
+
+    // Identical to the CEO dashboard's _buildDashboardLineItem.
+    Widget financeLine(String title, double value) => Container(
+          width: double.infinity,
+          height: 26,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.22)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.88),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                formatAmount(value),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => FinancialReport()),
+          );
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Finance',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const SizedBox(height: 5),
+                if (isFinanceLoading && beposoftSummary.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                else if (financeError != null && beposoftSummary.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: TextButton(
+                        onPressed: fetchBeposoftSummary,
+                        child: const Text(
+                          'Retry finance',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  Container(
+                    width: double.infinity,
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.35),
+                      ),
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'TCB - ${formatAmount(asDouble(todayBank['closing_balance']))}',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      primary: false,
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          financeLine('TCT', todayCredit),
+                          const SizedBox(height: 6),
+                          financeLine('TDT', todayDebit),
+                          const SizedBox(height: 6),
+                          financeLine('DAC', todayCredit - todayDebit),
+                          const SizedBox(height: 6),
+                          financeLine('MCT', monthCredit),
+                          const SizedBox(height: 6),
+                          financeLine('MDT', monthDebit),
+                          const SizedBox(height: 6),
+                          financeLine('MAC', monthCredit - monthDebit),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Purchase shortcuts use the existing Admin purchase destinations.
+  Widget _buildPurchaseGridCard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 160;
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          padding: EdgeInsets.all(compact ? 10 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Purchase',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: compact ? 32 : 34,
+                    height: compact ? 32 : 34,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.22),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.shopping_cart_outlined,
+                      color: Colors.white,
+                      size: 19,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              Expanded(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: _buildPurchaseShortcut(
+                        'PO - Local',
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AllLocalPurchaseOrderScreen(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Expanded(
+                      child: _buildPurchaseShortcut(
+                        'PO - Internal',
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => Product_List(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPurchaseShortcut(String label, VoidCallback onTap) {
+    return Material(
+      color: Colors.white.withOpacity(0.14),
+      borderRadius: BorderRadius.circular(11),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(11),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white,
+                size: 19,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGstGridCard() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => d.navigateToSelectedPage(context, 'GST Report'),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'GST',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.22),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.receipt_long_outlined,
+                        color: Colors.white,
+                        size: 19,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: Center(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.22),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'GST Report',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.white,
+                            size: 19,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

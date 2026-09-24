@@ -80,6 +80,12 @@ class _marketing_dashboardState extends State<marketing_dashboard>
   int myTodaysBills = 0;
   double myTodaysTotalAmount = 0.0;
   bool isMyOrderSummaryLoading = false;
+
+  // BDO-style dashboard search and bottom navigation.
+  bool isBottomSearchOpen = false;
+  String dashboardSearchQuery = '';
+  final TextEditingController dashboardSearchController = TextEditingController();
+  final FocusNode dashboardSearchFocusNode = FocusNode();
   @override
   void initState() {
     super.initState();
@@ -120,6 +126,8 @@ class _marketing_dashboardState extends State<marketing_dashboard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     mailCountTimer?.cancel();
+    dashboardSearchController.dispose();
+    dashboardSearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -1091,6 +1099,749 @@ class _marketing_dashboardState extends State<marketing_dashboard>
     );
   }
 
+  // All existing Marketing destinations are retained; only their presentation
+  // moves from the old drawer into BDO-style dashboard cards.
+  List<Map<String, dynamic>> _getMarketingFrontMenuItems() {
+    return [
+      {
+        'title': 'Add Attendance',
+        'icon': Icons.person_outline_rounded,
+        'keywords': 'self attendance fingerprint check in',
+      },
+      {
+        'title': 'Customers',
+        'icon': Icons.people_alt_outlined,
+        'groupType': 'customers',
+        'keywords': 'add customer customers view customers',
+      },
+      {
+        'title': 'Proforma Invoice',
+        'icon': Icons.description_outlined,
+        'groupType': 'proforma',
+        'keywords': 'create proforma invoice view proforma invoice',
+      },
+      {
+        'title': 'Orders',
+        'icon': Icons.receipt_long_outlined,
+        'groupType': 'orders',
+        'keywords': 'create orders bepocart order list',
+      },
+      {
+        'title': 'Bulk Order Creation',
+        'icon': Icons.add_shopping_cart_outlined,
+        'groupType': 'bulk',
+        'keywords': 'bulk order creation excel upload',
+      },
+      // {
+      //   'title': 'Employee Leave Form',
+      //   'icon': Icons.event_note_outlined,
+      //   'keywords': 'leave application employee leave form',
+      // },
+      {
+        'title': 'Local Purchase Order',
+        'icon': Icons.shopping_cart_checkout_rounded,
+        'keywords': 'local purchase order po local',
+      },
+      if (isManager)
+        {
+          'title': 'Team Management',
+          'icon': Icons.groups_outlined,
+          'groupType': 'team',
+          'keywords': 'add team staff mark attendance approve leave requests',
+        },
+    ];
+  }
+
+  List<Map<String, dynamic>> _getMarketingGroupItems(String groupType) {
+    switch (groupType) {
+      case 'customers':
+        return [
+          {'title': 'Add Customer', 'icon': Icons.person_add_alt_1_outlined},
+          {'title': 'Customers', 'icon': Icons.people_outline_rounded},
+        ];
+      case 'proforma':
+        return [
+          {'title': 'Create Proforma Invoice', 'icon': Icons.note_add_outlined},
+          {'title': 'View Proforma Invoice', 'icon': Icons.description_outlined},
+        ];
+      case 'orders':
+        return [
+          {'title': 'Create Orders', 'icon': Icons.add_shopping_cart_outlined},
+          {'title': 'Bepocart Order List', 'icon': Icons.list_alt_rounded},
+        ];
+      case 'bulk':
+        return [
+          {'title': 'Bulk Order Creation', 'icon': Icons.file_upload_outlined},
+          {
+            'title': 'Bulk Order Creation Excel',
+            'icon': Icons.upload_file_outlined,
+          },
+        ];
+      case 'team':
+        return [
+          {'title': 'Add Team Staff', 'icon': Icons.group_add_outlined},
+          {'title': 'Mark Team Attendance', 'icon': Icons.fact_check_outlined},
+          {'title': 'Approve Leave Requests', 'icon': Icons.approval_outlined},
+        ];
+      default:
+        return [];
+    }
+  }
+
+  Future<void> _navigateFromFrontCard(String item) async {
+    switch (item) {
+      case 'Add Attendance':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => StaffSelfAttendanceScreen()),
+        );
+        return;
+      case 'Create Orders':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => order_products()),
+        );
+        return;
+      case 'Bepocart Order List':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => MyFamilyOrderList()),
+        );
+        return;
+      case 'Bulk Order Creation':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OrderBulkUpload()),
+        );
+        return;
+      case 'Bulk Order Creation Excel':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OrderBulkUploadexcel()),
+        );
+        return;
+      case 'Add Team Staff':
+        if (!isManager) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StaffAttendanceTeamMemberScreen(),
+          ),
+        );
+        return;
+      case 'Mark Team Attendance':
+        if (!isManager) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => StaffMarkAttendanceScreen()),
+        );
+        return;
+      case 'Approve Leave Requests':
+        if (!isManager) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ManagerLeaveRequestsPage()),
+        );
+        return;
+      case 'Employee Leave Form':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => EmployeeLeaveFormPage()),
+        );
+        return;
+      case 'Local Purchase Order':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => LocalPurchaseOrderScreen()),
+        );
+        return;
+      case 'Send Mail':
+        await _openBottomMail();
+        return;
+      case 'Logout':
+        await logoutUser(context);
+        return;
+      default:
+        // Preserve the Marketing drawer's existing customer/proforma routes.
+        d.navigateToSelectedPage(context, item);
+        return;
+    }
+  }
+
+  // Exact blue gradient, dimensions, typography and Open affordance
+  // from the reference BDO front-menu card.
+  Widget _buildFrontMenuCard({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.22),
+                        ),
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 19),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Row(
+                  children: [
+                    Text(
+                      'Open',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.90),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white.withOpacity(0.92),
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Same internal-scroll grouped card used by BDO. The fixed card height
+  // will not overflow even when Manager-only options are also present.
+  Widget _buildGroupedMenuCard({
+    required String title,
+    required IconData icon,
+    required List<Map<String, dynamic>> items,
+    required bool isVerySmallPhone,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2C74FF).withOpacity(0.28),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(isVerySmallPhone ? 10 : 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isVerySmallPhone ? 11.5 : 13,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: isVerySmallPhone ? 32 : 34,
+                  height: isVerySmallPhone ? 32 : 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.22),
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: Colors.white,
+                    size: isVerySmallPhone ? 18 : 19,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                physics: const BouncingScrollPhysics(),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final title = item['title'] as String;
+                  final itemIcon = item['icon'] as IconData;
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(9),
+                      onTap: () => _navigateFromFrontCard(title),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isVerySmallPhone ? 6 : 7,
+                          vertical: isVerySmallPhone ? 5 : 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.11),
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.20),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              itemIcon,
+                              color: Colors.white,
+                              size: isVerySmallPhone ? 13 : 14,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isVerySmallPhone ? 8.5 : 9.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: Colors.white.withOpacity(0.90),
+                              size: 15,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFrontMenuSection({String query = ''}) {
+    final normalizedQuery = query.trim().toLowerCase();
+    final items = _getMarketingFrontMenuItems().where((item) {
+      if (normalizedQuery.isEmpty) return true;
+      final groupType = item['groupType']?.toString() ?? '';
+      final subItems = _getMarketingGroupItems(groupType)
+          .map((entry) => entry['title'].toString().toLowerCase())
+          .join(' ');
+      final searchText = '${item['title']} ${item['keywords']} $subItems'
+          .toLowerCase();
+      return searchText.contains(normalizedQuery);
+    }).toList();
+
+    if (items.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 52, horizontal: 24),
+        alignment: Alignment.center,
+        child: Column(
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F2F7),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.search_off_rounded,
+                color: Color(0xFF8E8E93),
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'No cards found',
+              style: TextStyle(
+                color: Color(0xFF1C1C1E),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Try a different search',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isVerySmallPhone = constraints.maxWidth < 340;
+        final spacing = isVerySmallPhone ? 8.0 : 12.0;
+        final cardHeight = isVerySmallPhone ? 195.0 : 210.0;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            mainAxisExtent: cardHeight,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final title = item['title'] as String;
+            final icon = item['icon'] as IconData;
+            final groupType = item['groupType']?.toString();
+            if (groupType != null && groupType.isNotEmpty) {
+              return _buildGroupedMenuCard(
+                title: title,
+                icon: icon,
+                items: _getMarketingGroupItems(groupType),
+                isVerySmallPhone: isVerySmallPhone,
+              );
+            }
+            return _buildFrontMenuCard(
+              title: title,
+              icon: icon,
+              onTap: () => _navigateFromFrontCard(title),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _toggleBottomSearch() {
+    final shouldOpen = !isBottomSearchOpen;
+    setState(() {
+      isBottomSearchOpen = shouldOpen;
+      if (!shouldOpen) {
+        dashboardSearchQuery = '';
+        dashboardSearchController.clear();
+      }
+    });
+    if (shouldOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) dashboardSearchFocusNode.requestFocus();
+      });
+    } else {
+      dashboardSearchFocusNode.unfocus();
+    }
+  }
+
+  void _closeBottomSearch() {
+    dashboardSearchFocusNode.unfocus();
+    if (!isBottomSearchOpen && dashboardSearchQuery.isEmpty) return;
+    setState(() {
+      isBottomSearchOpen = false;
+      dashboardSearchQuery = '';
+      dashboardSearchController.clear();
+    });
+  }
+
+  Future<void> _openBottomMail() async {
+    _closeBottomSearch();
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const StaffMailPage()),
+    );
+    if (!mounted) return;
+    await fetchInboxMailCount();
+  }
+
+  void _openBottomProfile() {
+    _closeBottomSearch();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EditProfileScreen()),
+    );
+  }
+
+  Widget _buildBottomNavigationItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
+    final foregroundColor = isSelected
+        ? const Color(0xFF2C74FF)
+        : const Color(0xFF6B7280);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: SizedBox(
+          height: 54,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 36,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFEAF2FF)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: foregroundColor, size: 23),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -7,
+                      top: -5,
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF3B30),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: Text(
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 10.5,
+                  fontWeight: isSelected
+                      ? FontWeight.w700
+                      : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernBottomNavigationBar() {
+    return MediaQuery.removePadding(
+      context: context,
+      removeBottom: true,
+      child: Material(
+        color: Colors.white,
+        elevation: 14,
+        shadowColor: Colors.black.withOpacity(0.10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              height: 68,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(26),
+                  topRight: Radius.circular(26),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Profile',
+                      isSelected: false,
+                      onTap: _openBottomProfile,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.mail_outline_rounded,
+                      label: 'Mail',
+                      isSelected: false,
+                      badgeCount: inboxMailCount,
+                      onTap: () => _openBottomMail(),
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.search_rounded,
+                      label: 'Search',
+                      isSelected: isBottomSearchOpen,
+                      onTap: _toggleBottomSearch,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: isBottomSearchOpen
+                  ? Padding(
+                      key: const ValueKey<String>('dashboard-search-open'),
+                      padding: const EdgeInsets.fromLTRB(12, 9, 12, 4),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFE5E5EA),
+                          ),
+                        ),
+                        child: TextField(
+                          controller: dashboardSearchController,
+                          focusNode: dashboardSearchFocusNode,
+                          textInputAction: TextInputAction.search,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          onChanged: (value) {
+                            setState(() => dashboardSearchQuery = value);
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search cards',
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Color(0xFF8E8E93),
+                              size: 22,
+                            ),
+                            suffixIcon: dashboardSearchQuery.isNotEmpty
+                                ? IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      dashboardSearchController.clear();
+                                      setState(() => dashboardSearchQuery = '');
+                                      dashboardSearchFocusNode.requestFocus();
+                                    },
+                                    icon: const Icon(
+                                      Icons.cancel_rounded,
+                                      color: Color(0xFF8E8E93),
+                                      size: 20,
+                                    ),
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('dashboard-search-closed'),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -1100,307 +1851,32 @@ class _marketing_dashboardState extends State<marketing_dashboard>
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.white,
-          // leading: Icon(Icons.arrow_back, color: Colors.black),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.mail_outline_rounded,
-                      color: Colors.black,
-                      size: 28,
-                    ),
-                    onPressed: () async {
-                      await Navigator.push<void>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const StaffMailPage(),
-                        ),
-                      );
-
-                      if (!mounted) return;
-
-                      await fetchInboxMailCount();
-                    },
-                  ),
-                  if (inboxMailCount > 0)
-                    Positioned(
-                      right: 4,
-                      top: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
-                        child: Text(
-                          inboxMailCount > 99
-                              ? '99+'
-                              : inboxMailCount.toString(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: IconButton(
+                tooltip: 'Logout',
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.black,
+                  size: 27,
+                ),
+                onPressed: () async => logoutUser(context),
               ),
             ),
           ],
         ),
-        drawer: Drawer(
-          backgroundColor: Colors.white,
-          child: Container(
-            color: Colors.white,
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: <Widget>[
-                DrawerHeader(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Image.asset(
-                          "lib/assets/appstore.png",
-                          width: 90,
-                          height: 90,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // ListTile(
-                //   leading: Icon(Icons.dashboard),
-                //   title: Text('Dashboard'),
-                //   onTap: () {
-                //     Navigator.push(context,
-                //         MaterialPageRoute(builder: (context) => Graph()));
-                //   },
-                // ),
-                     ListTile(
-                  leading: Icon(Icons.fingerprint),
-                  title: Text('Add Attendance'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => StaffSelfAttendanceScreen()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-                _buildDropdownTile(context, 'Customers', [
-                  'Add Customer',
-                  'Customers',
-                ]),
-
-           
-          _buildDropdownTile(context, 'Proforma Invoice', [
-                  'Create Proforma Invoice',
-                  'View Proforma Invoice',
-                ]),
-
-                // ListTile(
-                //   leading: Icon(Icons.mail_outline),
-                //   title: const Text('Send Mail'),
-                //   onTap: () async {
-                //     Navigator.pop(context);
-
-                //     await Navigator.push<void>(
-                //       context,
-                //       MaterialPageRoute(
-                //         builder: (_) => const StaffMailPage(),
-                //       ),
-                //     );
-
-                //     if (!mounted) return;
-
-                //     await fetchInboxMailCount();
-                //   },
-                // ),
-
-                     ListTile(
-                  leading: const Icon(Icons.shopping_cart),
-                  title: Text('Create Orders'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => order_products()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-
-                ListTile(
-                  leading: const Icon(Icons.receipt_long),
-                  title: Text('Bepocart Order List'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => MyFamilyOrderList()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-                // Divider(),
-
-                // ListTile(
-                //   leading: Icon(Icons.dashboard),
-                //   title: Text('Call Report'),
-                //   onTap: () {
-                //     Navigator.push(context,
-                //         MaterialPageRoute(builder: (context) => CallLog()));
-                //   },
-                // ),
-
-          
-                // _buildDropdownTile(context, 'Orders', [
-                //   'New Orders',
-                //   'Bepocart Orders List',
-                //   'Invoice Created',
-                //   'Invoice Approved',
-                //   'Pre Booked',
-                //   'Waiting For Confirmation',
-                //   'To Print',
-                //   'Packing Under Progress',
-                //   'Packed',
-                //   'Ready to ship',
-                //   'Shipped',
-                //   'Invoice Rejected'
-                // ]),
-                // Divider(),
-                ListTile(
-                  leading: Icon(Icons.add_shopping_cart),
-                  title: Text('Bulk Order Creation'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => OrderBulkUpload()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-
-                ListTile(
-                  leading: Icon(Icons.upload_file),
-                  title: Text('Bulk Order Creation Excel'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => OrderBulkUploadexcel()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
-                if (isManager) ...[
-                  Divider(),
-                  ListTile(
-                    leading: Icon(Icons.group_add),
-                    title: Text('Add Team Staff '),
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  StaffAttendanceTeamMemberScreen()));
-                      // Navigate to the Settings page or perform any other action
-                    },
-                  ),
-                  Divider(),
-                  ListTile(
-                    leading: Icon(Icons.fact_check),
-                    title: Text('Add Attendance '),
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  StaffMarkAttendanceScreen()));
-                      // Navigate to the Settings page or perform any other action
-                    },
-                  ),
-                  Divider(),
-                  ListTile(
-                    leading: Icon(Icons.approval),
-                    title: Text('Approve Leave Requests '),
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  ManagerLeaveRequestsPage()));
-                      // Navigate to the Settings page or perform any other action
-                    },
-                  ),
-                ],
-                ListTile(
-                  leading: const Icon(Icons.event_note),
-                  title: Text('Employee Leave Form'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => EmployeeLeaveFormPage()));
-                  },
-                ),
-                Divider(),
-                       ListTile(
-                    leading: Icon(Icons.dashboard),
-                    title: Text('Local Purchase Order'),
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  LocalPurchaseOrderScreen()));
-                    },
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.logout_rounded),
-                  title: const Text('Logout'),
-                  onTap: () async {
-                    await logoutUser(context);
-                  },
-                ),
-                SizedBox(height: 50), // Add some space at the bottom
-              ],
-            ),
-          ),
-        ),
+        bottomNavigationBar: _buildModernBottomNavigationBar(),
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                // Profile Section
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => EditProfileScreen()),
-                        );
-                      },
+                      onTap: _openBottomProfile,
                       child: CircleAvatar(
                         radius: 25,
                         backgroundColor: const Color(0xFFE5E7EB),
@@ -1410,93 +1886,27 @@ class _marketing_dashboardState extends State<marketing_dashboard>
                                 as ImageProvider,
                       ),
                     ),
-                    SizedBox(width: 16),
-                    Text(
-                      '$username',
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        '$username',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                SizedBox(height: 10),
-
+                const SizedBox(height: 10),
                 buildMyOrderSummaryCard(),
-
-                SizedBox(height: 10),
-
-                // Container(
-                //   decoration: BoxDecoration(
-                //     gradient: LinearGradient(
-                //       colors: [Colors.blueAccent, Colors.lightBlueAccent],
-                //       begin: Alignment.topLeft,
-                //       end: Alignment.bottomRight,
-                //     ),
-                //     borderRadius: BorderRadius.circular(20),
-                //     boxShadow: [
-                //       BoxShadow(
-                //         color: Colors.black12,
-                //         blurRadius: 10,
-                //         offset: Offset(0, 6),
-                //       ),
-                //     ],
-                //   ),
-                //   padding: EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-                //   child: Column(
-                //     crossAxisAlignment: CrossAxisAlignment.start,
-                //     children: [
-                //       // Date and Icon Row
-                //       Row(
-                //         children: [
-                //           Icon(Icons.calendar_today,
-                //               color: Colors.white, size: 20),
-                //           SizedBox(width: 8),
-                //           Text(
-                //             DateFormat('EEEE, dd MMMM yyyy')
-                //                 .format(DateTime.now()),
-                //             style: TextStyle(
-                //               fontSize: 15,
-                //               fontWeight: FontWeight.w600,
-                //               color: Colors.white.withOpacity(0.95),
-                //             ),
-                //           ),
-                //         ],
-                //       ),
-                //       SizedBox(height: 12),
-
-                //       // Divider
-                //       Container(
-                //         height: 1,
-                //         color: Colors.white.withOpacity(0.3),
-                //       ),
-                //       SizedBox(height: 16),
-
-                //       // Info Cards Row
-                //       Row(
-                //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                //         children: [
-                //           GestureDetector(
-                //             onTap: () {
-                //               // Navigator.push(
-                //               //   context,
-                //               //   MaterialPageRoute(builder: (context) => today_OrderList(status: null)),
-                //               // );
-                //             },
-                //             child: _buildCardWithIcon(
-                //               label: 'Today\'s Bills',
-                //               value: billcount.toString(),
-                //               color: Colors.white,
-                //             ),
-                //           ),
-                //           _buildCardWithIcon(
-                //             label: 'Total Volume',
-                //             value: amountsum.toString(),
-                //             color: Colors.white,
-                //           ),
-                //         ],
-                //       ),
-                //     ],
-                //   ),
-                // ),
+                const SizedBox(height: 14),
+                _buildFrontMenuSection(
+                  query: isBottomSearchOpen ? dashboardSearchQuery : '',
+                ),
+                const SizedBox(height: 10),
               ],
             ),
           ),
