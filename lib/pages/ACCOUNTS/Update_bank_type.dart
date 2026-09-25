@@ -35,6 +35,21 @@ class _update_bank_typeState extends State<update_bank_type> {
   void initState() {
     super.initState();
     getbanktype();
+    loadDepartment();
+  }
+
+  String currentDepartment = '';
+
+  bool get canUpdate => const ['ADMIN', 'COO', 'CEO', 'HR']
+      .contains(currentDepartment.trim().toUpperCase());
+ Future<String?> getdepFromPrefs() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString('department');
+  }
+  Future<void> loadDepartment() async {
+    final department = await getdepFromPrefs();
+    if (!mounted) return;
+    setState(() => currentDepartment = department ?? '');
   }
 
   TextEditingController name = TextEditingController();
@@ -93,6 +108,15 @@ class _update_bank_typeState extends State<update_bank_type> {
   }
 
   Future<void> updateBankType() async {
+    if (!canUpdate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('You do not have permission to update bank types.'),
+        ),
+      );
+      return;
+    }
     try {
       final token = await gettokenFromPrefs();
 
@@ -304,6 +328,7 @@ Navigator.push(
                                 width: constraints.maxWidth * 0.9,
                                 child: TextField(
                                   controller: name,
+                                  readOnly: !canUpdate,
                                   decoration: InputDecoration(
                                     labelText: 'Bank Type',
                                     border: OutlineInputBorder(
@@ -320,15 +345,11 @@ Navigator.push(
                               SizedBox(height: 10),
 
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    updateBankType();
-                                  });
-                                },
+                                onPressed: canUpdate ? updateBankType : null,
                                 style: ButtonStyle(
                                   backgroundColor:
                                       MaterialStateProperty.all<Color>(
-                                    Colors.blue,
+                                    canUpdate ? Colors.blue : Colors.grey,
                                   ),
                                   shape: MaterialStateProperty.all<
                                       RoundedRectangleBorder>(
@@ -432,19 +453,24 @@ Navigator.push(
                                   Padding(
                                     padding: const EdgeInsets.all(8.0),
                                     child: GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                                builder: (context) =>
-                                                    update_bank_type(
-                                                        id: category[i]
-                                                            ['id'])));
-                                      },
-                                      child: Image.asset(
-                                        "lib/assets/edit.jpg",
-                                        width: 20,
-                                        height: 20,
+                                      onTap: canUpdate
+                                          ? () {
+                                              Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          update_bank_type(
+                                                              id: category[i]
+                                                                  ['id'])));
+                                            }
+                                          : null,
+                                      child: Opacity(
+                                        opacity: canUpdate ? 1.0 : 0.35,
+                                        child: Image.asset(
+                                          "lib/assets/edit.jpg",
+                                          width: 20,
+                                          height: 20,
+                                        ),
                                       ),
                                     ),
                                   ),

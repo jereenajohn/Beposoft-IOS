@@ -1027,9 +1027,7 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   'ADMIN',
                                   'COO',
                                   'CEO',
-                                  'ACCOUNTS',
-                                  'ACCOUNTING',
-                                  'ACCOUNTS / ACCOUNTING',
+                                  'HR',
                                 ].contains(currentDepartment)
                                     ? () {
                                         if (selectedInvoiceId != null) {

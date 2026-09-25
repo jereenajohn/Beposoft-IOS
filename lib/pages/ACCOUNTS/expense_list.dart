@@ -50,9 +50,7 @@ class _expence_listState extends State<expence_list> {
     return department == 'ADMIN' ||
         department == 'COO' ||
         department == 'CEO' ||
-        department == 'ACCOUNTS' ||
-        department == 'ACCOUNTING' ||
-        department == 'ACCOUNTS / ACCOUNTING';
+        department == 'HR';
   }
 
   List<ExpenseItem> expenseList = [];
@@ -3299,6 +3297,11 @@ class _expence_listState extends State<expence_list> {
     ) async {
       if (isSaving) return;
 
+      if (!canUpdate) {
+        _showSnackBar("Only ADMIN, COO, CEO, and HR can update expenses.");
+        return;
+      }
+
       if (!(formKey.currentState?.validate() ?? false)) return;
 
       if (localCompanyId == null) {
@@ -4436,7 +4439,7 @@ await showDialog<void>(
                             child: SizedBox(
                               height: 52,
                               child: ElevatedButton(
-                                onPressed: isSaving
+                                onPressed: (isSaving || !canUpdate)
                                     ? null
                                     : () => submit(
                                           dialogContext,
@@ -4449,7 +4452,7 @@ await showDialog<void>(
                                   foregroundColor:
                                       Colors.white,
                                   disabledBackgroundColor:
-                                      const Color(0xffB2CCFF),
+                                      const Color(0xff9CA3AF),
                                   elevation: 0,
                                   shape:
                                       RoundedRectangleBorder(

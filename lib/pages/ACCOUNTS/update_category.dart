@@ -35,9 +35,22 @@ class _update_categoryState extends State<update_category> {
   void initState() {
     super.initState();
     getcategory();
+    loadDepartment();
   }
 
   TextEditingController name = TextEditingController();
+
+  String currentDepartment = '';
+
+  bool get canUpdate => const {'ADMIN', 'COO', 'CEO', 'HR'}
+      .contains(currentDepartment.trim().toUpperCase());
+
+  Future<void> loadDepartment() async {
+    final prefs = await SharedPreferences.getInstance();
+    final department = prefs.getString('department') ?? '';
+    if (!mounted) return;
+    setState(() => currentDepartment = department);
+  }
   
 
   Future<String?> gettokenFromPrefs() async {
@@ -103,6 +116,16 @@ Future<void> getcategory() async {
 
 
   void updatecategory() async {
+    if (!canUpdate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Only ADMIN, COO, CEO, and HR can update categories.'),
+        ),
+      );
+      return;
+    }
+
     final token = await gettokenFromPrefs();
 
     try {
@@ -321,6 +344,7 @@ void logout() async {
                                 width: constraints.maxWidth * 0.9,
                                 child: TextField(
                                   controller: name,
+                                  readOnly: !canUpdate,
                                   decoration: InputDecoration(
                                     labelText: 'Category Name',
                                     border: OutlineInputBorder(
@@ -337,15 +361,13 @@ void logout() async {
                               SizedBox(height: 10),
                              
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    updatecategory();
-                                  });
-                                },
+                                onPressed: canUpdate ? updatecategory : null,
                                 style: ButtonStyle(
                                   backgroundColor:
-                                      MaterialStateProperty.all<Color>(
-                                    Colors.blue,
+                                      MaterialStateProperty.resolveWith<Color>(
+                                    (states) => states.contains(MaterialState.disabled)
+                                        ? Colors.grey.shade400
+                                        : Colors.blue,
                                   ),
                                   shape: MaterialStateProperty.all<
                                       RoundedRectangleBorder>(
@@ -449,18 +471,26 @@ void logout() async {
                                   Padding(
                                     padding: const EdgeInsets.all(8.0),
                                     child: GestureDetector(
-                                      onTap: () {
-                                      Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                                builder: (context) =>
-                                                    update_category(
-                                                        id: category[i]['id'])));
-                                      },
-                                      child: Image.asset(
-                                        "lib/assets/edit.jpg",
-                                        width: 20,
-                                        height: 20,
+                                      onTap: canUpdate
+                                          ? () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      update_category(
+                                                    id: category[i]['id'],
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          : null,
+                                      child: Opacity(
+                                        opacity: canUpdate ? 1.0 : 0.4,
+                                        child: Image.asset(
+                                          "lib/assets/edit.jpg",
+                                          width: 20,
+                                          height: 20,
+                                        ),
                                       ),
                                     ),
                                   ),

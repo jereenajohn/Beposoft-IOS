@@ -42,8 +42,8 @@ class _UpdateBankTransferListState extends State<UpdateBankTransferList> {
   @override
   void initState() {
     super.initState();
-    // Initialize any necessary data or state here
 
+    loadDepartment();
     getreciptReport();
     getbank();
   }
@@ -53,7 +53,41 @@ class _UpdateBankTransferListState extends State<UpdateBankTransferList> {
     return prefs.getString('token');
   }
 
+  String currentDepartment = '';
+
+  bool get canUpdate {
+    return [
+      'ADMIN',
+      'COO',
+      'CEO',
+      'HR',
+    ].contains(currentDepartment.trim().toUpperCase());
+  }
+
+  Future<void> loadDepartment() async {
+    final department = await getdepFromPrefs();
+
+    if (!mounted) return;
+
+    setState(() {
+      currentDepartment = department ?? '';
+    });
+  }
+
   Future<void> updatebanktransfer() async {
+    if (!canUpdate) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            'Only ADMIN, COO, CEO, and HR can update bank transfers.',
+          ),
+        ),
+      );
+      return;
+    }
     try {
       final token = await getTokenFromPrefs();
 
@@ -252,13 +286,12 @@ class _UpdateBankTransferListState extends State<UpdateBankTransferList> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }else if (dep == "BDM") {
+    } else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -335,17 +368,16 @@ class _UpdateBankTransferListState extends State<UpdateBankTransferList> {
                           bdm_dashbord()), // Replace AnotherPage with your target page
                 );
               } else if (dep == "COO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => ceo_dashboard()),
-      );
-    }
-    else if (dep == "CSO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => cso_dashboard()),
-      );
-    }else if (dep == "warehouse") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => ceo_dashboard()),
+                );
+              } else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => cso_dashboard()),
+                );
+              } else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
@@ -724,14 +756,20 @@ class _UpdateBankTransferListState extends State<UpdateBankTransferList> {
                                   SizedBox(
                                     width: 270,
                                     child: ElevatedButton(
-                                      onPressed: () {
-                                        //AddReceipt3(context);
-                                        updatebanktransfer();
-                                      },
+                                      onPressed: canUpdate
+                                          ? () {
+                                              updatebanktransfer();
+                                            }
+                                          : null,
                                       style: ButtonStyle(
                                         backgroundColor:
-                                            MaterialStateProperty.all<Color>(
-                                          Color.fromARGB(255, 64, 176, 251),
+                                            MaterialStateProperty.resolveWith<Color>(
+                                          (states) {
+                                            if (states.contains(MaterialState.disabled)) {
+                                              return Colors.grey.shade400;
+                                            }
+                                            return const Color.fromARGB(255, 64, 176, 251);
+                                          },
                                         ),
                                         shape: MaterialStateProperty.all<
                                             RoundedRectangleBorder>(

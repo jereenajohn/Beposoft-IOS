@@ -96,6 +96,26 @@ class _Staff_UpdateState extends State<Staff_Update> {
   String staffId = '';
   bool isLoading = false;
   bool isPageLoading = true;
+  bool canUpdate = false;
+
+  static const Set<String> _updateDepartments = {
+    'ADMIN', 'COO', 'CEO', 'HR',
+  };
+
+  Future<bool> _checkUpdatePermission(BuildContext scaffoldContext) async {
+    final department = (await getdepFromPrefs() ?? '').trim().toUpperCase();
+    final allowed = _updateDepartments.contains(department);
+    if (!allowed && scaffoldContext.mounted) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to update staff records.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return allowed;
+  }
+
 
   File? selectedImage;
   File? selectedSignature;
@@ -169,6 +189,11 @@ class _Staff_UpdateState extends State<Staff_Update> {
     debugPrint('========== UPDATE STAFF PAGE INIT ==========');
     debugPrint('WIDGET STAFF ID: ${widget.id}');
     debugPrint('============================================');
+
+    final department = (await getdepFromPrefs() ?? '').trim().toUpperCase();
+    if (mounted) {
+      setState(() => canUpdate = _updateDepartments.contains(department));
+    }
 
     await Future.wait([
       getdepartments(),
@@ -1180,6 +1205,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
   Future<bool> updateStaffSalaryIncrement(
     BuildContext scaffoldContext,
   ) async {
+    if (!await _checkUpdatePermission(scaffoldContext)) return false;
+
     debugPrint('========== SALARY INCREMENT BUTTON ==========');
     debugPrint('TARGET STAFF ID: ${widget.id}');
     debugPrint('SALARY RECORD ID: $salaryRecordId');
@@ -1368,6 +1395,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
     required BuildContext scaffoldContext,
     required num updatedSalary,
   }) async {
+    if (!await _checkUpdatePermission(scaffoldContext)) return false;
+
     if (salaryRecordId == null) {
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         const SnackBar(
@@ -1542,6 +1571,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
     required num incrementAmountValue,
     required String remarksValue,
   }) async {
+    if (!await _checkUpdatePermission(scaffoldContext)) return false;
+
     final token = await gettokenFromPrefs();
 
     if (token == null || token.isEmpty) {
@@ -2080,9 +2111,9 @@ class _Staff_UpdateState extends State<Staff_Update> {
               else
                 IconButton(
                   tooltip: 'Edit Increment',
-                  onPressed: () {
-                    _showEditIncrementDialog(increment);
-                  },
+                  onPressed: canUpdate
+                      ? () => _showEditIncrementDialog(increment)
+                      : null,
                   icon: const Icon(
                     Icons.edit_outlined,
                     color: Colors.blue,
@@ -2257,7 +2288,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
               width: double.infinity,
               height: 46,
               child: OutlinedButton.icon(
-                onPressed: isSalaryEditing
+                onPressed: (!canUpdate || isSalaryEditing)
                     ? null
                     : _showEditSalaryDialog,
                 style: OutlinedButton.styleFrom(
@@ -2318,7 +2349,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton.icon(
-              onPressed: isSalaryUpdating
+              onPressed: (!canUpdate || isSalaryUpdating)
                   ? null
                   : () async {
                       await updateStaffSalaryIncrement(context);
@@ -2359,6 +2390,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
   }
 
   Future<bool> registerUserData(BuildContext scaffoldContext) async {
+    if (!await _checkUpdatePermission(scaffoldContext)) return false;
+
     final token = await gettokenFromPrefs();
 
     try {
@@ -2522,6 +2555,8 @@ class _Staff_UpdateState extends State<Staff_Update> {
   }
 
   Future<bool> updateStaffFiles(BuildContext scaffoldContext) async {
+    if (!await _checkUpdatePermission(scaffoldContext)) return false;
+
     final token = await gettokenFromPrefs();
 
     try {
@@ -4436,7 +4471,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                   width: double.infinity,
                                   height: 54,
                                   child: ElevatedButton(
-                                    onPressed: () async {
+                                    onPressed: (!canUpdate || isLoading)
+                                        ? null
+                                        : () async {
+                                      if (!await _checkUpdatePermission(scaffoldContext)) return;
                                       debugPrint('========== UPDATE STAFF BUTTON ==========');
                                       debugPrint('STAFF ID: ${widget.id}');
                                       debugPrint('DEPARTMENT ID: $selectedDepartmentId');
@@ -4499,8 +4537,12 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                       }
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue,
+                                      backgroundColor: canUpdate
+                                          ? Colors.blue
+                                          : Colors.grey.shade400,
+                                      disabledBackgroundColor: Colors.grey.shade400,
                                       foregroundColor: Colors.white,
+                                      disabledForegroundColor: Colors.white,
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),

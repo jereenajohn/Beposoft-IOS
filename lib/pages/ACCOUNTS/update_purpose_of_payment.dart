@@ -34,6 +34,7 @@ class _update_purpose_of_paymentState extends State<update_purpose_of_payment> {
   @override
   void initState() {
     super.initState();
+    loadDepartment();
     getpurpose();
   }
 
@@ -43,6 +44,20 @@ class _update_purpose_of_paymentState extends State<update_purpose_of_payment> {
   Future<String?> gettokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
+  }
+
+  String currentDepartment = '';
+
+  bool get canUpdate => const {'ADMIN', 'COO', 'CEO', 'HR'}
+      .contains(currentDepartment.trim().toUpperCase());
+
+  Future<void> loadDepartment() async {
+    final prefs = await SharedPreferences.getInstance();
+    final department = prefs.getString('department') ?? '';
+    if (!mounted) return;
+    setState(() {
+      currentDepartment = department;
+    });
   }
 
   var departments;
@@ -105,6 +120,15 @@ Future<void> getpurpose() async {
 
 
   void updatepurpose() async {
+    if (!canUpdate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('You do not have permission to update this purpose.'),
+        ),
+      );
+      return;
+    }
     final token = await gettokenFromPrefs();
 
     try {
@@ -215,6 +239,7 @@ Future<void> getpurpose() async {
 
   @override
   void dispose() {
+    name.dispose();
     textEditingController.dispose();
     super.dispose();
   }
@@ -323,6 +348,7 @@ void logout() async {
                                 width: constraints.maxWidth * 0.9,
                                 child: TextField(
                                   controller: name,
+                                  readOnly: !canUpdate,
                                   decoration: InputDecoration(
                                     labelText: 'Purpose Name',
                                     border: OutlineInputBorder(
@@ -339,15 +365,13 @@ void logout() async {
                               SizedBox(height: 10),
                              
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    updatepurpose();
-                                  });
-                                },
+                                onPressed: canUpdate ? updatepurpose : null,
                                 style: ButtonStyle(
                                   backgroundColor:
-                                      MaterialStateProperty.all<Color>(
-                                    Colors.blue,
+                                      MaterialStateProperty.resolveWith<Color>(
+                                    (states) => states.contains(MaterialState.disabled)
+                                        ? Colors.grey
+                                        : Colors.blue,
                                   ),
                                   shape: MaterialStateProperty.all<
                                       RoundedRectangleBorder>(
@@ -451,18 +475,21 @@ void logout() async {
                                   Padding(
                                     padding: const EdgeInsets.all(8.0),
                                     child: GestureDetector(
-                                      onTap: () {
+                                      onTap: canUpdate ? () {
                                       Navigator.push(
                                             context,
                                             MaterialPageRoute(
                                                 builder: (context) =>
                                                     update_purpose_of_payment(
                                                         id: purposes[i]['id'])));
-                                      },
-                                      child: Image.asset(
-                                        "lib/assets/edit.jpg",
-                                        width: 20,
-                                        height: 20,
+                                      } : null,
+                                      child: Opacity(
+                                        opacity: canUpdate ? 1.0 : 0.35,
+                                        child: Image.asset(
+                                          "lib/assets/edit.jpg",
+                                          width: 20,
+                                          height: 20,
+                                        ),
                                       ),
                                     ),
                                   ),

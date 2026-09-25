@@ -97,12 +97,12 @@ bool get canUpdate {
   final String department =
       currentDepartment.trim().toUpperCase();
 
-  return department == 'ADMIN' ||
-      department == 'COO' ||
-      department == 'CEO' ||
-      department == 'ACCOUNTS' ||
-      department == 'ACCOUNTING' ||
-      department == 'ACCOUNTS / ACCOUNTING';
+  return [
+    'ADMIN',
+    'COO',
+    'CEO',
+    'HR',
+  ].contains(department);
 }
 
   int? parseInt(dynamic value) {

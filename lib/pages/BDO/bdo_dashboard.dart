@@ -8,6 +8,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
 // import 'package:beposoft/pages/ACCOUNTS/call_log.dart';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
 import 'package:beposoft/pages/ACCOUNTS/mailboxpage..dart';
+import 'package:beposoft/pages/ACCOUNTS/my_grv_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_list.dart';
 import 'package:beposoft/pages/ADMIN/localpurchaseorderscreen.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
@@ -1764,6 +1765,12 @@ class _bdo_dashbordState extends State<bdo_dashbord>
         'keywords':
             'proforma invoice create proforma invoice view proforma invoice view order list orders',
       },
+      {
+  'title': 'My GRV',
+  'icon': Icons.assignment_return_outlined,
+  'keywords':
+      'my grv goods return voucher return products exchange',
+},
       // {
       //   'title': 'Orders',
       //   'icon':
@@ -1789,6 +1796,8 @@ class _bdo_dashbordState extends State<bdo_dashbord>
       //           'call duration add district',
       // },
     ];
+
+    
   }
 
   List<Map<String, dynamic>> _getBdoGroupItems(
@@ -1893,6 +1902,16 @@ class _bdo_dashbordState extends State<bdo_dashbord>
         );
 
         return;
+        case 'My GRV':
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => const MyGrvPage(),
+    ),
+  );
+
+  return;
 
       case 'Add Attendance':
         Navigator.push(

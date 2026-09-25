@@ -57,8 +57,8 @@ class _updaterefundState extends State<updaterefund> {
   String? selectedBankId; // Variable to store the selected bank ID
   var respo;
 // Add this variable to your _add_receiptState class:
-String? selectedReceiptType;
-final List<String> receiptTypes = ['Order Refund', 'Advance Refund'];
+  String? selectedReceiptType;
+  final List<String> receiptTypes = ['Order Refund', 'Advance Refund'];
   Future<String?> gettoken() async {
     SharedPreferences pref = await SharedPreferences.getInstance();
     return pref.getString('token');
@@ -71,6 +71,8 @@ final List<String> receiptTypes = ['Order Refund', 'Advance Refund'];
     getbank();
     getrefund();
     getcustomer();
+    loadDepartment();
+
     // getNameFromJWT(); // Fetch the name from JWT
   }
 
@@ -78,95 +80,114 @@ final List<String> receiptTypes = ['Order Refund', 'Advance Refund'];
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
-   Future getuserid() async {
+
+  Future getuserid() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getInt('user_id');
   }
 
+  bool get canUpdate {
+    return [
+      'ADMIN',
+      'COO',
+      'CEO',
+      'HR',
+    ].contains(currentDepartment.trim().toUpperCase());
+  }
+
+  String currentDepartment = '';
+
+  Future<void> loadDepartment() async {
+    final department = await getdepFromPrefs();
+
+    if (!mounted) return;
+
+    setState(() {
+      currentDepartment = department ?? '';
+    });
+  }
+
   List<Map<String, dynamic>> customer = [];
-String? selectedCustomerId;
+  String? selectedCustomerId;
   Future<void> getcustomer() async {
-  try {
-    final dep = await getdepFromPrefs();
-    final token = await getTokenFromPrefs();
+    try {
+      final dep = await getdepFromPrefs();
+      final token = await getTokenFromPrefs();
 
-    final jwt = JWT.decode(token!);
-    var name = jwt.payload['name'];
-    
+      final jwt = JWT.decode(token!);
+      var name = jwt.payload['name'];
 
-    var response = await http.get(
-      Uri.parse('$api/api/customers/'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+      var response = await http.get(
+        Uri.parse('$api/api/customers/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    ;
+      ;
 
-    if (response.statusCode == 200) {
-      final parsed = jsonDecode(response.body);
-      var productsData = parsed['data']; // Directly accessing 'data' since no pagination
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        var productsData =
+            parsed['data']; // Directly accessing 'data' since no pagination
 
-      List<Map<String, dynamic>> newCustomers = [];
+        List<Map<String, dynamic>> newCustomers = [];
 
-      for (var productData in productsData) {
-        newCustomers.add({
-          'id': productData['id'],
-          'name': productData['name'],
-          'created_at': productData['created_at'],
+        for (var productData in productsData) {
+          newCustomers.add({
+            'id': productData['id'],
+            'name': productData['name'],
+            'created_at': productData['created_at'],
+          });
+        }
+
+        // Update UI
+        setState(() {
+          customer = newCustomers;
         });
+      } else {
+        throw Exception("Failed to load customer data");
       }
-
-      // Update UI
-      setState(() {
-        customer = newCustomers;
-        
-      });
-    } else {
-      throw Exception("Failed to load customer data");
+    } catch (error) {
+      ;
     }
-  } catch (error) {
-    ;
   }
-}
 
-Future<void> AddStatusTime(BuildContext scaffoldContext) async {
-  final token = await getTokenFromPrefs();
-  try {
-    final response = await http.post(
-      Uri.parse('$api/api/datalog/create/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-         'before_data': {"Action": "Recipt added "},
-        'after_data':  {"Data": "$respo"},
-        'order': "",
-      }),
-    );
-
-
-    if (response.statusCode == 201) {
-
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text('time added Successfully.'),
-        ),
+  Future<void> AddStatusTime(BuildContext scaffoldContext) async {
+    final token = await getTokenFromPrefs();
+    try {
+      final response = await http.post(
+        Uri.parse('$api/api/datalog/create/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'before_data': {"Action": "Recipt added "},
+          'after_data': {"Data": "$respo"},
+          'order': "",
+        }),
       );
-    } else {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Adding time failed.'),
-        ),
-      );
-    }
-  } catch (e) {
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('time added Successfully.'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Adding time failed.'),
+          ),
+        );
+      }
+    } catch (e) {}
   }
-}
+
   Future<void> fetchOrderData() async {
     try {
       final token = await getTokenFromPrefs();
@@ -184,7 +205,6 @@ Future<void> AddStatusTime(BuildContext scaffoldContext) async {
         },
       );
 
-  
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         final List ordersData = responseData['results'];
@@ -211,52 +231,49 @@ Future<void> AddStatusTime(BuildContext scaffoldContext) async {
       ;
     }
   }
+
   var res;
-   Future<void> getrefund() async {
-  final token = await gettoken();
-   final jwt = JWT.decode(token!);
-      var name = jwt.payload['name'];
+  Future<void> getrefund() async {
+    final token = await gettoken();
+    final jwt = JWT.decode(token!);
+    var name = jwt.payload['name'];
 
-  try {
-    final response = await http.get(
-      Uri.parse('$api/api/refund/receipts/${widget.id}/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
+    try {
+      final response = await http.get(
+        Uri.parse('$api/api/refund/receipts/${widget.id}/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
 
-  
-    if (response.statusCode == 200) {
-      final parsed = jsonDecode(response.body);
-      final data = parsed['data']; // ✅ SINGLE OBJECT
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+        final data = parsed['data']; // ✅ SINGLE OBJECT
 
-      setState(() {
-        // 🔹 Text fields
-        res=data;
-        amount.text = data['amount'] ?? '';
-        transactionid.text = data['transactionID'] ?? '';
-        Remark.text = data['note'] ?? '';
+        setState(() {
+          // 🔹 Text fields
+          res = data;
+          amount.text = data['amount'] ?? '';
+          transactionid.text = data['transactionID'] ?? '';
+          Remark.text = data['note'] ?? '';
 
-        // 🔹 Dropdown selections (convert to String)
-        selectedCustomerId = data['customer']?.toString();
-        selectedInvoiceId  = data['invoice']?.toString();
-        selectedBankId     = data['bank']?.toString();
+          // 🔹 Dropdown selections (convert to String)
+          selectedCustomerId = data['customer']?.toString();
+          selectedInvoiceId = data['invoice']?.toString();
+          selectedBankId = data['bank']?.toString();
 
-        // 🔹 Date
-        selectedDate = DateTime.parse(data['date']);
+          // 🔹 Date
+          selectedDate = DateTime.parse(data['date']);
 
-        // 🔹 Receipt type logic (optional)
-        selectedReceiptType =
-            data['invoice'] != null ? 'Order Refund' : 'Advance Refund';
-             uname.text=name; 
-      });
-
-    }
-  } catch (e) {
-
+          // 🔹 Receipt type logic (optional)
+          selectedReceiptType =
+              data['invoice'] != null ? 'Order Refund' : 'Advance Refund';
+          uname.text = name;
+        });
+      }
+    } catch (e) {}
   }
-}
 
   Future<void> getbank() async {
     final token = await gettoken();
@@ -282,73 +299,66 @@ Future<void> AddStatusTime(BuildContext scaffoldContext) async {
           bank = banklist;
         });
       }
-    } catch (e) {
-      
-    }
+    } catch (e) {}
   }
 
-Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
-  final token = await getTokenFromPrefs();
+  Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
+    final token = await getTokenFromPrefs();
 
-  try {
-   
-
-    // 3️⃣ Safe POST request
-    final response = await http.post(
-      Uri.parse('$api/api/datalog/create/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'before_data': {
-          "status": "Refund updated",
-          "refund_no": res['refund_no'],
-          "customer_name": res['customer_name'],
-          "amount": res['amount'],
-          "created_by": res['created_name'],
-          "date": res['date'],
-          "invoice": res['invoice'],
+    try {
+      // 3️⃣ Safe POST request
+      final response = await http.post(
+        Uri.parse('$api/api/datalog/create/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
         },
-        'after_data': {
-          'refund_no': respo['refund_no'],
-          'customer_name': respo['customer_name'],
-          'amount': respo['amount'],
-          'created_by': respo['created_name'],
-          'date': respo['date'],
-          'invoice': respo['invoice'],
-        },
-        'order': "",
-      }),
-    );
-
-   
-
-    if (response.statusCode == 201) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text('Note log added successfully.'),
-        ),
+        body: jsonEncode({
+          'before_data': {
+            "status": "Refund updated",
+            "refund_no": res['refund_no'],
+            "customer_name": res['customer_name'],
+            "amount": res['amount'],
+            "created_by": res['created_name'],
+            "date": res['date'],
+            "invoice": res['invoice'],
+          },
+          'after_data': {
+            'refund_no': respo['refund_no'],
+            'customer_name': respo['customer_name'],
+            'amount': respo['amount'],
+            'created_by': respo['created_name'],
+            'date': respo['date'],
+            'invoice': respo['invoice'],
+          },
+          'order': "",
+        }),
       );
-    } else {
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Note log added successfully.'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Log creation failed.'),
+          ),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.red,
-          content: Text('Log creation failed.'),
+          content: Text('Unexpected error while adding log'),
         ),
       );
     }
-  } catch (e) {
-
-    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-      const SnackBar(
-        backgroundColor: Colors.red,
-        content: Text('Unexpected error while adding log'),
-      ),
-    );
   }
-}
 
   Future<void> AddRefund(
     BuildContext scaffoldContext,
@@ -359,27 +369,37 @@ Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
       final jwt = JWT.decode(token!);
       var name = jwt.payload['name'];
       var id = await getuserid();
-    
 
+      if (!canUpdate) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              'Only ADMIN, COO, CEO, and HR can update refunds.',
+            ),
+          ),
+        );
+        return;
+      }
       // Format the selectedDate as a string
       String formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
 
-      final response = await http.put(
-          Uri.parse('$api/api/refund/receipts/${widget.id}/'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode({
-            'transactionID': transactionid.text,
-            'customer': selectedCustomerId,
-            'invoice': selectedInvoiceId,
-            'amount': amount.text,
-            'bank': selectedBankId,
-            'date': formattedDate, // Use the formatted date string
-            'created_by': id,
-            'note': Remark.text
-          }));
+      final response =
+          await http.put(Uri.parse('$api/api/refund/receipts/${widget.id}/'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'transactionID': transactionid.text,
+                'customer': selectedCustomerId,
+                'invoice': selectedInvoiceId,
+                'amount': amount.text,
+                'bank': selectedBankId,
+                'date': formattedDate, // Use the formatted date string
+                'created_by': id,
+                'note': Remark.text
+              }));
 
       if (response.statusCode == 200) {
         var Data = jsonDecode(response.body);
@@ -392,10 +412,9 @@ Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
         );
         await Addrefundlog(scaffoldContext, respo);
 
-        Navigator.push(context, MaterialPageRoute(builder: (context)=>RefundList()));
-      } 
-      else 
-      {
+        Navigator.push(
+            context, MaterialPageRoute(builder: (context) => RefundList()));
+      } else {
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
@@ -403,12 +422,8 @@ Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
           ),
         );
       }
-    } catch (e) {
-      
-    }
+    } catch (e) {}
   }
-
- 
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -441,6 +456,7 @@ Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
+
   Future<String?> getusername() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('username');
@@ -456,59 +472,61 @@ Future<void> Addrefundlog(BuildContext scaffoldContext, dynamic respo) async {
   //     });
   //   }
   // }
-Future<void> _navigateBack() async {
+  Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
-   if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
-
-}
-else if (dep == "COO") {
+    if (dep == "BDO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdo_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-
-
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-}else {
+    } else if (dep == "BDM") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                bdm_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "warehouse") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseDashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "CEO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "COO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                ceo_dashboard()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "Warehouse Admin") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) =>
+                WarehouseAdmin()), // Replace AnotherPage with your target page
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => dashboard()),
@@ -519,7 +537,7 @@ else if(dep=="Warehouse Admin" ){
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-        onWillPop: () async {
+      onWillPop: () async {
         // Prevent the swipe-back gesture (and back button)
         _navigateBack();
         return false;
@@ -535,57 +553,59 @@ else if(dep=="Warehouse Admin" ){
             icon: const Icon(Icons.arrow_back), // Custom back arrow
             onPressed: () async {
               final dep = await getdepFromPrefs();
-             if(dep=="BDO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
-            );
-
-}
-else if(dep=="BDM" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="warehouse" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseDashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if(dep=="CEO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-else if (dep == "COO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => ceo_dashboard()),
-      );
-    }
-    else if (dep == "CSO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => cso_dashboard()),
-      );
-    }
-else if(dep=="COO" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
-            );
-}
-
-
-else if(dep=="Warehouse Admin" ){
-   Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
-            );
-} else {
+              if (dep == "BDO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          bdo_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "BDM") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          bdm_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "warehouse") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          WarehouseDashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "CEO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ceo_dashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "COO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => ceo_dashboard()),
+                );
+              } else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => cso_dashboard()),
+                );
+              } else if (dep == "COO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ceo_dashboard()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "Warehouse Admin") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          WarehouseAdmin()), // Replace AnotherPage with your target page
+                );
+              } else {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
@@ -604,9 +624,9 @@ else if(dep=="Warehouse Admin" ){
         ),
         body: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.only(bottom:55),
-              child: Container(
-                        child: Column(
+          padding: const EdgeInsets.only(bottom: 55),
+          child: Container(
+            child: Column(
               children: [
                 SizedBox(
                   height: 15,
@@ -617,7 +637,8 @@ else if(dep=="Warehouse Admin" ){
                     width: 600,
                     decoration: BoxDecoration(
                       color: Color.fromARGB(255, 34, 165, 246),
-                      border: Border.all(color: Color.fromARGB(255, 202, 202, 202)),
+                      border:
+                          Border.all(color: Color.fromARGB(255, 202, 202, 202)),
                     ),
                     child: Column(
                       children: [
@@ -644,8 +665,8 @@ else if(dep=="Warehouse Admin" ){
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(10.0),
-                        border:
-                            Border.all(color: Color.fromARGB(255, 202, 202, 202)),
+                        border: Border.all(
+                            color: Color.fromARGB(255, 202, 202, 202)),
                       ),
                       width: 700,
                       child: Padding(
@@ -656,60 +677,12 @@ else if(dep=="Warehouse Admin" ){
                             SizedBox(
                               height: 10,
                             ),
-                Text(
-                      "Refund Type",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 5),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(10.0),
-                        ),
-                        child: DropdownButton<String>(
-              isExpanded: true,
-              value: selectedReceiptType,
-              hint: Text(
-                'Select Refund Type',
-                style: TextStyle(fontSize: 12.0),
-              ),
-               items: receiptTypes.map((type) {
-                return DropdownMenuItem<String>(
-                  value: type,
-                  child: Text(
-                    type,
-                    style: TextStyle(fontSize: 12.0),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedReceiptType = value;
-                  if(selectedReceiptType=="Advance Refund"){
-                    selectedInvoiceId=null;
-                  }
-                });
-              },
-              underline: SizedBox(),
-                        ),
-                      ),
-                    ),
-              
-                    SizedBox(height: 10),
-              
-              
-                        if(selectedReceiptType =='Order Refund') 
                             Text(
-                              "Select Invoice",
+                              "Refund Type",
                               style: TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.bold),
                             ),
-                            if(selectedReceiptType =='Order Refund') 
                             SizedBox(height: 5),
-                            if(selectedReceiptType =='Order Refund')
                             Padding(
                               padding: const EdgeInsets.only(right: 10),
                               child: Container(
@@ -720,40 +693,45 @@ else if(dep=="Warehouse Admin" ){
                                 ),
                                 child: DropdownButton<String>(
                                   isExpanded: true,
-                                  value: selectedInvoiceId,
+                                  value: selectedReceiptType,
                                   hint: Text(
-                                    'Select Invoice',
+                                    'Select Refund Type',
                                     style: TextStyle(fontSize: 12.0),
                                   ),
-                                  items: orders.map((order) {
+                                  items: receiptTypes.map((type) {
                                     return DropdownMenuItem<String>(
-                                      value: order['id'].toString(),
+                                      value: type,
                                       child: Text(
-                                        '${order['invoice']} - ${order['customer']}',
+                                        type,
                                         style: TextStyle(fontSize: 12.0),
                                       ),
                                     );
                                   }).toList(),
                                   onChanged: (value) {
                                     setState(() {
-                                      selectedInvoiceId =
-                                          value; // Store the selected invoice ID
-                    
-                                          
+                                      selectedReceiptType = value;
+                                      if (selectedReceiptType ==
+                                          "Advance Refund") {
+                                        selectedInvoiceId = null;
+                                      }
                                     });
                                   },
                                   underline: SizedBox(),
                                 ),
                               ),
                             ),
-              
-                        //  if(selectedReceiptType =='Advance receipt')
-                            Text(
-                                "Select Customer",
+
+                            SizedBox(height: 10),
+
+                            if (selectedReceiptType == 'Order Refund')
+                              Text(
+                                "Select Invoice",
                                 style: TextStyle(
                                     fontSize: 12, fontWeight: FontWeight.bold),
                               ),
+                            if (selectedReceiptType == 'Order Refund')
                               SizedBox(height: 5),
+                            if (selectedReceiptType == 'Order Refund')
                               Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: Container(
@@ -764,30 +742,71 @@ else if(dep=="Warehouse Admin" ){
                                   ),
                                   child: DropdownButton<String>(
                                     isExpanded: true,
-                                    value: selectedCustomerId,
+                                    value: selectedInvoiceId,
                                     hint: Text(
-                                      'Select Customer',
+                                      'Select Invoice',
                                       style: TextStyle(fontSize: 12.0),
                                     ),
-              
-                items: customer.map((cust) {
+                                    items: orders.map((order) {
                                       return DropdownMenuItem<String>(
-                                        value: cust['id'].toString(),
+                                        value: order['id'].toString(),
                                         child: Text(
-                                          cust['name'],
+                                          '${order['invoice']} - ${order['customer']}',
                                           style: TextStyle(fontSize: 12.0),
                                         ),
                                       );
                                     }).toList(),
                                     onChanged: (value) {
                                       setState(() {
-                                        selectedCustomerId = value;
+                                        selectedInvoiceId =
+                                            value; // Store the selected invoice ID
                                       });
                                     },
                                     underline: SizedBox(),
                                   ),
                                 ),
                               ),
+
+                            //  if(selectedReceiptType =='Advance receipt')
+                            Text(
+                              "Select Customer",
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 5),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(10.0),
+                                ),
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: selectedCustomerId,
+                                  hint: Text(
+                                    'Select Customer',
+                                    style: TextStyle(fontSize: 12.0),
+                                  ),
+                                  items: customer.map((cust) {
+                                    return DropdownMenuItem<String>(
+                                      value: cust['id'].toString(),
+                                      child: Text(
+                                        cust['name'],
+                                        style: TextStyle(fontSize: 12.0),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedCustomerId = value;
+                                    });
+                                  },
+                                  underline: SizedBox(),
+                                ),
+                              ),
+                            ),
                             SizedBox(
                               height: 5,
                             ),
@@ -807,11 +826,13 @@ else if(dep=="Warehouse Admin" ){
                                   decoration: InputDecoration(
                                     labelText: 'Amount',
                                     labelStyle: TextStyle(
-                                      fontSize: 12.0, // Set your desired font size
+                                      fontSize:
+                                          12.0, // Set your desired font size
                                     ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10.0),
-                                      borderSide: BorderSide(color: Colors.grey),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
                                     ),
                                     contentPadding: EdgeInsets.symmetric(
                                         vertical: 8.0), // Set vertical padding
@@ -838,11 +859,13 @@ else if(dep=="Warehouse Admin" ){
                                   decoration: InputDecoration(
                                     labelText: 'Transaction Id',
                                     labelStyle: TextStyle(
-                                      fontSize: 12.0, // Set your desired font size
+                                      fontSize:
+                                          12.0, // Set your desired font size
                                     ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10.0),
-                                      borderSide: BorderSide(color: Colors.grey),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
                                     ),
                                     contentPadding: EdgeInsets.symmetric(
                                         vertical: 8.0), // Set vertical padding
@@ -885,7 +908,8 @@ else if(dep=="Warehouse Admin" ){
                                   }).toList(),
                                   onChanged: (value) {
                                     setState(() {
-                                      selectedBankId = value; // Store the selected bank ID
+                                      selectedBankId =
+                                          value; // Store the selected bank ID
                                       ;
                                     });
                                   },
@@ -893,61 +917,66 @@ else if(dep=="Warehouse Admin" ){
                                 ),
                               ),
                             ),
-                          
 
                             SizedBox(
                               height: 10,
                             ),
                             Text(
                               "Date",
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                             SizedBox(
                               height: 5,
                             ),
-                           // ...existing code...
-Padding(
-  padding: const EdgeInsets.only(right: 10),
-  child: GestureDetector(
-    onTap: () async {
-      DateTime? pickedDate = await showDatePicker(
-        context: context,
-        initialDate: selectedDate,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-      );
-      if (pickedDate != null) {
-        setState(() {
-          selectedDate = pickedDate;
-        });
-      }
-    },
-    child: AbsorbPointer(
-      child: TextField(
-        readOnly: true,
-        decoration: InputDecoration(
-          labelText: 'Date',
-          labelStyle: TextStyle(fontSize: 12.0),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10.0),
-            borderSide: BorderSide(color: Colors.grey),
-          ),
-          contentPadding: EdgeInsets.symmetric(vertical: 8.0),
-        ),
-        controller: TextEditingController(
-          text: DateFormat('yyyy-MM-dd').format(selectedDate),
-        ),
-      ),
-    ),
-  ),
-),
+                            // ...existing code...
+                            Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: GestureDetector(
+                                onTap: () async {
+                                  DateTime? pickedDate = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDate,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (pickedDate != null) {
+                                    setState(() {
+                                      selectedDate = pickedDate;
+                                    });
+                                  }
+                                },
+                                child: AbsorbPointer(
+                                  child: TextField(
+                                    readOnly: true,
+                                    decoration: InputDecoration(
+                                      labelText: 'Date',
+                                      labelStyle: TextStyle(fontSize: 12.0),
+                                      border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10.0),
+                                        borderSide:
+                                            BorderSide(color: Colors.grey),
+                                      ),
+                                      contentPadding:
+                                          EdgeInsets.symmetric(vertical: 8.0),
+                                    ),
+                                    controller: TextEditingController(
+                                      text: DateFormat('yyyy-MM-dd')
+                                          .format(selectedDate),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
 
                             SizedBox(
                               height: 10,
                             ),
                             Text(
                               "Name",
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                             SizedBox(
                               height: 5,
@@ -957,23 +986,27 @@ Padding(
                               child: Container(
                                 child: TextField(
                                   controller: TextEditingController(
-                                      text: uname.text), // Display the name extracted from JWT
+                                      text: uname
+                                          .text), // Display the name extracted from JWT
                                   readOnly: true, // Make the field non-editable
                                   decoration: InputDecoration(
                                     labelText: 'Name',
                                     labelStyle: TextStyle(
-                                      fontSize: 12.0, // Set your desired font size
+                                      fontSize:
+                                          12.0, // Set your desired font size
                                     ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10.0),
-                                      borderSide: BorderSide(color: Colors.grey),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
                                     ),
                                     contentPadding: EdgeInsets.symmetric(
                                         vertical: 8.0), // Set vertical padding
                                   ),
                                 ),
                               ),
-                            ),  SizedBox(height: 10),
+                            ),
+                            SizedBox(height: 10),
                             Text(
                               "Remark",
                               style: TextStyle(
@@ -983,31 +1016,31 @@ Padding(
                               height: 5,
                             ),
                             Padding(
-  padding: const EdgeInsets.only(right: 10),
-  child: TextField(
-    controller: Remark,
-    maxLines: 3,        // expands up to 3 lines only
-    keyboardType: TextInputType.multiline,
-    decoration: InputDecoration(
-      labelText: 'Remark',
-      labelStyle: const TextStyle(
-        fontSize: 12.0,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10.0),
-        borderSide: const BorderSide(color: Colors.grey),
-      ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 12.0,
-        vertical: 10.0,
-      ),
-    ),
-  ),
-),
+                              padding: const EdgeInsets.only(right: 10),
+                              child: TextField(
+                                controller: Remark,
+                                maxLines: 3, // expands up to 3 lines only
+                                keyboardType: TextInputType.multiline,
+                                decoration: InputDecoration(
+                                  labelText: 'Remark',
+                                  labelStyle: const TextStyle(
+                                    fontSize: 12.0,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10.0),
+                                    borderSide:
+                                        const BorderSide(color: Colors.grey),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12.0,
+                                    vertical: 10.0,
+                                  ),
+                                ),
+                              ),
+                            ),
                             SizedBox(
                               height: 10,
                             ),
-
 
                             Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1018,9 +1051,11 @@ Padding(
                                   SizedBox(
                                     width: 270,
                                     child: ElevatedButton(
-                                      onPressed: () {
-                                       AddRefund(context);
-                                      },
+                                      onPressed: canUpdate
+                                          ? () {
+                                              AddRefund(context);
+                                            }
+                                          : null,
                                       style: ButtonStyle(
                                         backgroundColor:
                                             MaterialStateProperty.all<Color>(
@@ -1033,13 +1068,15 @@ Padding(
                                                 10), // Set your desired border radius
                                           ),
                                         ),
-                                        fixedSize: MaterialStateProperty.all<Size>(
+                                        fixedSize:
+                                            MaterialStateProperty.all<Size>(
                                           Size(95,
                                               15), // Set your desired width and heigh
                                         ),
                                       ),
                                       child: Text("Submit",
-                                          style: TextStyle(color: Colors.white)),
+                                          style:
+                                              TextStyle(color: Colors.white)),
                                     ),
                                   ),
                                 ]),
@@ -1051,9 +1088,9 @@ Padding(
                       )),
                 ),
               ],
-                        ),
-                      ),
-            )),
+            ),
+          ),
+        )),
       ),
     );
   }

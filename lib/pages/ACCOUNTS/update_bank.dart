@@ -47,6 +47,19 @@ class _update_bankState extends State<update_bank> {
     getbank();
     getBankTypes();
     getcompany();
+    loadDepartment();
+  }
+
+  String currentDepartment = '';
+
+  bool get canUpdate => const {'ADMIN', 'COO', 'CEO', 'HR'}
+      .contains(currentDepartment.trim().toUpperCase());
+
+  Future<void> loadDepartment() async {
+    final prefs = await SharedPreferences.getInstance();
+    final department = prefs.getString('department') ?? '';
+    if (!mounted) return;
+    setState(() => currentDepartment = department);
   }
 
   var url = "$api/api/add/department/";
@@ -241,6 +254,16 @@ class _update_bankState extends State<update_bank> {
   }
 
   Future<void> updatebank() async {
+    if (!canUpdate) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Only ADMIN, COO, CEO, and HR can update banks.'),
+        ),
+      );
+      return;
+    }
     if (selectedCompanyId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a company')),
@@ -432,6 +455,7 @@ class _update_bankState extends State<update_bank> {
                                 width: constraints.maxWidth * 0.9,
                                 child: TextField(
                                   controller: bank,
+                                   readOnly: !canUpdate,
                                   decoration: InputDecoration(
                                     hintText: bank.text.isNotEmpty
                                         ? bank.text
@@ -463,6 +487,7 @@ class _update_bankState extends State<update_bank> {
                                 child: Container(
                                   child: TextField(
                                     controller: account_number,
+                                     readOnly: !canUpdate,
                                     decoration: InputDecoration(
                                       labelText: 'Account Number',
                                       labelStyle: TextStyle(
@@ -496,6 +521,7 @@ class _update_bankState extends State<update_bank> {
                                 padding: const EdgeInsets.only(right: 10),
                                 child: TextField(
                                   controller: interest,
+                                   readOnly: !canUpdate,
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     labelText: 'Interest',
@@ -538,11 +564,11 @@ class _update_bankState extends State<update_bank> {
                                           child: Text(type['name']),
                                         );
                                       }).toList(),
-                                      onChanged: (value) {
+                                      onChanged: canUpdate ? (value) {
                                         setState(() {
                                           selectedBankTypeId = value;
                                         });
-                                      },
+                                      } : null,
                                     ),
                                   ),
                                 ),
@@ -581,11 +607,11 @@ class _update_bankState extends State<update_bank> {
                                           child: Text(item['name'].toString()),
                                         );
                                       }).toList(),
-                                      onChanged: (value) {
+                                      onChanged: canUpdate ? (value) {
                                         setState(() {
                                           selectedCompanyId = value;
                                         });
-                                      },
+                                      } : null,
                                     ),
                                   ),
                                 ),
@@ -605,6 +631,7 @@ class _update_bankState extends State<update_bank> {
                                 child: Container(
                                   child: TextField(
                                     controller: branch,
+                                     readOnly: !canUpdate,
                                     decoration: InputDecoration(
                                       labelText: 'Branch',
                                       labelStyle: TextStyle(
@@ -641,6 +668,7 @@ class _update_bankState extends State<update_bank> {
                                 child: Container(
                                   child: TextField(
                                     controller: ifsc,
+                                     readOnly: !canUpdate,
                                     decoration: InputDecoration(
                                       labelText: 'IFSC Code',
                                       labelStyle: TextStyle(
@@ -676,6 +704,7 @@ class _update_bankState extends State<update_bank> {
                                 child: Container(
                                   child: TextField(
                                     controller: balance,
+                                     readOnly: !canUpdate,
                                     decoration: InputDecoration(
                                       labelText: 'Opening Balance',
                                       labelStyle: TextStyle(
@@ -697,15 +726,14 @@ class _update_bankState extends State<update_bank> {
                               ),
                               SizedBox(height: 15),
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    updatebank();
-                                  });
-                                },
+                                onPressed: canUpdate ? updatebank : null,
                                 style: ButtonStyle(
                                   backgroundColor:
-                                      MaterialStateProperty.all<Color>(
-                                          Colors.blue),
+                                      MaterialStateProperty.resolveWith<Color>(
+                                    (states) => states.contains(MaterialState.disabled)
+                                        ? Colors.grey.shade400
+                                        : Colors.blue,
+                                  ),
                                   shape: MaterialStateProperty.all<
                                       RoundedRectangleBorder>(
                                     RoundedRectangleBorder(
@@ -815,17 +843,22 @@ class _update_bankState extends State<update_bank> {
                                 Padding(
                                   padding: const EdgeInsets.all(8.0),
                                   child: GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) => update_bank(
-                                                  id: banks[i]['id'])));
-                                    },
-                                    child: Image.asset(
-                                      "lib/assets/edit.jpg",
-                                      width: 20,
-                                      height: 20,
+                                    onTap: canUpdate
+                                        ? () {
+                                            Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (context) => update_bank(
+                                                        id: banks[i]['id'])));
+                                          }
+                                        : null,
+                                    child: Opacity(
+                                      opacity: canUpdate ? 1.0 : 0.35,
+                                      child: Image.asset(
+                                        "lib/assets/edit.jpg",
+                                        width: 20,
+                                        height: 20,
+                                      ),
                                     ),
                                   ),
                                 )

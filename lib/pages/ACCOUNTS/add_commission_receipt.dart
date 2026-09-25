@@ -116,8 +116,7 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
   }
 
   Future<String?> gettokenFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
 
@@ -127,23 +126,20 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
     if (!mounted) return;
 
     setState(() {
-      currentDepartment =
-          department?.trim().toUpperCase() ?? '';
+      currentDepartment = department?.trim().toUpperCase() ?? '';
     });
   }
 
-bool get canUpdate {
-  final String department =
-      currentDepartment.trim().toUpperCase();
+  bool get canUpdate {
+    final String department = currentDepartment.trim().toUpperCase();
 
-  return department == 'ADMIN' ||
-      department == 'COO' ||
-      department == 'CEO' ||
-      department == 'ACCOUNTS' ||
-      department == 'ACCOUNTING' ||
-      department == 'ACCOUNTS / ACCOUNTING';
-}
-
+    return [
+      'ADMIN',
+      'COO',
+      'CEO',
+      'HR',
+    ].contains(department);
+  }
 
   Future<void> AddStatusTime(
     BuildContext scaffoldContext,
@@ -478,29 +474,23 @@ bool get canUpdate {
                   : raw['order_name']?.toString() ??
                       raw['order_invoice']?.toString() ??
                       '',
-              'payment_receipt':
-                  raw['payment_receipt']?.toString() ?? '',
+              'payment_receipt': raw['payment_receipt']?.toString() ?? '',
               'amount': raw['amount'],
               'bank': bank is Map ? bank['id'] : bank,
               'bank_name': bank is Map
                   ? bank['name']?.toString() ?? ''
                   : raw['bank_name']?.toString() ?? '',
-              'transactionID':
-                  raw['transactionID']?.toString() ?? '',
-              'received_at':
-                  raw['received_at']?.toString() ?? '',
-              'created_by':
-                  createdBy is Map ? createdBy['id'] : createdBy,
+              'transactionID': raw['transactionID']?.toString() ?? '',
+              'received_at': raw['received_at']?.toString() ?? '',
+              'created_by': createdBy is Map ? createdBy['id'] : createdBy,
               'created_by_name': createdBy is Map
                   ? createdBy['name']?.toString() ??
                       createdBy['username']?.toString() ??
                       ''
                   : raw['created_by_name']?.toString() ?? '',
               'remark': raw['remark']?.toString() ?? '',
-              'created_at':
-                  raw['created_at']?.toString() ?? '',
-              'updated_at':
-                  raw['updated_at']?.toString() ?? '',
+              'created_at': raw['created_at']?.toString() ?? '',
+              'updated_at': raw['updated_at']?.toString() ?? '',
             };
           })
           .where((item) => _toInt(item['id']) != null)
@@ -598,7 +588,7 @@ bool get canUpdate {
 
     if (editingId != null && !canUpdate) {
       _showMessage(
-        'Only ADMIN, COO, and CEO can update commission receipts.',
+        'Only ADMIN, COO, CEO, and HR can update commission receipts.',
         error: true,
       );
       return;
@@ -994,9 +984,9 @@ bool get canUpdate {
         );
       },
     );
-
   }
- Future<String?> getdepFromPrefs() async {
+
+  Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
@@ -1072,14 +1062,14 @@ bool get canUpdate {
         scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: textPrimary,
-          leading: IconButton(
-            tooltip: 'Back',
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 20,
-            ),
-            onPressed: _navigateBack,
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
           ),
+          onPressed: _navigateBack,
+        ),
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1651,18 +1641,12 @@ bool get canUpdate {
     final createdById = _toInt(receipt['created_by']);
     final amount = _toDouble(receipt['amount']);
 
-    final receiptNumber =
-        receipt['payment_receipt']?.toString().trim() ?? '';
-    final orderName =
-        receipt['order_name']?.toString().trim() ?? '';
-    final bankName =
-        receipt['bank_name']?.toString().trim() ?? '';
-    final transactionId =
-        receipt['transactionID']?.toString().trim() ?? '';
-    final createdByName =
-        receipt['created_by_name']?.toString().trim() ?? '';
-    final remark =
-        receipt['remark']?.toString().trim() ?? '';
+    final receiptNumber = receipt['payment_receipt']?.toString().trim() ?? '';
+    final orderName = receipt['order_name']?.toString().trim() ?? '';
+    final bankName = receipt['bank_name']?.toString().trim() ?? '';
+    final transactionId = receipt['transactionID']?.toString().trim() ?? '';
+    final createdByName = receipt['created_by_name']?.toString().trim() ?? '';
+    final remark = receipt['remark']?.toString().trim() ?? '';
 
     return Container(
       width: double.infinity,
@@ -1704,9 +1688,7 @@ bool get canUpdate {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        receiptNumber.isEmpty
-                            ? 'Receipt #$id'
-                            : receiptNumber,
+                        receiptNumber.isEmpty ? 'Receipt #$id' : receiptNumber,
                         style: const TextStyle(
                           color: textPrimary,
                           fontSize: 14,
@@ -1748,8 +1730,9 @@ bool get canUpdate {
                 ),
                 IconButton(
                   tooltip: 'Edit',
-                  onPressed:
-                      loadingEdit ? null : () => fetchReceiptForEdit(id),
+                  onPressed: canUpdate && !loadingEdit
+                      ? () => fetchReceiptForEdit(id)
+                      : null,
                   icon: loadingEdit && editingId == id
                       ? const SizedBox(
                           width: 18,
@@ -1773,9 +1756,7 @@ bool get canUpdate {
                     Expanded(
                       child: _metric(
                         'Amount',
-                        amount == null
-                            ? '—'
-                            : '₹${amount.toStringAsFixed(2)}',
+                        amount == null ? '—' : '₹${amount.toStringAsFixed(2)}',
                         Icons.currency_rupee_rounded,
                       ),
                     ),
