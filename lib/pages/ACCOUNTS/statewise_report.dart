@@ -7,6 +7,7 @@ import 'package:beposoft/pages/ACCOUNTS/statewise_order_list.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
@@ -697,7 +698,9 @@ class _StateWiseReport2State extends State<StateWiseReport2> {
       case 'CSO':
         destination = cso_dashboard();
         break;
-
+      case 'HR':
+        destination = HrDashboard();
+        break;
       case 'BDM':
         destination = bdm_dashbord();
         break;

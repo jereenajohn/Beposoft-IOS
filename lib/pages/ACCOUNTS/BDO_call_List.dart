@@ -248,6 +248,11 @@ class _BdoCallListState extends State<BdoCallList>
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
+    }else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
     }
     else if (dep == "CSO") {
       Navigator.pushReplacement(
@@ -2397,7 +2402,12 @@ await SharePlus.instance.share(
               } else if (dep == "BDM") {
                 Navigator.pushReplacement(context,
                     MaterialPageRoute(builder: (context) => bdm_dashbord()));
-              } else if (dep == "warehouse") {
+              } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
+    }else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(

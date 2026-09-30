@@ -7,6 +7,7 @@ import 'package:beposoft/pages/ACCOUNTS/update_recipt.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
@@ -1104,6 +1105,9 @@ class _order_recipt_ReportState extends State<order_recipt_Report> {
         break;
       case 'CSO':
         destination = cso_dashboard();
+        break;
+         case 'HR':
+        destination = HrDashboard();
         break;
       case 'warehouse':
         destination = WarehouseDashboard();

@@ -630,7 +630,15 @@ sta = stafflist.where((staff) {
         context,
         MaterialPageRoute(builder: (context) => bdo_dashbord()),
       );
-    } else if (dep == "SD") {
+    } 
+      else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "SD") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => SdDashboard()),
@@ -1056,7 +1064,14 @@ sta = stafflist.where((staff) {
                   context,
                   MaterialPageRoute(builder: (context) => bdo_dashbord()),
                 );
-              } else if (dep == "SD") {
+              }   else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    } else if (dep == "SD") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => SdDashboard()),

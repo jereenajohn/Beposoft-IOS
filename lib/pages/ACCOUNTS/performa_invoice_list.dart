@@ -10,6 +10,7 @@ import 'package:beposoft/pages/ACCOUNTS/performa_big_view.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
@@ -1880,7 +1881,14 @@ static const Set<String> _allInvoiceDepartments = {
         context,
         MaterialPageRoute(builder: (context) => bdo_dashbord()),
       );
-    } 
+    } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }
            else if (dep == "Marketing") {
       Navigator.pushReplacement(
         context,

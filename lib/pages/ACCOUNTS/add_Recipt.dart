@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:intl/intl.dart';
@@ -514,6 +515,13 @@ class _add_receiptState extends State<add_receipt> {
         context,
         MaterialPageRoute(builder: (context) => WarehouseDashboard()),
       );
+    }  else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
     } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
@@ -793,7 +801,14 @@ class _add_receiptState extends State<add_receipt> {
                   context,
                   MaterialPageRoute(builder: (context) => bdo_dashbord()),
                 );
-              } else if (dep == "BDM") {
+              }  else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    } else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => bdm_dashbord()),

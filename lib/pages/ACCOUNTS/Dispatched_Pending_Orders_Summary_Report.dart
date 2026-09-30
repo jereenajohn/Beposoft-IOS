@@ -6,6 +6,7 @@ import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
@@ -2707,6 +2708,9 @@ Future<void> _navigateBack() async {
         break;
       case 'WAREHOUSE ADMIN':
         destination = WarehouseAdmin();
+        break;
+          case 'HR':
+        destination = HrDashboard();
         break;
       case 'CEO':
       case 'COO':

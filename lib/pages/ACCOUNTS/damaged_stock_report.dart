@@ -7,6 +7,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:intl/intl.dart'; // Import the intl package for date formatting
@@ -243,7 +244,12 @@ Future<String?> getdepFromPrefs() async {
               MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
             );
 
-}
+} else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
+    }
 else if(dep=="BDM" ){
    Navigator.pushReplacement(
               context,
@@ -315,7 +321,12 @@ else if(dep=="Warehouse Admin" ){
                 MaterialPageRoute(builder: (context) => bdo_dashbord()), // Replace AnotherPage with your target page
               );
       
-      }
+      } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
+    }
       else if(dep=="CEO" ){
    Navigator.pushReplacement(
               context,

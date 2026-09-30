@@ -10,6 +10,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -168,7 +169,15 @@ class _add_customer_typeState extends State<add_customer_type> {
                     builder: (context) =>
                         bdo_dashbord()), // Replace AnotherPage with your target page
               );
-            } else if (dep == "BDM") {
+            } 
+              else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "BDM") {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(

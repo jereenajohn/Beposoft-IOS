@@ -17,6 +17,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
@@ -756,7 +757,14 @@ List<String> usabilityOptions = [
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -839,7 +847,14 @@ List<String> usabilityOptions = [
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "COO") {
+              } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),

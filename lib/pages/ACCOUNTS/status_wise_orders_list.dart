@@ -18,6 +18,7 @@ import 'package:beposoft/pages/ACCOUNTS/order.review.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
@@ -551,7 +552,14 @@ class _OrderList2State extends State<OrderList2> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    } else if (dep == "CSO") {
+    } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
@@ -638,7 +646,14 @@ class _OrderList2State extends State<OrderList2> {
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "BDM") {
+              } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

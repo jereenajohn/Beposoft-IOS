@@ -9,6 +9,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
@@ -466,7 +467,14 @@ class cod_transferState extends State<cod_transfer> {
               bdm_dashbord(),
         ),
       );
-    } else if (dep == "warehouse") {
+    } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -576,7 +584,14 @@ class cod_transferState extends State<cod_transfer> {
                         bdm_dashbord(),
                   ),
                 );
-              } else if (dep == "warehouse") {
+              } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

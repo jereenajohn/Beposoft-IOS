@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
@@ -369,7 +370,14 @@ class _addrefundState extends State<addrefund> {
         context,
         MaterialPageRoute(builder: (context) => bdo_dashbord()),
       );
-    } else if (dep == "COO") {
+    }   else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
@@ -446,7 +454,14 @@ class _addrefundState extends State<addrefund> {
                   context,
                   MaterialPageRoute(builder: (context) => WarehouseDashboard()),
                 );
-              } else if (dep == "CEO") {
+              }   else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => ceo_dashboard()),

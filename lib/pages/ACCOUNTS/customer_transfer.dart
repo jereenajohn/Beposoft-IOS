@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
@@ -395,6 +396,14 @@ class _addcustomertransferState extends State<addcustomertransfer> {
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
       );
+    }
+      else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
     } else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
@@ -482,7 +491,14 @@ class _addcustomertransferState extends State<addcustomertransfer> {
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "CEO") {
+              }   else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

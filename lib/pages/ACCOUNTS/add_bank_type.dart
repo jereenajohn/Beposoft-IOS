@@ -11,6 +11,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:flutter/material.dart';
@@ -178,6 +179,11 @@ Future<void> getbanktype() async {
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
       );
+    }else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
     } else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
@@ -255,7 +261,12 @@ Future<void> getbanktype() async {
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "warehouse") {
+              } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
+    }else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

@@ -7,6 +7,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -253,7 +254,12 @@ class _AddDistrictState extends State<AddDistrict> {
                 context,
                 MaterialPageRoute(builder: (context) => bdm_dashbord()),
               );
-            } else if (dep == "CEO") {
+            } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
+    }else if (dep == "CEO") {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => ceo_dashboard()),

@@ -20,6 +20,7 @@ import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
@@ -388,7 +389,15 @@ class _customer_listState extends State<customer_list> {
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
-    } else if (dep == "warehouse") {
+    } 
+      else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => WarehouseDashboard()),
@@ -465,7 +474,14 @@ class _customer_listState extends State<customer_list> {
                   context,
                   MaterialPageRoute(builder: (context) => bdm_dashbord()),
                 );
-              } else if (dep == "COO") {
+              }   else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    }else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),

@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
@@ -265,6 +266,9 @@ class _SalesReportExcelState extends State<SalesReportExcel> {
         break;
       case "COO":
         page = ceo_dashboard();
+        break;
+         case "HR":
+        page = HrDashboard();
         break;
       case "CSO":
         page = cso_dashboard();

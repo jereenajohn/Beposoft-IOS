@@ -18,6 +18,7 @@ import 'package:beposoft/pages/ACCOUNTS/order.review.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
@@ -612,7 +613,14 @@ String getDisplayStatus(dynamic rawStatus) {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
+    }else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }
     else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
@@ -700,7 +708,14 @@ String getDisplayStatus(dynamic rawStatus) {
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "BDM") {
+              } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              }else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

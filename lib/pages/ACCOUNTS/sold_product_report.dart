@@ -7,6 +7,7 @@ import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
@@ -550,6 +551,11 @@ class _Sold_pro_reportState extends State<Sold_pro_report> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => bdo_dashbord()),
+      );
+    } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
       );
     } else if (dep == "BDM") {
       Navigator.pushReplacement(

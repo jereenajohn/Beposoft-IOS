@@ -9,6 +9,7 @@ import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/familywise_salesreport.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
@@ -338,7 +339,12 @@ class _Sales_ReportState extends State<Sales_Report> {
         context,
         MaterialPageRoute(builder: (context) => bdo_dashbord()),
       );
-    } else if (dep == "BDM") {
+    } else if (dep == "HR") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HrDashboard()),
+      );
+    }else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
