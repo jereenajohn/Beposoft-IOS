@@ -98,6 +98,13 @@ class _Staff_UpdateState extends State<Staff_Update> {
   bool isPageLoading = true;
   bool canUpdate = false;
 
+  // Original staff snapshot used for audit logging.
+  Map<String, dynamic> _originalStaffAuditData = {};
+
+  // Raw API objects used to mirror the React Staff Update DataLog exactly.
+  Map<String, dynamic>? _reactOldStaffData;
+  Map<String, dynamic>? _reactUpdatedStaffData;
+
   static const Set<String> _updateDepartments = {
     'ADMIN', 'COO', 'CEO', 'HR',
   };
@@ -740,6 +747,7 @@ class _Staff_UpdateState extends State<Staff_Update> {
 
           if (widget.id.toString() == staffData['id'].toString()) {
             debugPrint('MATCHED STAFF DATA: ${jsonEncode(staffData)}');
+            _reactOldStaffData = Map<String, dynamic>.from(staffData);
             name.text = staffData['name']?.toString() ?? '';
             username.text = staffData['username']?.toString() ?? '';
             email.text = staffData['email']?.toString() ?? '';
@@ -883,6 +891,16 @@ class _Staff_UpdateState extends State<Staff_Update> {
                       )['name'] as String)
                   .toList();
             }
+
+            // IMPORTANT:
+            // Build the original audit snapshot from the exact values now loaded
+            // into this page. This keeps approval_status and all other fields in
+            // the same normalized format used when Update Staff is pressed.
+            _originalStaffAuditData = _buildCurrentStaffAuditData();
+
+            debugPrint(
+              'ORIGINAL STAFF AUDIT SNAPSHOT: ${jsonEncode(_originalStaffAuditData)}',
+            );
 
             break;
           }
@@ -2389,6 +2407,362 @@ class _Staff_UpdateState extends State<Staff_Update> {
     );
   }
 
+  Map<String, dynamic> _buildAuditDataFromApiStaff(Map<String, dynamic> staffData) {
+    return {
+      'staff_id': staffData['staff_id'],
+      'name': staffData['name'],
+      'username': staffData['username'],
+      'email': staffData['email'],
+      'phone': staffData['phone'],
+      'alternate_number': staffData['alternate_number'],
+      'date_of_birth': staffData['date_of_birth'],
+      'gender': staffData['gender'],
+      'marital_status': staffData['marital_status'],
+      'department_id': staffData['department_id'],
+      'supervisor_id': staffData['supervisor_id'],
+      'warehouse_id': staffData['warehouse_id'],
+      'family': staffData['family'],
+      'state': staffData['state'],
+      'allocated_states': staffData['allocated_states'] ?? [],
+      'is_manager': staffData['is_manager'],
+      'employment_status': staffData['employment_status'],
+      'designation': staffData['designation'],
+      'grade': staffData['grade'],
+      'paid_leaves': staffData['paid_leaves'],
+      'experience': staffData['experience'],
+      'previous_company': staffData['previous_company'],
+      'education': staffData['education'],
+      'join_date': staffData['join_date'],
+      'confirmation_date': staffData['confirmation_date'],
+      'termination_date': staffData['termination_date'],
+      'approval_status': staffData['approval_status'],
+      'emergency_contact_name': staffData['emergency_contact_name'],
+      'emergency_contact_number': staffData['emergency_contact_number'],
+      'emergency_contact_name1': staffData['emergency_contact_name1'],
+      'emergency_contact_number1': staffData['emergency_contact_number1'],
+      'blood_group': staffData['blood_group'],
+      'aadhar_no': staffData['aadhar_no'],
+      'pan_no': staffData['pan_no'],
+      'address': staffData['address'],
+      'city': staffData['city'],
+      'country': staffData['country'],
+      'country_code': staffData['country_code'],
+      'place': staffData['place'],
+      'driving_license': staffData['driving_license'],
+      'driving_license_exp_date': staffData['driving_license_exp_date'],
+    };
+  }
+
+  Map<String, dynamic> _buildCurrentStaffAuditData() {
+    return {
+      'staff_id': staff_id.text.trim(),
+      'name': name.text.trim(),
+      'username': username.text.trim(),
+      'email': email.text.trim(),
+      'phone': phone.text.trim(),
+      'alternate_number': alternate_number.text.trim(),
+      'date_of_birth': dateFormatter.format(selectedDate),
+      'gender': selectgender,
+      'marital_status': selectmarital,
+      'department_id': selectedDepartmentId,
+      'supervisor_id': selectedManagerId,
+      'warehouse_id': selectedWarehouseId,
+      'family': selectedFamily.isNotEmpty ? selectedFamily[0] : null,
+      'state': selectedPostingStateId,
+      'allocated_states': List<int>.from(allocated_states),
+      'is_manager': isManager,
+      'employment_status': employment_status.text.trim(),
+      'designation': designation.text.trim(),
+      'grade': grade.text.trim(),
+      'paid_leaves': int.tryParse(paid_leaves.text.trim()) ?? 0,
+      'experience': experience.text.trim(),
+      'previous_company': previous_company.text.trim(),
+      'education': education.text.trim(),
+      'join_date': dateFormatter.format(selectejoin),
+      'confirmation_date': dateFormatter.format(selecteconf),
+      'termination_date': selectedTerminationDate != null
+          ? dateFormatter.format(selectedTerminationDate!)
+          : null,
+      'approval_status': approvalstatus,
+      'emergency_contact_name': emergency_contact_name.text.trim(),
+      'emergency_contact_number': emergency_contact_number.text.trim(),
+      'emergency_contact_name1': emergency_contact_name1.text.trim(),
+      'emergency_contact_number1': emergency_contact_number1.text.trim(),
+      'blood_group': selectedBloodGroup ?? '',
+      'aadhar_no': aadhar_no.text.trim(),
+      'pan_no': pan_no.text.trim(),
+      'address': address.text.trim(),
+      'city': city.text.trim(),
+      'country': Country.text.trim(),
+      'country_code': selectedCountryId,
+      'place': place.text.trim(),
+      'driving_license': driving_license.text.trim(),
+      'driving_license_exp_date': dateFormatter.format(selecteExp),
+    };
+  }
+
+  dynamic _normalizeAuditValue(dynamic value) {
+    if (value is List) {
+      final normalized = value.map((e) => e.toString()).toList()..sort();
+      return normalized;
+    }
+    if (value == null) return null;
+    return value.toString().trim();
+  }
+
+  Map<String, Map<String, dynamic>> _getChangedStaffAuditData(
+    Map<String, dynamic> before,
+    Map<String, dynamic> after,
+  ) {
+    final Map<String, dynamic> changedBefore = {};
+    final Map<String, dynamic> changedAfter = {};
+
+    final keys = <String>{...before.keys, ...after.keys};
+    for (final key in keys) {
+      if (_normalizeAuditValue(before[key]).toString() !=
+          _normalizeAuditValue(after[key]).toString()) {
+        changedBefore[key] = before[key];
+        changedAfter[key] = after[key];
+      }
+    }
+
+    return {
+      'before': changedBefore,
+      'after': changedAfter,
+    };
+  }
+
+  String _reactRelationName(
+    dynamic value,
+    List<Map<String, dynamic>> source,
+  ) {
+    if (value is Map) {
+      return (value['name'] ?? value['label'] ?? '').toString();
+    }
+
+    final int? id = int.tryParse(value?.toString() ?? '');
+    if (id == null) return value?.toString() ?? '';
+
+    final item = source.firstWhere(
+      (e) => int.tryParse(e['id']?.toString() ?? '') == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return item['name']?.toString() ?? '';
+  }
+
+  String _reactStateName(dynamic value) {
+    if (value is Map) {
+      return (value['name'] ?? value['label'] ?? '').toString();
+    }
+
+    final int? id = int.tryParse(value?.toString() ?? '');
+    if (id == null) return value?.toString() ?? '';
+
+    final item = statess.firstWhere(
+      (e) => int.tryParse(e['id']?.toString() ?? '') == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return item['name']?.toString() ?? '';
+  }
+
+  List<String> _reactAllocatedStateNames(dynamic value) {
+    if (value is! List) return <String>[];
+
+    return value.map<String>((stateValue) {
+      if (stateValue is Map) {
+        return (stateValue['name'] ?? stateValue['label'] ?? '').toString();
+      }
+      return _reactStateName(stateValue);
+    }).where((name) => name.isNotEmpty).toList();
+  }
+
+  String _reactCountryCodeName(dynamic value) {
+    if (value is Map) {
+      return (value['country_code'] ?? value['name'] ?? '').toString();
+    }
+
+    final int? id = int.tryParse(value?.toString() ?? '');
+    if (id == null) return value?.toString() ?? '';
+
+    final item = country.firstWhere(
+      (e) => int.tryParse(e['id']?.toString() ?? '') == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return item['country_code']?.toString() ?? '';
+  }
+
+  String _reactWarehouseName(dynamic value) {
+    return _reactRelationName(value, warehouses);
+  }
+
+  Map<String, dynamic> _buildReactBeforeLogData(
+    Map<String, dynamic> beforeData,
+  ) {
+    return {
+      'name': beforeData['name'],
+      'username': beforeData['username'],
+      'email': beforeData['email'],
+      'phone': beforeData['phone'],
+      'alternate_number': beforeData['alternate_number'] ?? '',
+      'staff_id': beforeData['staff_id'] ?? '',
+      'address': beforeData['address'] ?? '',
+      'city': beforeData['city'] ?? '',
+      'place': beforeData['place'] ?? '',
+      'country': beforeData['country'] ?? '',
+      'state': _reactStateName(beforeData['state']),
+      'country_code': _reactCountryCodeName(beforeData['country_code']),
+      'date_of_birth': beforeData['date_of_birth'],
+      'gender': beforeData['gender'],
+      'marital_status': beforeData['marital_status'],
+      'blood_group': beforeData['blood_group'] ?? '',
+      'aadhar_no': beforeData['aadhar_no'] ?? '',
+      'pan_no': beforeData['pan_no'] ?? '',
+      'emergency_contact_name': beforeData['emergency_contact_name'] ?? '',
+      'emergency_contact_number': beforeData['emergency_contact_number'] ?? '',
+      'emergency_contact_name1': beforeData['emergency_contact_name1'] ?? '',
+      'emergency_contact_number1': beforeData['emergency_contact_number1'] ?? '',
+      'education': beforeData['education'] ?? '',
+      'previous_company': beforeData['previous_company'] ?? '',
+      'experience': beforeData['experience'] ?? beforeData['yr_experience'] ?? '',
+      'warehouse': _reactWarehouseName(
+        beforeData['warehouse'] ?? beforeData['warehouse_id'],
+      ),
+      'driving_license': beforeData['driving_license'] ?? '',
+      'driving_license_exp_date': beforeData['driving_license_exp_date'],
+      'employment_status': beforeData['employment_status'],
+      'designation': beforeData['designation'],
+      'department': _reactRelationName(
+        beforeData['department'] ?? beforeData['department_id'],
+        dep,
+      ),
+      'supervisor': _reactRelationName(
+        beforeData['supervisor'] ?? beforeData['supervisor_id'],
+        manager,
+      ),
+      'family': _reactRelationName(beforeData['family'], fam),
+      'paid_leaves': beforeData['paid_leaves'] ?? 0,
+      'allocated_states': _reactAllocatedStateNames(beforeData['allocated_states']),
+      'join_date': beforeData['join_date'],
+      'confirmation_date': beforeData['confirmation_date'],
+      'termination_date': beforeData['termination_date'],
+      'approval_status': beforeData['approval_status'],
+      'is_manager': beforeData['is_manager'] ?? false,
+    };
+  }
+
+  Map<String, dynamic> _buildReactAfterLogData(
+    Map<String, dynamic> afterData,
+  ) {
+    return {
+      'action': 'Staff Updated',
+      'name': afterData['name'],
+      'username': afterData['username'],
+      'email': afterData['email'],
+      'phone': afterData['phone'],
+      'alternate_number': afterData['alternate_number'] ?? '',
+      'staff_id': afterData['staff_id'] ?? '',
+      'address': afterData['address'] ?? '',
+      'city': afterData['city'] ?? '',
+      'place': afterData['place'] ?? '',
+      'country': afterData['country'] ?? '',
+      'state': _reactStateName(afterData['state']),
+      'country_code': _reactCountryCodeName(afterData['country_code']),
+      'date_of_birth': afterData['date_of_birth'],
+      'gender': afterData['gender'],
+      'marital_status': afterData['marital_status'],
+      'blood_group': afterData['blood_group'] ?? '',
+      'aadhar_no': afterData['aadhar_no'] ?? '',
+      'pan_no': afterData['pan_no'] ?? '',
+      'emergency_contact_name': afterData['emergency_contact_name'] ?? '',
+      'emergency_contact_number': afterData['emergency_contact_number'] ?? '',
+      'emergency_contact_name1': afterData['emergency_contact_name1'] ?? '',
+      'emergency_contact_number1': afterData['emergency_contact_number1'] ?? '',
+      'education': afterData['education'] ?? '',
+      'previous_company': afterData['previous_company'] ?? '',
+      'experience': afterData['experience'] ?? afterData['yr_experience'] ?? '',
+      'warehouse': _reactWarehouseName(
+        afterData['warehouse'] ?? afterData['warehouse_id'],
+      ),
+      'driving_license': afterData['driving_license'] ?? '',
+      'driving_license_exp_date': afterData['driving_license_exp_date'],
+      'employment_status': afterData['employment_status'],
+      'designation': afterData['designation'],
+      'department': _reactRelationName(
+        afterData['department'] ?? afterData['department_id'],
+        dep,
+      ),
+      'supervisor': _reactRelationName(
+        afterData['supervisor'] ?? afterData['supervisor_id'],
+        manager,
+      ),
+      'family': _reactRelationName(afterData['family'], fam),
+      'paid_leaves': afterData['paid_leaves'] ?? 0,
+      'allocated_states': _reactAllocatedStateNames(afterData['allocated_states']),
+      'join_date': afterData['join_date'],
+      'confirmation_date': afterData['confirmation_date'],
+      'termination_date': afterData['termination_date'],
+      'approval_status': afterData['approval_status'],
+      'is_manager': afterData['is_manager'] ?? false,
+    };
+  }
+
+  Future<bool> createStaffUpdateLog({
+    required Map<String, dynamic> beforeData,
+    required Map<String, dynamic> afterData,
+    bool filesChanged = false,
+  }) async {
+    final token = await gettokenFromPrefs();
+    if (token == null || token.isEmpty) return false;
+
+    final int? updatedStaffId = int.tryParse(
+      (afterData['id'] ?? widget.id).toString(),
+    );
+
+    if (updatedStaffId == null) {
+      debugPrint('STAFF UPDATE AUDIT LOG SKIPPED: invalid staff id.');
+      return false;
+    }
+
+    // IMPORTANT: This intentionally mirrors the React page exactly.
+    // React logs the complete selected field set, not only changed fields.
+    final Map<String, dynamic> reactBefore =
+        _buildReactBeforeLogData(beforeData);
+    final Map<String, dynamic> reactAfter =
+        _buildReactAfterLogData(afterData);
+
+    debugPrint('========== REACT-STYLE STAFF AUDIT LOG ==========');
+    debugPrint('STAFF: $updatedStaffId');
+    debugPrint('BEFORE: ${jsonEncode(reactBefore)}');
+    debugPrint('AFTER : ${jsonEncode(reactAfter)}');
+    debugPrint('=================================================');
+
+    try {
+      final response = await http.post(
+        Uri.parse('$api/api/datalog/create/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'staff': updatedStaffId,
+          'before_data': reactBefore,
+          'after_data': reactAfter,
+        }),
+      );
+
+      debugPrint('========== STAFF UPDATE AUDIT RESPONSE ==========');
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('=================================================');
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e, stackTrace) {
+      debugPrint('STAFF UPDATE AUDIT LOG ERROR: $e');
+      debugPrint('STAFF UPDATE AUDIT LOG STACKTRACE: $stackTrace');
+      return false;
+    }
+  }
+
   Future<bool> registerUserData(BuildContext scaffoldContext) async {
     if (!await _checkUpdatePermission(scaffoldContext)) return false;
 
@@ -2471,6 +2845,10 @@ class _Staff_UpdateState extends State<Staff_Update> {
       if (responseData.statusCode == 200) {
         final Map<String, dynamic> responseJson = jsonDecode(responseData.body);
         staffId = responseJson['data']['id'].toString();
+        if (responseJson['data'] is Map) {
+          _reactUpdatedStaffData =
+              Map<String, dynamic>.from(responseJson['data']);
+        }
         return true;
       } else if (responseData.statusCode == 400) {
         final Map<String, dynamic> responseJson = jsonDecode(responseData.body);
@@ -4363,48 +4741,48 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                 ),
                               ],
                             ),
-                            // _buildSectionCard(
-                            //   title: "License, Address & Country",
-                            //   children: [
-                            //     _buildTextField(
-                            //       driving_license,
-                            //       'Driving License',
-                            //       icon: Icons.drive_eta_outlined,
-                            //     ),
-                            //     _buildDateField(
-                            //       title: "License Expiry Date",
-                            //       date: selecteExp,
-                            //       onTap: () => _selectDate(
-                            //         context,
-                            //         selecteExp,
-                            //         (picked) => selecteExp = picked,
-                            //       ),
-                            //     ),
-                            //     _buildTextField(
-                            //       address,
-                            //       'Address',
-                            //       icon: Icons.location_on_outlined,
-                            //       maxLines: 3,
-                            //     ),
-                            //     _buildTextField(
-                            //       city,
-                            //       'City',
-                            //       icon: Icons.location_city_outlined,
-                            //     ),
-                            //     _buildTextField(
-                            //       Country,
-                            //       'Country',
-                            //       icon: Icons.public_outlined,
-                            //     ),
-                            //     _buildPostingStateDropdown(),
-                            //     _buildTextField(
-                            //       place,
-                            //       'Place',
-                            //       icon: Icons.place_outlined,
-                            //     ),
-                            //     _buildCountryCodeDropdown(),
-                            //   ],
-                            // ),
+                            _buildSectionCard(
+                              title: "License, Address & Country",
+                              children: [
+                                _buildTextField(
+                                  driving_license,
+                                  'Driving License',
+                                  icon: Icons.drive_eta_outlined,
+                                ),
+                                _buildDateField(
+                                  title: "Driving License Exp Date",
+                                  date: selecteExp,
+                                  onTap: () => _selectDate(
+                                    context,
+                                    selecteExp,
+                                    (picked) => selecteExp = picked,
+                                  ),
+                                ),
+                                _buildTextField(
+                                  address,
+                                  'Address',
+                                  icon: Icons.location_on_outlined,
+                                  maxLines: 3,
+                                ),
+                                _buildTextField(
+                                  city,
+                                  'City',
+                                  icon: Icons.location_city_outlined,
+                                ),
+                                _buildTextField(
+                                  Country,
+                                  'Country',
+                                  icon: Icons.public_outlined,
+                                ),
+                                _buildPostingStateDropdown(),
+                                _buildTextField(
+                                  place,
+                                  'Place',
+                                  icon: Icons.place_outlined,
+                                ),
+                                _buildCountryCodeDropdown(),
+                              ],
+                            ),
                             _buildSectionCard(
                               title: "Uploads",
                               children: [
@@ -4498,6 +4876,24 @@ class _Staff_UpdateState extends State<Staff_Update> {
 
                                       setState(() => isLoading = true);
 
+                                      final Map<String, dynamic> auditBefore =
+                                          Map<String, dynamic>.from(
+                                              _originalStaffAuditData);
+                                      final Map<String, dynamic> auditAfter =
+                                          _buildCurrentStaffAuditData();
+                                      final bool filesChanged =
+                                          selectedImage != null ||
+                                          selectedSignature != null ||
+                                          selectedExpLetter != null ||
+                                          selectedSalarySlip != null ||
+                                          selectedAadharImage != null ||
+                                          selectedPanImage != null;
+
+                                      debugPrint('========== STAFF AUDIT SNAPSHOTS ==========');
+                                      debugPrint('BEFORE: ${jsonEncode(auditBefore)}');
+                                      debugPrint('AFTER : ${jsonEncode(auditAfter)}');
+                                      debugPrint('============================================');
+
                                       final bool dataUpdated =
                                           await registerUserData(
                                               scaffoldContext);
@@ -4508,6 +4904,22 @@ class _Staff_UpdateState extends State<Staff_Update> {
                                                 scaffoldContext);
 
                                         if (filesUpdated && mounted) {
+                                          final Map<String, dynamic>? reactBefore =
+                                              _reactOldStaffData;
+                                          final Map<String, dynamic>? reactAfter =
+                                              _reactUpdatedStaffData;
+
+                                          if (reactBefore != null && reactAfter != null) {
+                                            await createStaffUpdateLog(
+                                              beforeData: reactBefore,
+                                              afterData: reactAfter,
+                                              filesChanged: filesChanged,
+                                            );
+                                          } else {
+                                            debugPrint(
+                                              'STAFF AUDIT LOG SKIPPED: React-style before/after API data unavailable.',
+                                            );
+                                          }
                                           ScaffoldMessenger.of(scaffoldContext)
                                               .showSnackBar(
                                             const SnackBar(

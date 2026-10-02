@@ -1193,7 +1193,7 @@ class _OrderReviewState extends State<OrderReview> {
 
   void _showShippingChargeDialog(
       BuildContext context, Map<String, dynamic> boxDetails) {
-    if (!isPrivilegedDepartment()) return;
+    if (!canEditAnyBoxField(boxDetails)) return;
 
     final shippingController = TextEditingController(
         text: boxDetails['shipping_charge']?.toString() ?? '');
@@ -1213,11 +1213,21 @@ class _OrderReviewState extends State<OrderReview> {
             child: Column(
               children: [
                 // Shipping Charge
+                TextField(
+                  controller: shippingController,
+                  readOnly: !canEditBoxField(boxDetails, 'shipping_charge'),
+                  decoration: const InputDecoration(
+                    labelText: 'Shipping Charge',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 10),
 
-                SizedBox(height: 10),
                 // Actual Weight
                 TextField(
                   controller: actualWeightController,
+                  readOnly: !canEditBoxField(boxDetails, 'actual_weight'),
                   decoration: InputDecoration(
                     labelText: 'Actual Weight',
                     border: OutlineInputBorder(),
@@ -1228,6 +1238,7 @@ class _OrderReviewState extends State<OrderReview> {
                 // Post Office Amount
                 TextField(
                   controller: postOfficeAmountController,
+                  readOnly: !canEditBoxField(boxDetails, 'parcel_amount'),
                   decoration: InputDecoration(
                     labelText: 'Post Office Amount',
                     border: OutlineInputBorder(),
@@ -1244,7 +1255,8 @@ class _OrderReviewState extends State<OrderReview> {
                     suffixIcon: Icon(Icons.calendar_today),
                   ),
                   readOnly: true,
-                  onTap: () async {
+                  onTap: canEditBoxField(boxDetails, 'postoffice_date')
+                      ? () async {
                     DateTime? pickedDate = await showDatePicker(
                       context: context,
                       initialDate: DateTime.now(),
@@ -1256,7 +1268,8 @@ class _OrderReviewState extends State<OrderReview> {
                       dateController.text =
                           "${pickedDate.toLocal()}".split(' ')[0];
                     }
-                  },
+                  }
+                      : null,
                 ),
               ],
             ),
@@ -4817,11 +4830,11 @@ class _OrderReviewState extends State<OrderReview> {
   }
 
   bool canEditProductPopup() {
-    return isPrivilegedDepartment();
+    return canEditExistingProduct();
   }
 
   bool canDeleteProduct() {
-    return isPrivilegedDepartment();
+    return canDeleteExistingProduct();
   }
 
   bool canManageRackSelection() {
@@ -5872,6 +5885,196 @@ class _OrderReviewState extends State<OrderReview> {
     }
   }
 
+
+  // Accounts / Accounting: create-once permission helpers.
+  // Other departments keep their existing permissions unchanged.
+  bool isAccountsAccountingDepartment() {
+    final String dept =
+        (department ?? dep ?? '').toString().trim().toLowerCase();
+    return dept == 'accounts / accounting' ||
+        dept == 'accounts' ||
+        dept == 'accounting';
+  }
+
+  bool _hasStoredValue(dynamic value) {
+    if (value == null) return false;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized.isNotEmpty &&
+          normalized != 'null' &&
+          normalized != 'n/a' &&
+          normalized != 'none';
+    }
+    if (value is Map) return value.isNotEmpty;
+    if (value is Iterable) return value.isNotEmpty;
+    return true;
+  }
+
+  bool _canAccountsAddOnce(dynamic storedValue) {
+    return !isAccountsAccountingDepartment() || !_hasStoredValue(storedValue);
+  }
+
+  bool canEditOrderDate() =>
+      isPrivilegedDepartment() && _canAccountsAddOnce(ord?['order_date']);
+
+  bool canEditPaymentMethod() =>
+      canEditCompanyAndShippingCharge() &&
+      _canAccountsAddOnce(ord?['payment_status']);
+
+  bool canEditCodType() =>
+      canEditCompanyAndShippingCharge() && _canAccountsAddOnce(ord?['cod_status']);
+
+  bool canEditDivision() =>
+      canEditCompanyAndShippingCharge() &&
+      _canAccountsAddOnce(ord?['family_id'] ?? ord?['family']);
+
+  bool canEditCompany() =>
+      canEditCompanyAndShippingCharge() &&
+      _canAccountsAddOnce(ord?['company'] is Map ? ord?['company']?['id'] : ord?['company']);
+
+  bool canEditShippingMode() =>
+      canEditCompanyAndShippingCharge() && _canAccountsAddOnce(ord?['shipping_mode']);
+
+  bool _isEmptyOrZero(dynamic value) {
+    if (!_hasStoredValue(value)) return true;
+    final double? number = double.tryParse(value.toString().trim());
+    return number != null && number.abs() < 0.000001;
+  }
+
+  bool canEditCodAmount() {
+    // Accounts / Accounting:
+    // editable only while the PERSISTED backend value is empty or zero.
+    // Once a non-zero value is saved and the order is refreshed, it locks.
+    if (isAccountsAccountingDepartment()) {
+      return _isEmptyOrZero(ord?['cod_amount']);
+    }
+
+    // Preserve the existing permission behaviour for every other department.
+    return canEditCompanyAndShippingCharge();
+  }
+
+  bool canEditAdvanceCodAmount() =>
+      canEditCompanyAndShippingCharge() && _canAccountsAddOnce(ord?['adv_cod_amount']);
+
+  bool canEditBillingAddressOnce() =>
+      canEditCompanyAndShippingCharge() && _canAccountsAddOnce(ord?['customer']);
+
+  bool canEditShippingChargeOnce() {
+    // Accounts / Accounting:
+    // editable only while the PERSISTED backend value is empty or zero.
+    // Once a non-zero value is saved and the order is refreshed, it locks.
+    if (isAccountsAccountingDepartment()) {
+      return _isEmptyOrZero(ord?['shipping_charge']);
+    }
+
+    // Preserve the existing permission behaviour for every other department.
+    return canEditCompanyAndShippingCharge();
+  }
+
+  bool canEditAccountsNoteOnce() =>
+      canEditAccountsNote() && _canAccountsAddOnce(ord?['accounts_note']);
+
+  bool canEditWarehouseNoteOnce() =>
+      isPrivilegedDepartment() && _canAccountsAddOnce(ord?['note']);
+
+  bool canEditShippingAddressOnce() =>
+      canEditShippingAddressInUpdateSection() &&
+      _canAccountsAddOnce(ord?['billing_address']);
+
+  bool canUploadPaymentScreenshotOnce() {
+    if (!canManagePaymentScreenshots()) return false;
+    if (!isAccountsAccountingDepartment()) return true;
+    return selectedImageData.isEmpty;
+  }
+
+  bool canDeleteUploadedPaymentScreenshot() {
+    if (!canManagePaymentScreenshots()) return false;
+    return !isAccountsAccountingDepartment();
+  }
+
+  bool canEditExistingProduct() {
+    if (!isPrivilegedDepartment()) return false;
+    return !isAccountsAccountingDepartment();
+  }
+
+  bool canDeleteExistingProduct() {
+    if (!isPrivilegedDepartment()) return false;
+    return !isAccountsAccountingDepartment();
+  }
+
+  bool canAddRackAllocation(Map<String, dynamic> item) {
+    if (!canManageRackSelection()) return false;
+    if (!isAccountsAccountingDepartment()) return true;
+    final rackDetails = item['rack_details'];
+    return rackDetails == null || (rackDetails is List && rackDetails.isEmpty);
+  }
+
+  bool canEditAnyBoxField(Map<String, dynamic> box) {
+    if (!isPrivilegedDepartment()) return false;
+    if (!isAccountsAccountingDepartment()) return true;
+
+    // Accounts / Accounting: every Box Details field is independently
+    // write-once. Empty / zero fields remain editable; persisted values lock.
+    return canEditBoxField(box, 'shipping_charge') ||
+        canEditBoxField(box, 'actual_weight') ||
+        canEditBoxField(box, 'parcel_amount') ||
+        canEditBoxField(box, 'postoffice_date');
+  }
+
+  bool canEditBoxField(Map<String, dynamic> box, String key) {
+    if (!isPrivilegedDepartment()) return false;
+    if (!isAccountsAccountingDepartment()) return true;
+
+    final dynamic value = box[key];
+
+    // Accounts / Accounting may enter numeric Box Details only while the
+    // persisted value is empty or zero. A real non-zero value locks the field.
+    if (key == 'shipping_charge' ||
+        key == 'actual_weight' ||
+        key == 'parcel_amount') {
+      return _isEmptyOrZero(value);
+    }
+
+    return !_hasStoredValue(value);
+  }
+
+  bool canEditBoxTrackingId(Map<String, dynamic> box) {
+    if (!isAccountsAccountingDepartment()) return true;
+
+    // Tracking ID 0 / 0.0 / empty / null / N/A means it has not been entered.
+    // Once a real tracking ID is persisted, Accounts / Accounting cannot edit it.
+    return _isEmptyOrZero(box['tracking_id']);
+  }
+
+  bool canEditBoxStatus(Map<String, dynamic> box) {
+    if (!isAccountsAccountingDepartment()) return true;
+    final String value = (box['status'] ?? '').toString().trim().toLowerCase();
+    // pending is the backend's initial/default state, so Accounts may enter the
+    // first real status. Once changed from pending, it is locked permanently.
+    return value.isEmpty || value == 'pending' || value == 'n/a';
+  }
+
+  bool canEditBoxParcelService(Map<String, dynamic> box) {
+    if (!isAccountsAccountingDepartment()) return true;
+
+    // A missing/zero parcel-service id and missing name means no service has
+    // been entered yet. After a real parcel service is persisted it is locked.
+    final dynamic serviceId = box['parcel_service_id'];
+    final dynamic serviceName = box['parcel_service_name'];
+
+    return _isEmptyOrZero(serviceId) && !_hasStoredValue(serviceName);
+  }
+
+  bool canEditBoxShippedDate(Map<String, dynamic> box) {
+    if (!isAccountsAccountingDepartment()) return true;
+
+    // Shipping date is write-once for Accounts / Accounting.
+    return !_hasStoredValue(box['shipped_date']);
+  }
+
+  bool canDeleteBox() =>
+      isPrivilegedDepartment() && !isAccountsAccountingDepartment();
+
   bool canManageApprovalControls() {
     final String currentDepartment =
         (department ?? dep ?? '').toString().trim().toLowerCase();
@@ -6062,7 +6265,7 @@ class _OrderReviewState extends State<OrderReview> {
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold),
                             ),
-                            if (isPrivilegedDepartment())
+                            if (canEditOrderDate())
                               GestureDetector(
                                 onTap: () {
                                   _showDatePicker2(context, ord['id']);
@@ -6123,7 +6326,7 @@ class _OrderReviewState extends State<OrderReview> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: showPayStatusDropdown &&
-                                            canEditCompanyAndShippingCharge()
+                                            canEditPaymentMethod()
                                         ? DropdownButtonFormField<String>(
                                             value: selectedPayStatus,
                                             isExpanded: true,
@@ -6167,7 +6370,7 @@ class _OrderReviewState extends State<OrderReview> {
                                                 const TextStyle(fontSize: 12),
                                           ),
                                   ),
-                                  if (canEditCompanyAndShippingCharge())
+                                  if (canEditPaymentMethod())
                                     _simpleEditIcon(() {
                                       setState(() {
                                         showPayStatusDropdown =
@@ -6192,7 +6395,7 @@ class _OrderReviewState extends State<OrderReview> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: showCodTypeDropdown &&
-                                            canEditCompanyAndShippingCharge()
+                                            canEditCodType()
                                         ? DropdownButtonFormField<String>(
                                             value: cod_status == ""
                                                 ? null
@@ -6238,7 +6441,7 @@ class _OrderReviewState extends State<OrderReview> {
                                                 const TextStyle(fontSize: 12),
                                           ),
                                   ),
-                                  if (canEditCompanyAndShippingCharge())
+                                  if (canEditCodType())
                                     _simpleEditIcon(() {
                                       setState(() {
                                         showCodTypeDropdown =
@@ -6263,7 +6466,7 @@ class _OrderReviewState extends State<OrderReview> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: showFamilyDropdown &&
-                                            canEditCompanyAndShippingCharge()
+                                            canEditDivision()
                                         ? DropdownButtonFormField<String>(
                                             value: selectedfamily ??
                                                 (ord != null
@@ -6320,7 +6523,7 @@ class _OrderReviewState extends State<OrderReview> {
                                                 const TextStyle(fontSize: 12),
                                           ),
                                   ),
-                                  if (canEditCompanyAndShippingCharge())
+                                  if (canEditDivision())
                                     _simpleEditIcon(() {
                                       setState(() {
                                         showFamilyDropdown =
@@ -6344,7 +6547,7 @@ class _OrderReviewState extends State<OrderReview> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: showCompanyDropdown &&
-                                          canEditCompanyAndShippingCharge()
+                                          canEditCompany()
                                       ? DropdownButtonFormField<String>(
                                           value: selectedCompany ??
                                               (ord != null
@@ -6408,7 +6611,7 @@ class _OrderReviewState extends State<OrderReview> {
                                           style: const TextStyle(fontSize: 12),
                                         ),
                                 ),
-                                if (canEditCompanyAndShippingCharge())
+                                if (canEditCompany())
                                   _simpleEditIcon(() {
                                     setState(() {
                                       showCompanyDropdown =
@@ -6696,7 +6899,7 @@ class _OrderReviewState extends State<OrderReview> {
                           Expanded(
                             child: TextField(
                               controller: shippingmethod,
-                              readOnly: !canEditCompanyAndShippingCharge(),
+                              readOnly: !canEditShippingMode(),
                               decoration: InputDecoration(
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(
@@ -6710,7 +6913,7 @@ class _OrderReviewState extends State<OrderReview> {
                           Expanded(
                             child: TextField(
                               controller: codamount,
-                              readOnly: !canEditCompanyAndShippingCharge(),
+                              readOnly: !canEditCodAmount(),
                               decoration: InputDecoration(
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(
@@ -6727,7 +6930,7 @@ class _OrderReviewState extends State<OrderReview> {
                           Expanded(
                             child: TextField(
                               controller: advanceController,
-                              readOnly: !canEditCompanyAndShippingCharge(),
+                              readOnly: !canEditAdvanceCodAmount(),
                               decoration: InputDecoration(
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(
@@ -6740,7 +6943,9 @@ class _OrderReviewState extends State<OrderReview> {
                           Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: ElevatedButton(
-                              onPressed: canEditCompanyAndShippingCharge()
+                              onPressed: (canEditShippingMode() ||
+                                      canEditCodAmount() ||
+                                      canEditAdvanceCodAmount())
                                   ? () {
                                       updatecod();
                                     }
@@ -6785,7 +6990,7 @@ class _OrderReviewState extends State<OrderReview> {
                         ),
                         if (dep != "BDM" &&
                             dep != "BDO" &&
-                            canEditCompanyAndShippingCharge())
+                            canEditBillingAddressOnce())
                           IconButton(
                             icon: const Icon(Icons.edit, size: 18),
                             onPressed: () async {
@@ -7021,7 +7226,7 @@ class _OrderReviewState extends State<OrderReview> {
                                           const Spacer(),
 
                                           // 🔹 New button to show rack details
-                                          if (canManageRackSelection())
+                                          if (canAddRackAllocation(item))
                                             IconButton(
                                               icon: const Icon(
                                                   Icons.inventory_2,
@@ -7248,23 +7453,25 @@ class _OrderReviewState extends State<OrderReview> {
                   ],
                 ),
               ),
-              if (canManageRackSelection())
-                Center(
-                  child: ElevatedButton(
-                    onPressed: _submittingAll
-                        ? null
-                        : () async {
-                            await submitAllAllocations();
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 3, 125, 247),
-                    ),
-                    child: Text(
-                      _submittingAll ? 'Submitting...' : 'Submit Rack Details',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
+           if (canManageRackSelection() &&
+    (!isAccountsAccountingDepartment() ||
+        _allocationsByItem.isNotEmpty))
+  Center(
+    child: ElevatedButton(
+      onPressed: _submittingAll
+          ? null
+          : () async {
+              await submitAllAllocations();
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color.fromARGB(255, 3, 125, 247),
+      ),
+      child: Text(
+        _submittingAll ? 'Submitting...' : 'Submit Rack Details',
+        style: const TextStyle(color: Colors.white),
+      ),
+    ),
+  ),
               SizedBox(
                 height: 10,
               ),
@@ -7395,7 +7602,7 @@ class _OrderReviewState extends State<OrderReview> {
                                         ),
                                       ),
                                     ),
-                                    if (canManagePaymentScreenshots())
+                                    if (canDeleteUploadedPaymentScreenshot())
                                       Positioned(
                                         top: 2,
                                         right: 2,
@@ -7423,7 +7630,7 @@ class _OrderReviewState extends State<OrderReview> {
 
                         const SizedBox(height: 12),
 
-                        if (canManagePaymentScreenshots())
+                        if (canUploadPaymentScreenshotOnce())
                           Row(
                             children: [
                               Expanded(
@@ -8560,7 +8767,7 @@ class _OrderReviewState extends State<OrderReview> {
                                   : null,
                               isExpanded: true,
                               menuMaxHeight: 360,
-                              onChanged: canEditShippingAddressInUpdateSection()
+                              onChanged: canEditShippingAddressOnce()
                                   ? (int? newValue) {
                                       setState(() {
                                         selectedAddressId = newValue;
@@ -8600,7 +8807,7 @@ class _OrderReviewState extends State<OrderReview> {
                                   Icons.location_on_outlined,
                                 ),
                                 suffixIcon:
-                                    canEditShippingAddressInUpdateSection()
+                                    canEditShippingAddressOnce()
                                         ? null
                                         : const Icon(
                                             Icons.lock_outline,
@@ -8608,7 +8815,7 @@ class _OrderReviewState extends State<OrderReview> {
                                           ),
                                 filled: true,
                                 fillColor:
-                                    canEditShippingAddressInUpdateSection()
+                                    canEditShippingAddressOnce()
                                         ? Colors.white
                                         : Colors.grey.shade100,
                                 contentPadding: const EdgeInsets.symmetric(
@@ -8629,12 +8836,12 @@ class _OrderReviewState extends State<OrderReview> {
                             if (!canManageApprovalControls()) ...[
                               const SizedBox(height: 8),
                               Text(
-                                canEditShippingAddressInUpdateSection()
+                                canEditShippingAddressOnce()
                                     ? 'Shipping address can be updated while the order is Waiting For Approval.'
                                     : 'Shipping address is locked for this status or department.',
                                 style: TextStyle(
                                   fontSize: 11.5,
-                                  color: canEditShippingAddressInUpdateSection()
+                                  color: canEditShippingAddressOnce()
                                       ? Colors.green.shade700
                                       : Colors.grey.shade600,
                                 ),
@@ -8647,7 +8854,7 @@ class _OrderReviewState extends State<OrderReview> {
                               // Waiting For Approval: everyone can edit.
                               // Invoice Approved onward:
                               // ADMIN, CEO, COO, Accounts / Accounting only.
-                              readOnly: !canEditCompanyAndShippingCharge(),
+                              readOnly: !canEditShippingChargeOnce(),
 
                               keyboardType:
                                   const TextInputType.numberWithOptions(
@@ -8658,14 +8865,14 @@ class _OrderReviewState extends State<OrderReview> {
                                 prefixIcon: const Icon(
                                   Icons.local_shipping_outlined,
                                 ),
-                                suffixIcon: canEditCompanyAndShippingCharge()
+                                suffixIcon: canEditShippingChargeOnce()
                                     ? null
                                     : const Icon(
                                         Icons.lock_outline,
                                         size: 18,
                                       ),
                                 filled: true,
-                                fillColor: canEditCompanyAndShippingCharge()
+                                fillColor: canEditShippingChargeOnce()
                                     ? Colors.grey.shade50
                                     : Colors.grey.shade100,
                                 contentPadding: const EdgeInsets.symmetric(
@@ -8682,7 +8889,7 @@ class _OrderReviewState extends State<OrderReview> {
                               controller: accountsnoteController,
                               minLines: 3,
                               maxLines: 5,
-                              readOnly: !canEditAccountsNote(),
+                              readOnly: !canEditAccountsNoteOnce(),
                               decoration: InputDecoration(
                                 labelText: 'Accounts Note',
                                 alignLabelWithHint: true,
@@ -8710,7 +8917,8 @@ class _OrderReviewState extends State<OrderReview> {
                                     borderRadius: BorderRadius.circular(13),
                                   ),
                                 ),
-                                onPressed: canEditAccountsNote()
+                                onPressed: (canEditAccountsNoteOnce() ||
+                                        canEditShippingChargeOnce())
                                     ? () {
                                         // For non-privileged departments in
                                         // Waiting For Approval, allow submission
@@ -8789,7 +8997,7 @@ class _OrderReviewState extends State<OrderReview> {
                               controller: noteController,
                               minLines: 3,
                               maxLines: 5,
-                              readOnly: !isPrivilegedDepartment(),
+                              readOnly: !canEditWarehouseNoteOnce(),
                               decoration: InputDecoration(
                                 labelText: 'Warehouse Note',
                                 alignLabelWithHint: true,
@@ -8818,7 +9026,7 @@ class _OrderReviewState extends State<OrderReview> {
                                     borderRadius: BorderRadius.circular(13),
                                   ),
                                 ),
-                                onPressed: isPrivilegedDepartment()
+                                onPressed: canEditWarehouseNoteOnce()
                                     ? updatenote
                                     : null,
                                 icon: const Icon(
@@ -8911,7 +9119,7 @@ class _OrderReviewState extends State<OrderReview> {
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 8.0),
                                 child: GestureDetector(
-                                  onTap: isPrivilegedDepartment()
+                                  onTap: canEditAnyBoxField(order)
                                       ? () {
                                           _showShippingChargeDialog(
                                               context, order);
@@ -9026,7 +9234,7 @@ class _OrderReviewState extends State<OrderReview> {
                                                     ),
                                             // Delete Button
                                             SizedBox(width: 5),
-                                            if (isPrivilegedDepartment())
+                                            if (canDeleteBox())
                                               GestureDetector(
                                                 onTap: () {
                                                   deletebox(order['id']);
@@ -9163,7 +9371,8 @@ class _OrderReviewState extends State<OrderReview> {
                                         SizedBox(height: 6),
 
                                         GestureDetector(
-                                          onTap: isPrivilegedDepartment()
+                                          onTap: isPrivilegedDepartment() &&
+                                                  canEditBoxTrackingId(order)
                                               ? () {
                                                   showDialog(
                                                     context: context,
@@ -9283,7 +9492,8 @@ class _OrderReviewState extends State<OrderReview> {
                                           height: 5,
                                         ),
                                         GestureDetector(
-                                          onTap: isPrivilegedDepartment()
+                                          onTap: isPrivilegedDepartment() &&
+                                                  canEditBoxStatus(order)
                                               ? () {
                                                   showStatusDialog(
                                                       context, order);
@@ -9328,7 +9538,8 @@ class _OrderReviewState extends State<OrderReview> {
                                         SizedBox(height: 6),
 
                                         GestureDetector(
-                                          onTap: isPrivilegedDepartment()
+                                          onTap: isPrivilegedDepartment() &&
+                                                  canEditBoxParcelService(order)
                                               ? () {
                                                   showParcelServiceDialog(
                                                       context,
@@ -9387,7 +9598,8 @@ class _OrderReviewState extends State<OrderReview> {
 
                                         // Shipped Date
                                         GestureDetector(
-                                          onTap: isPrivilegedDepartment()
+                                          onTap: isPrivilegedDepartment() &&
+                                                  canEditBoxShippedDate(order)
                                               ? () {
                                                   _showDatePicker(
                                                       context, order['id']);

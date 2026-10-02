@@ -765,6 +765,131 @@ class _add_staffState extends State<add_staff> {
     );
   }
 
+  String _auditStateName(int? stateId) {
+    if (stateId == null) return '';
+    final item = statess.firstWhere(
+      (state) => int.tryParse(state['id']?.toString() ?? '') == stateId,
+      orElse: () => <String, dynamic>{},
+    );
+    return item['name']?.toString() ?? '';
+  }
+
+  String _auditFamilyName() {
+    if (_selectedFamily.isEmpty) return '';
+    final selectedId = _selectedFamily.first;
+    final item = fam.firstWhere(
+      (family) => int.tryParse(family['id']?.toString() ?? '') == selectedId,
+      orElse: () => <String, dynamic>{},
+    );
+    return item['name']?.toString() ?? '';
+  }
+
+  List<String> _auditAllocatedStateNames() {
+    return dynamicStatid.map((stateId) => _auditStateName(stateId)).where((name) {
+      return name.trim().isNotEmpty;
+    }).toList();
+  }
+
+  Map<String, dynamic> _buildStaffCreatedAuditData() {
+    return <String, dynamic>{
+      'action': 'Staff Created',
+      'name': name.text.trim(),
+      'username': username.text.trim(),
+      'email': email.text.trim(),
+      'phone': phone.text.trim(),
+      'alternate_number': alternate_number.text.trim(),
+      'staff_id': staff_id.text.trim(),
+      'address': address.text.trim(),
+      'city': city.text.trim(),
+      'place': place.text.trim(),
+      'country': Country.text.trim(),
+      'state': _auditStateName(selectedPostingStateId),
+      'country_code': selectedCountryName ?? '',
+      'date_of_birth': DateFormat('yyyy-MM-dd').format(selectedDate),
+      'gender': selectgender,
+      'marital_status': selectmarital,
+      'blood_group': selectedBloodGroup ?? '',
+      'aadhar_no': aadhar_no.text.trim(),
+      'pan_no': pan_no.text.trim(),
+      'emergency_contact_name': emergency_contact_name.text.trim(),
+      'emergency_contact_number': emergency_contact_number.text.trim(),
+      'emergency_contact_name1': emergency_contact_name1.text.trim(),
+      'emergency_contact_number1': emergency_contact_number1.text.trim(),
+      'education': education.text.trim(),
+      'previous_company': previous_company.text.trim(),
+      'experience': experience.text.trim(),
+      'warehouse': selectedwarehouseName ?? '',
+      'driving_license': driving_license.text.trim(),
+      'driving_license_exp_date': DateFormat('yyyy-MM-dd').format(selecteExp),
+      'employment_status': employment_status.text.trim(),
+      'designation': designation.text.trim(),
+      'grade': grade.text.trim(),
+      'department': selectedDepartmentName ?? '',
+      'supervisor': selectedmanagerName ?? '',
+      'family': _auditFamilyName(),
+      'paid_leaves': int.tryParse(paid_leaves.text.trim()) ?? 0,
+      'allocated_states': _auditAllocatedStateNames(),
+      'join_date': DateFormat('yyyy-MM-dd').format(selectejoin),
+      'confirmation_date': DateFormat('yyyy-MM-dd').format(selecteconf),
+      'termination_date': termination_date.text.trim().isEmpty
+          ? null
+          : termination_date.text.trim(),
+      'approval_status': approvalstatus,
+    };
+  }
+
+  Future<bool> createStaffAuditLog({
+    required String createdStaffId,
+  }) async {
+    final token = await gettokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      debugPrint('STAFF CREATE AUDIT LOG SKIPPED: AUTH TOKEN MISSING');
+      return false;
+    }
+
+    final int? parsedStaffId = int.tryParse(createdStaffId);
+    if (parsedStaffId == null) {
+      debugPrint(
+        'STAFF CREATE AUDIT LOG SKIPPED: INVALID STAFF ID $createdStaffId',
+      );
+      return false;
+    }
+
+    final Map<String, dynamic> auditBody = <String, dynamic>{
+      'staff': parsedStaffId,
+      'before_data': <String, dynamic>{
+        'action': 'Staff Created',
+      },
+      'after_data': _buildStaffCreatedAuditData(),
+    };
+
+    try {
+      debugPrint('========== CREATE STAFF AUDIT LOG ==========');
+      debugPrint('URL: $api/api/datalog/create/');
+      debugPrint('REQUEST: ${jsonEncode(auditBody)}');
+
+      final response = await http.post(
+        Uri.parse('$api/api/datalog/create/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(auditBody),
+      );
+
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('============================================');
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e, stackTrace) {
+      debugPrint('CREATE STAFF AUDIT LOG ERROR: $e');
+      debugPrint('CREATE STAFF AUDIT LOG STACKTRACE: $stackTrace');
+      return false;
+    }
+  }
+
   Future<String?> RegisterUserData(
     int selectedDepartmentId,
     DateTime selectedDate,
@@ -2516,6 +2641,17 @@ class _add_staffState extends State<add_staff> {
                                         if (newStaffId == null ||
                                             newStaffId.isEmpty) {
                                           return;
+                                        }
+
+                                        final bool auditLogged =
+                                            await createStaffAuditLog(
+                                          createdStaffId: newStaffId,
+                                        );
+
+                                        if (!auditLogged) {
+                                          debugPrint(
+                                            'WARNING: STAFF CREATED SUCCESSFULLY, BUT AUDIT LOG CREATION FAILED.',
+                                          );
                                         }
 
                                         final bool salaryAdded =

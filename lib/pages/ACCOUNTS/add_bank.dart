@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'package:beposoft/loginpage.dart';
-
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_bank.dart';
@@ -138,57 +138,133 @@ class _add_bankState extends State<add_bank> {
   }
 
   Future<void> Addbank(
-    BuildContext scaffoldContext,
-  ) async {
-    if (selectedCompanyId == null) {
+  BuildContext scaffoldContext,
+) async {
+  if (selectedCompanyId == null) {
+    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text('Please select a company.'),
+      ),
+    );
+    return;
+  }
+
+  final token = await gettoken();
+
+  if (token == null || token.isEmpty) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text('Authentication token not available.'),
+      ),
+    );
+    return;
+  }
+
+  try {
+    final response = await http.post(
+      Uri.parse('$api/api/add/bank/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'name': name.text,
+        'account_number': account_number.text,
+        'branch': branch.text,
+        'ifsc_code': ifsc.text,
+        'open_balance': balance.text,
+        'interest_rate': interest.text,
+        'account_type': selectedBankTypeId,
+        'company': selectedCompanyId,
+      }),
+    );
+
+    if (response.statusCode == 201) {
+      // ---------------------------------------------------------
+      // AUDIT LOG
+      // Bank was successfully created, so now create the log.
+      // ---------------------------------------------------------
+final selectedCompany = company.firstWhere(
+  (item) => item['id'] == selectedCompanyId,
+  orElse: () => <String, dynamic>{},
+);
+
+final String? selectedCompanyName =
+    selectedCompany['name']?.toString();
+ final bool auditCreated = await AuditLogService.logCreate(
+  action: 'bank_created',
+  afterData: {
+    'name': name.text.trim(),
+    'branch': branch.text.trim(),
+    'ifsc_code': ifsc.text.trim(),
+    'open_balance': balance.text.trim(),
+    'interest_rate': interest.text.trim(),
+
+    // Human-readable values
+    'account_type': selectedBankTypeName,
+    'company': selectedCompanyName,
+
+    // Keep IDs separately for audit/reference
+    'account_type_id': selectedBankTypeId,
+    'company_id': selectedCompanyId,
+  },
+);
+
+      if (!auditCreated) {
+        debugPrint(
+          'Bank created successfully, but audit log creation failed.',
+        );
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Bank added Successfully.'),
+        ),
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const add_bank(),
+        ),
+      );
+    } else {
+      if (!mounted) return;
+
+      debugPrint(
+        'Add Bank failed: ${response.statusCode} ${response.body}',
+      );
+
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.red,
-          content: Text('Please select a company.'),
+          content: Text('Adding Bank failed.'),
         ),
       );
-      return;
     }
+  } catch (e, stackTrace) {
+    debugPrint('Add Bank error: $e');
+    debugPrint(stackTrace.toString());
 
-    final token = await gettoken();
-    try {
-      final response = await http.post(Uri.parse('$api/api/add/bank/'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode({
-            'name': name.text,
-            'account_number': account_number.text,
-            'branch': branch.text,
-            'ifsc_code': ifsc.text,
-            'open_balance': balance.text,
-            'interest_rate': interest.text,
-            'account_type': selectedBankTypeId,
-            'company': selectedCompanyId,
-          }));
+    if (!mounted) return;
 
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('Bank added Successfully.'),
-          ),
-        );
-        Navigator.push(
-            context, MaterialPageRoute(builder: (context) => add_bank()));
-      } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding Bank failed.'),
-          ),
-        );
-      }
-    } catch (e) {}
+    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text(
+          'Something went wrong while adding the bank.',
+        ),
+      ),
+    );
   }
-
+}
   Future<void> getbank() async {
     final token = await gettoken();
     try {
