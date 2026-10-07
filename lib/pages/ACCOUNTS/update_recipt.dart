@@ -1,40 +1,77 @@
 import 'dart:convert';
 
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/main.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_company.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_credit_note.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_department.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_new_customer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_new_stock.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/credit_note_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/expense_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/new_product.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/order_recipts_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/order_request.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/purchases_request.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/recipt.report.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/recipts_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/update_department.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/update_family.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+
 import 'package:dropdown_button2/dropdown_button2.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:intl/intl.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class update_recipt extends StatefulWidget {
@@ -46,8 +83,7 @@ class update_recipt extends StatefulWidget {
   });
 
   @override
-  State<update_recipt> createState() =>
-      _update_reciptState();
+  State<update_recipt> createState() => _update_reciptState();
 }
 
 class _update_reciptState extends State<update_recipt> {
@@ -56,8 +92,11 @@ class _update_reciptState extends State<update_recipt> {
     super.initState();
 
     loadDepartment();
+
     initdata();
+
     fetchOrderData();
+
     getbank();
   }
 
@@ -67,40 +106,40 @@ class _update_reciptState extends State<update_recipt> {
 
   var url = "$api/api/add/department/";
 
-  final TextEditingController transactionid =
-      TextEditingController();
+  final TextEditingController transactionid = TextEditingController();
 
-  final TextEditingController purposes =
-      TextEditingController();
+  final TextEditingController purposes = TextEditingController();
 
-  final TextEditingController amount =
-      TextEditingController();
+  final TextEditingController amount = TextEditingController();
 
-  final TextEditingController createdby =
-      TextEditingController();
+  final TextEditingController createdby = TextEditingController();
 
-  final TextEditingController remark =
-      TextEditingController();
+  final TextEditingController remark = TextEditingController();
 
-  final TextEditingController name =
-      TextEditingController();
+  final TextEditingController name = TextEditingController();
 
-  final TextEditingController uname =
-      TextEditingController();
+  final TextEditingController uname = TextEditingController();
 
-  final TextEditingController textEditingController =
-      TextEditingController();
+  final TextEditingController textEditingController = TextEditingController();
 
   dynamic respo;
+
   dynamic departments;
 
+  Map<String, dynamic> originalReceiptData = <String, dynamic>{};
+
   int? selectedCompanyId;
+
   int? selectedstaffId;
+
   int? selectedbankId;
 
   String selectedstaff = '';
+
   String? selectedpurpose;
+
   String? selectedInvoiceId;
+
   String? selectedValue;
 
   final List<String> items = [
@@ -114,49 +153,69 @@ class _update_reciptState extends State<update_recipt> {
   ];
 
   List<Map<String, dynamic>> fam = [];
+
   List<Map<String, dynamic>> bank = [];
+
   List<Map<String, dynamic>> orders = [];
 
   /*
+
    * Order API pagination variables.
+
    *
+
    * These are required because /api/orders/ now returns:
+
    *
+
    * {
+
    *   "count": ...,
+
    *   "next": ...,
+
    *   "previous": ...,
+
    *   "results": {
+
    *     "results": [...]
+
    *   }
+
    * }
+
    */
+
   int currentPage = 1;
+
   int totalPages = 1;
+
   int pageSize = 50;
 
   bool hasNextPage = false;
+
   bool isOrderLoading = false;
+
   bool isUpdating = false;
 
   String currentDepartment = '';
 
   String searchQuery = '';
+
   String selectedStatus = 'All';
 
   DateTime? orderStartDate;
+
   DateTime? orderEndDate;
 
   Future<String?> gettokenFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     return prefs.getString('token');
   }
 
   Future<String?> getdepFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     return prefs.getString('department');
   }
@@ -167,29 +226,26 @@ class _update_reciptState extends State<update_recipt> {
     if (!mounted) return;
 
     setState(() {
-      currentDepartment =
-          department?.trim().toUpperCase() ?? '';
+      currentDepartment = department?.trim().toUpperCase() ?? '';
     });
   }
-bool get canUpdate {
-  final String department =
-      currentDepartment.trim().toUpperCase();
 
-  return [
-    'ADMIN',
-    'COO',
-    'CEO',
-    'HR',
-  ].contains(department);
-}
+  bool get canUpdate {
+    final String department = currentDepartment.trim().toUpperCase();
+
+    return [
+      'ADMIN',
+      'COO',
+      'CEO',
+      'HR',
+    ].contains(department);
+  }
 
   Future<void> getbank() async {
-    final String? token =
-        await gettokenFromPrefs();
+    final String? token = await gettokenFromPrefs();
 
     try {
-      final http.Response response =
-          await http.get(
+      final http.Response response = await http.get(
         Uri.parse('$api/api/banks/'),
         headers: {
           'Content-Type': 'application/json',
@@ -197,18 +253,14 @@ bool get canUpdate {
         },
       );
 
-      final List<Map<String, dynamic>>
-          banklist = [];
+      final List<Map<String, dynamic>> banklist = [];
 
       if (response.statusCode == 200) {
-        final dynamic parsed =
-            jsonDecode(response.body);
+        final dynamic parsed = jsonDecode(response.body);
 
-        final dynamic productsData =
-            parsed['data'];
+        final dynamic productsData = parsed['data'];
 
-        for (final dynamic productData
-            in productsData) {
+        for (final dynamic productData in productsData) {
           banklist.add({
             'id': productData['id'],
             'name': productData['name'],
@@ -229,229 +281,189 @@ bool get canUpdate {
     }
   }
 
- Future<void> fetchOrderData() async {
-  if (isOrderLoading) {
-    return;
-  }
-
-  if (!mounted) return;
-
-  setState(() {
-    isOrderLoading = true;
-  });
-
-  try {
-    final String? token =
-        await gettokenFromPrefs();
-
-    if (token == null || token.isEmpty) {
-      throw Exception(
-        'Authentication token not found',
-      );
+  Future<void> fetchOrderData() async {
+    if (isOrderLoading) {
+      return;
     }
 
-    final dynamic jwt = JWT.decode(token);
-
-    final String loggedUserName =
-        jwt.payload['name']?.toString() ?? '';
-
-    final Map<String, dynamic> queryParameters = {
-      'page': currentPage.toString(),
-      'search':
-          searchQuery.isNotEmpty ? searchQuery : null,
-      'status': selectedStatus != 'All'
-          ? selectedStatus
-          : null,
-      'start_date': orderStartDate != null
-          ? DateFormat('yyyy-MM-dd').format(
-              orderStartDate!,
-            )
-          : null,
-      'end_date': orderEndDate != null
-          ? DateFormat('yyyy-MM-dd').format(
-              orderEndDate!,
-            )
-          : null,
-    };
-
-    queryParameters.removeWhere(
-      (String key, dynamic value) {
-        return value == null ||
-            value.toString().isEmpty;
-      },
-    );
-
-    final Uri uri = Uri.parse(
-      '$api/api/orders/',
-    ).replace(
-      queryParameters: queryParameters.map(
-        (String key, dynamic value) {
-          return MapEntry(
-            key,
-            value.toString(),
-          );
-        },
-      ),
-    );
-
-    debugPrint('Orders API URL: $uri');
-
-    final http.Response response =
-        await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final dynamic decodedResponse =
-          jsonDecode(response.body);
-
-      if (decodedResponse
-          is! Map<String, dynamic>) {
-        throw Exception(
-          'Invalid order API response',
-        );
-      }
-
-      final int totalCount =
-          int.tryParse(
-                decodedResponse['count']
-                        ?.toString() ??
-                    '0',
-              ) ??
-              0;
-
-      totalPages = totalCount == 0
-          ? 1
-          : (totalCount / pageSize).ceil();
-
-      hasNextPage =
-          decodedResponse['next'] != null;
-
-      final dynamic resultsContainer =
-          decodedResponse['results'];
-
-      List<dynamic> ordersData = [];
-
-      if (resultsContainer
-          is Map<String, dynamic>) {
-        final dynamic nestedResults =
-            resultsContainer['results'];
-
-        if (nestedResults is List) {
-          ordersData = nestedResults;
-        }
-      } else if (resultsContainer is List) {
-        ordersData = resultsContainer;
-      }
-
-      final Map<String, Map<String, dynamic>>
-          uniqueOrders = {};
-
-      for (final dynamic rawOrderData
-          in ordersData) {
-        if (rawOrderData is! Map) {
-          continue;
-        }
-
-        final Map<String, dynamic> orderData =
-            Map<String, dynamic>.from(
-          rawOrderData,
-        );
-
-        final dynamic orderId =
-            orderData['id'];
-
-        if (orderId == null) {
-          continue;
-        }
-
-        String customerName = '';
-
-        final dynamic customerData =
-            orderData['customer'];
-
-        if (customerData is Map) {
-          customerName =
-              customerData['name']?.toString() ??
-                  '';
-        } else {
-          customerName =
-              orderData['customer_name']
-                      ?.toString() ??
-                  customerData?.toString() ??
-                  '';
-        }
-
-        uniqueOrders[orderId.toString()] = {
-          'id': orderId,
-          'invoice':
-              orderData['invoice']?.toString() ??
-                  '',
-          'manage_staff':
-              orderData['manage_staff'],
-          'customer': customerName,
-          'warehouse':
-              orderData['warehouse_data'],
-          'status':
-              orderData['status']?.toString() ??
-                  '',
-          'total_amount':
-              orderData['total_amount'],
-          'order_date':
-              orderData['order_date'],
-          'items':
-              orderData['items'] ?? [],
-          'billing_address':
-              orderData['billing_address'] ?? {},
-          'bank':
-              orderData['bank'] ?? {},
-        };
-      }
-
-      final List<Map<String, dynamic>>
-          newOrders =
-          uniqueOrders.values.toList();
-
-      if (!mounted) return;
-
-      setState(() {
-        orders = newOrders;
-        uname.text = loggedUserName;
-      });
-    } else {
-      debugPrint(
-        'Order fetch failed: '
-        '${response.statusCode} '
-        '${response.body}',
-      );
-    }
-  } catch (error, stackTrace) {
-    debugPrint(
-      'Error fetching orders: $error',
-    );
-
-    debugPrintStack(
-      stackTrace: stackTrace,
-    );
-  } finally {
     if (!mounted) return;
 
     setState(() {
-      isOrderLoading = false;
+      isOrderLoading = true;
     });
+
+    try {
+      final String? token = await gettokenFromPrefs();
+
+      if (token == null || token.isEmpty) {
+        throw Exception(
+          'Authentication token not found',
+        );
+      }
+
+      final dynamic jwt = JWT.decode(token);
+
+      final String loggedUserName = jwt.payload['name']?.toString() ?? '';
+
+      final Map<String, dynamic> queryParameters = {
+        'page': currentPage.toString(),
+        'search': searchQuery.isNotEmpty ? searchQuery : null,
+        'status': selectedStatus != 'All' ? selectedStatus : null,
+        'start_date': orderStartDate != null
+            ? DateFormat('yyyy-MM-dd').format(
+                orderStartDate!,
+              )
+            : null,
+        'end_date': orderEndDate != null
+            ? DateFormat('yyyy-MM-dd').format(
+                orderEndDate!,
+              )
+            : null,
+      };
+
+      queryParameters.removeWhere(
+        (String key, dynamic value) {
+          return value == null || value.toString().isEmpty;
+        },
+      );
+
+      final Uri uri = Uri.parse(
+        '$api/api/orders/',
+      ).replace(
+        queryParameters: queryParameters.map(
+          (String key, dynamic value) {
+            return MapEntry(
+              key,
+              value.toString(),
+            );
+          },
+        ),
+      );
+
+      debugPrint('Orders API URL: $uri');
+
+      final http.Response response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decodedResponse = jsonDecode(response.body);
+
+        if (decodedResponse is! Map<String, dynamic>) {
+          throw Exception(
+            'Invalid order API response',
+          );
+        }
+
+        final int totalCount = int.tryParse(
+              decodedResponse['count']?.toString() ?? '0',
+            ) ??
+            0;
+
+        totalPages = totalCount == 0 ? 1 : (totalCount / pageSize).ceil();
+
+        hasNextPage = decodedResponse['next'] != null;
+
+        final dynamic resultsContainer = decodedResponse['results'];
+
+        List<dynamic> ordersData = [];
+
+        if (resultsContainer is Map<String, dynamic>) {
+          final dynamic nestedResults = resultsContainer['results'];
+
+          if (nestedResults is List) {
+            ordersData = nestedResults;
+          }
+        } else if (resultsContainer is List) {
+          ordersData = resultsContainer;
+        }
+
+        final Map<String, Map<String, dynamic>> uniqueOrders = {};
+
+        for (final dynamic rawOrderData in ordersData) {
+          if (rawOrderData is! Map) {
+            continue;
+          }
+
+          final Map<String, dynamic> orderData = Map<String, dynamic>.from(
+            rawOrderData,
+          );
+
+          final dynamic orderId = orderData['id'];
+
+          if (orderId == null) {
+            continue;
+          }
+
+          String customerName = '';
+
+          final dynamic customerData = orderData['customer'];
+
+          if (customerData is Map) {
+            customerName = customerData['name']?.toString() ?? '';
+          } else {
+            customerName = orderData['customer_name']?.toString() ??
+                customerData?.toString() ??
+                '';
+          }
+
+          uniqueOrders[orderId.toString()] = {
+            'id': orderId,
+            'invoice': orderData['invoice']?.toString() ?? '',
+            'manage_staff': orderData['manage_staff'],
+            'customer': customerName,
+            'warehouse': orderData['warehouse_data'],
+            'status': orderData['status']?.toString() ?? '',
+            'total_amount': orderData['total_amount'],
+            'order_date': orderData['order_date'],
+            'items': orderData['items'] ?? [],
+            'billing_address': orderData['billing_address'] ?? {},
+            'bank': orderData['bank'] ?? {},
+          };
+        }
+
+        final List<Map<String, dynamic>> newOrders =
+            uniqueOrders.values.toList();
+
+        if (!mounted) return;
+
+        setState(() {
+          orders = newOrders;
+
+          uname.text = loggedUserName;
+        });
+      } else {
+        debugPrint(
+          'Order fetch failed: '
+          '${response.statusCode} '
+          '${response.body}',
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Error fetching orders: $error',
+      );
+
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        isOrderLoading = false;
+      });
+    }
   }
-}
 
   void getCurrentTime() {
-    final DateTime now =
-        DateTime.now();
+    final DateTime now = DateTime.now();
 
-    final String formattedTime =
-        DateFormat('HH:mm:ss').format(
+    final String formattedTime = DateFormat('HH:mm:ss').format(
       now,
     );
 
@@ -464,14 +476,12 @@ bool get canUpdate {
     });
   }
 
-  DateTime selectedDate =
-      DateTime.now();
+  DateTime selectedDate = DateTime.now();
 
   Future<void> _selectDate(
     BuildContext context,
   ) async {
-    final DateTime? picked =
-        await showDatePicker(
+    final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: selectedDate,
       firstDate: DateTime(2000),
@@ -480,8 +490,7 @@ bool get canUpdate {
 
     if (!mounted) return;
 
-    if (picked != null &&
-        picked != selectedDate) {
+    if (picked != null && picked != selectedDate) {
       setState(() {
         selectedDate = picked;
       });
@@ -496,11 +505,9 @@ bool get canUpdate {
 
   Future<void> getreciptlist() async {
     try {
-      final String? token =
-          await gettokenFromPrefs();
+      final String? token = await gettokenFromPrefs();
 
-      final http.Response response =
-          await http.get(
+      final http.Response response = await http.get(
         Uri.parse(
           '$api/api/recieptsupdate/get/'
           '${widget.id}/',
@@ -512,55 +519,43 @@ bool get canUpdate {
       );
 
       if (response.statusCode == 200) {
-        final dynamic parsed =
-            jsonDecode(response.body);
+        final dynamic parsed = jsonDecode(response.body);
+
+        originalReceiptData = <String, dynamic>{
+          'invoice_id': parsed['order']?.toString(),
+          'bank_id': parsed['bank'],
+          'amount': parsed['amount']?.toString() ?? '',
+          'received_at': parsed['received_at']?.toString() ?? '',
+          'transaction_id': parsed['transactionID']?.toString() ?? '',
+          'remark': parsed['remark']?.toString() ?? '',
+        };
 
         if (!mounted) return;
 
         setState(() {
-          remark.text =
-              parsed['remark']?.toString() ??
-                  '';
+          remark.text = parsed['remark']?.toString() ?? '';
 
-          amount.text =
-              parsed['amount']?.toString() ??
-                  '';
+          amount.text = parsed['amount']?.toString() ?? '';
 
-          transactionid.text =
-              parsed['transactionID']
-                      ?.toString() ??
-                  '';
+          transactionid.text = parsed['transactionID']?.toString() ?? '';
 
-          selectedDate =
-              DateTime.tryParse(
-                    parsed['received_at']
-                            ?.toString() ??
-                        '',
-                  ) ??
-                  DateTime.now();
+          selectedDate = DateTime.tryParse(
+                parsed['received_at']?.toString() ?? '',
+              ) ??
+              DateTime.now();
 
-          final dynamic rawBankId =
-              parsed['bank'];
+          final dynamic rawBankId = parsed['bank'];
 
-          selectedbankId =
-              rawBankId is int
-                  ? rawBankId
-                  : int.tryParse(
-                      rawBankId
-                              ?.toString() ??
-                          '',
-                    );
+          selectedbankId = rawBankId is int
+              ? rawBankId
+              : int.tryParse(
+                  rawBankId?.toString() ?? '',
+                );
 
-          createdby.text =
-              parsed['created_by']
-                      ?.toString() ??
-                  '';
+          createdby.text = parsed['created_by']?.toString() ?? '';
 
           selectedInvoiceId =
-              parsed['order'] != null
-                  ? parsed['order']
-                      .toString()
-                  : null;
+              parsed['order'] != null ? parsed['order'].toString() : null;
         });
       }
     } catch (error) {
@@ -570,65 +565,75 @@ bool get canUpdate {
     }
   }
 
-  Future<void> AddStatusTime(
-    BuildContext scaffoldContext,
-  ) async {
-    final String? token =
-        await gettokenFromPrefs();
+  String? _getBankNameById(dynamic bankId) {
+    if (bankId == null) return null;
 
-    try {
-      final http.Response response =
-          await http.post(
-        Uri.parse(
-          '$api/api/datalog/create/',
-        ),
-        headers: {
-          'Content-Type':
-              'application/json',
-          'Authorization':
-              'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {
-            "Action": "Recipt added ",
-          },
-          'after_data': {
-            "Data": "$respo",
-          },
-          'order': "",
-        }),
-      );
+    final String targetId = bankId.toString();
 
-      if (!mounted) return;
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(
-          scaffoldContext,
-        ).showSnackBar(
-          const SnackBar(
-            backgroundColor:
-                Colors.green,
-            content: Text(
-              'time added Successfully.',
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          scaffoldContext,
-        ).showSnackBar(
-          const SnackBar(
-            backgroundColor:
-                Colors.red,
-            content: Text(
-              'Adding time failed.',
-            ),
-          ),
-        );
+    for (final Map<String, dynamic> bankItem in bank) {
+      if (bankItem['id']?.toString() == targetId) {
+        return bankItem['name']?.toString();
       }
-    } catch (e) {
+    }
+
+    return null;
+  }
+
+  Map<String, dynamic>? _getOrderById(dynamic orderId) {
+    if (orderId == null) return null;
+
+    final String targetId = orderId.toString();
+
+    for (final Map<String, dynamic> order in orders) {
+      if (order['id']?.toString() == targetId) {
+        return order;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _createReceiptUpdateAuditLog() async {
+    final dynamic originalBankId = originalReceiptData['bank_id'];
+    final String? originalInvoiceId =
+        originalReceiptData['invoice_id']?.toString();
+
+    final Map<String, dynamic>? originalOrder =
+        _getOrderById(originalInvoiceId);
+    final Map<String, dynamic>? updatedOrder = _getOrderById(selectedInvoiceId);
+
+    final bool auditCreated = await AuditLogService.logUpdate(
+      action: 'receipt_updated',
+      orderId: int.tryParse(selectedInvoiceId ?? ''),
+      beforeData: <String, dynamic>{
+        'receipt_id': widget.id,
+        'invoice_id': originalInvoiceId,
+        'invoice': originalOrder?['invoice']?.toString(),
+        'customer': originalOrder?['customer']?.toString(),
+        'bank_id': originalBankId,
+        'bank': _getBankNameById(originalBankId),
+        'amount': originalReceiptData['amount'],
+        'received_at': originalReceiptData['received_at'],
+        'transaction_id': originalReceiptData['transaction_id'],
+        'remark': originalReceiptData['remark'],
+      },
+      afterData: <String, dynamic>{
+        'receipt_id': widget.id,
+        'invoice_id': selectedInvoiceId,
+        'invoice': updatedOrder?['invoice']?.toString(),
+        'customer': updatedOrder?['customer']?.toString(),
+        'bank_id': selectedbankId,
+        'bank': _getBankNameById(selectedbankId),
+        'amount': amount.text.trim(),
+        'received_at': formatDate(selectedDate),
+        'transaction_id': transactionid.text.trim(),
+        'remark': remark.text.trim(),
+      },
+    );
+
+    if (!auditCreated) {
       debugPrint(
-        'Error adding status time: $e',
+        'Receipt updated successfully, but audit log creation failed.',
       );
     }
   }
@@ -644,16 +649,12 @@ bool get canUpdate {
       isUpdating = true;
     });
 
-    final String? token =
-        await gettokenFromPrefs();
+    final String? token = await gettokenFromPrefs();
 
     try {
-      final SharedPreferences prefs =
-          await SharedPreferences
-              .getInstance();
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      final String? username =
-          prefs.getString('username');
+      final String? username = prefs.getString('username');
 
       if (username == null) {
         return;
@@ -662,11 +663,9 @@ bool get canUpdate {
       if (selectedInvoiceId == null) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor:
-                Colors.red,
+            backgroundColor: Colors.red,
             content: Text(
               'Please select an invoice.',
             ),
@@ -679,11 +678,9 @@ bool get canUpdate {
       if (selectedbankId == null) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor:
-                Colors.red,
+            backgroundColor: Colors.red,
             content: Text(
               'Please select a bank.',
             ),
@@ -693,8 +690,7 @@ bool get canUpdate {
         return;
       }
 
-      final http.Response response =
-          await http.put(
+      final http.Response response = await http.put(
         Uri.parse(
           '$api/api/recieptsupdate/get/'
           '${widget.id}/',
@@ -703,15 +699,11 @@ bool get canUpdate {
           'Authorization': 'Bearer $token',
         },
         body: {
-          'invoice':
-              selectedInvoiceId.toString(),
-          'bank':
-              selectedbankId.toString(),
+          'invoice': selectedInvoiceId.toString(),
+          'bank': selectedbankId.toString(),
           'amount': amount.text,
-          'received_at':
-              formatDate(selectedDate),
-          'transactionID':
-              transactionid.text,
+          'received_at': formatDate(selectedDate),
+          'transactionID': transactionid.text,
           'remark': remark.text,
         },
       );
@@ -719,29 +711,24 @@ bool get canUpdate {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final dynamic responseData =
-            jsonDecode(response.body);
+        final dynamic responseData = jsonDecode(response.body);
 
         respo = responseData['data'];
 
-        await AddStatusTime(context);
+        await _createReceiptUpdateAuditLog();
 
         if (!mounted) return;
 
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder:
-                (BuildContext context) =>
-                    order_recipt_Report(),
+            builder: (BuildContext context) => order_recipt_Report(),
           ),
         );
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor:
-                Color.fromARGB(
+            backgroundColor: Color.fromARGB(
               255,
               49,
               212,
@@ -753,11 +740,9 @@ bool get canUpdate {
           ),
         );
       } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor:
-                Colors.red,
+            backgroundColor: Colors.red,
             content: Text(
               'Failed to add expense. '
               'Please try again.',
@@ -768,11 +753,9 @@ bool get canUpdate {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          backgroundColor:
-              Colors.red,
+          backgroundColor: Colors.red,
           content: Text(
             'An error occurred. '
             'Please try again.',
@@ -795,14 +778,11 @@ bool get canUpdate {
 
     final bool exists = orders.any(
       (Map<String, dynamic> order) {
-        return order['id'].toString() ==
-            selectedInvoiceId;
+        return order['id'].toString() == selectedInvoiceId;
       },
     );
 
-    return exists
-        ? selectedInvoiceId
-        : null;
+    return exists ? selectedInvoiceId : null;
   }
 
   int? get safeSelectedBankId {
@@ -812,33 +792,35 @@ bool get canUpdate {
 
     final bool exists = bank.any(
       (Map<String, dynamic> bankItem) {
-        final int? bankId =
-            bankItem['id'] is int
-                ? bankItem['id'] as int
-                : int.tryParse(
-                    bankItem['id']
-                        .toString(),
-                  );
+        final int? bankId = bankItem['id'] is int
+            ? bankItem['id'] as int
+            : int.tryParse(
+                bankItem['id'].toString(),
+              );
 
-        return bankId ==
-            selectedbankId;
+        return bankId == selectedbankId;
       },
     );
 
-    return exists
-        ? selectedbankId
-        : null;
+    return exists ? selectedbankId : null;
   }
 
   @override
   void dispose() {
     transactionid.dispose();
+
     purposes.dispose();
+
     amount.dispose();
+
     createdby.dispose();
+
     remark.dispose();
+
     name.dispose();
+
     uname.dispose();
+
     textEditingController.dispose();
 
     super.dispose();
@@ -847,8 +829,7 @@ bool get canUpdate {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color.fromARGB(
+      backgroundColor: const Color.fromARGB(
         242,
         255,
         255,
@@ -863,8 +844,7 @@ bool get canUpdate {
           ),
         ),
         leading: IconButton(
-          icon:
-              const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () async {
             Navigator.pop(context);
           },
@@ -890,28 +870,18 @@ bool get canUpdate {
                 children: [
                   const SizedBox(height: 15),
                   Padding(
-                    padding:
-                        const EdgeInsets
-                            .symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 1,
                     ),
                     child: Container(
-                      width:
-                          constraints.maxWidth *
-                              0.9,
-                      decoration:
-                          BoxDecoration(
+                      width: constraints.maxWidth * 0.9,
+                      decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
+                        borderRadius: BorderRadius.circular(
                           10,
                         ),
-                        border:
-                            Border.all(
-                          color:
-                              const Color
-                                  .fromARGB(
+                        border: Border.all(
+                          color: const Color.fromARGB(
                             255,
                             202,
                             202,
@@ -920,36 +890,23 @@ bool get canUpdate {
                         ),
                       ),
                       child: Padding(
-                        padding:
-                            const EdgeInsets
-                                .all(
+                        padding: const EdgeInsets.all(
                           10,
                         ),
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Container(
-                              width:
-                                  constraints
-                                          .maxWidth *
-                                      0.9,
-                              decoration:
-                                  BoxDecoration(
-                                color:
-                                    const Color
-                                        .fromARGB(
+                              width: constraints.maxWidth * 0.9,
+                              decoration: BoxDecoration(
+                                color: const Color.fromARGB(
                                   255,
                                   2,
                                   65,
                                   96,
                                 ),
-                                border:
-                                    Border.all(
-                                  color:
-                                      const Color
-                                          .fromARGB(
+                                border: Border.all(
+                                  color: const Color.fromARGB(
                                     255,
                                     202,
                                     202,
@@ -957,24 +914,17 @@ bool get canUpdate {
                                   ),
                                 ),
                               ),
-                              child:
-                                  const Column(
+                              child: const Column(
                                 children: [
                                   SizedBox(
                                     height: 10,
                                   ),
                                   Text(
                                     "Update Recipt",
-                                    style:
-                                        TextStyle(
-                                      fontSize:
-                                          20,
-                                      fontWeight:
-                                          FontWeight
-                                              .bold,
-                                      color:
-                                          Colors
-                                              .white,
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
                                     ),
                                   ),
                                   SizedBox(
@@ -987,108 +937,71 @@ bool get canUpdate {
                               "Select Invoice",
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight
-                                        .bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: Container(
-                                padding:
-                                    const EdgeInsets
-                                        .symmetric(
-                                  horizontal:
-                                      10,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
                                 ),
-                                decoration:
-                                    BoxDecoration(
-                                  border:
-                                      Border.all(
-                                    color:
-                                        Colors
-                                            .grey,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.grey,
                                   ),
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
                                 ),
-                                child:
-                                    DropdownButton<
-                                        String>(
-                                  isExpanded:
-                                      true,
-                                  value:
-                                      safeSelectedInvoiceId,
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: safeSelectedInvoiceId,
                                   hint: Text(
                                     isOrderLoading
                                         ? 'Loading invoices...'
-                                        : orders
-                                                .isEmpty
+                                        : orders.isEmpty
                                             ? 'No invoices available'
                                             : 'Select Invoice',
-                                    style:
-                                        const TextStyle(
-                                      fontSize:
-                                          12,
+                                    style: const TextStyle(
+                                      fontSize: 12,
                                     ),
                                   ),
-                                  items:
-                                      orders.map(
+                                  items: orders.map(
                                     (
-                                      Map<String,
-                                              dynamic>
-                                          order,
+                                      Map<String, dynamic> order,
                                     ) {
-                                      return DropdownMenuItem<
-                                          String>(
-                                        value: order[
-                                                'id']
-                                            .toString(),
-                                        child:
-                                            Text(
+                                      return DropdownMenuItem<String>(
+                                        value: order['id'].toString(),
+                                        child: Text(
                                           '${order['invoice']}'
                                           ' - '
                                           '${order['customer']}',
-                                          overflow:
-                                              TextOverflow
-                                                  .ellipsis,
-                                          style:
-                                              const TextStyle(
-                                            fontSize:
-                                                12,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 12,
                                           ),
                                         ),
                                       );
                                     },
                                   ).toList(),
-                                  onChanged:
-                                      isOrderLoading ||
-                                              orders
-                                                  .isEmpty
-                                          ? null
-                                          : (
-                                              String?
-                                                  value,
-                                            ) {
-                                              setState(
-                                                () {
-                                                  selectedInvoiceId =
-                                                      value;
-                                                },
-                                              );
+                                  onChanged: isOrderLoading || orders.isEmpty
+                                      ? null
+                                      : (
+                                          String? value,
+                                        ) {
+                                          setState(
+                                            () {
+                                              selectedInvoiceId = value;
                                             },
-                                  underline:
-                                      const SizedBox(),
+                                          );
+                                        },
+                                  underline: const SizedBox(),
                                 ),
                               ),
                             ),
@@ -1103,35 +1016,23 @@ bool get canUpdate {
                             ),
                             TextField(
                               controller: amount,
-                              decoration:
-                                  InputDecoration(
-                                labelText:
-                                    'Amount',
-                                hintText: amount
-                                        .text
-                                        .isNotEmpty
+                              decoration: InputDecoration(
+                                labelText: 'Amount',
+                                hintText: amount.text.isNotEmpty
                                     ? amount.text
                                     : 'Enter your amount',
-                                labelStyle:
-                                    const TextStyle(
+                                labelStyle: const TextStyle(
                                   fontSize: 13,
                                 ),
-                                border:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
-                                  borderSide:
-                                      const BorderSide(
-                                    color:
-                                        Colors.grey,
+                                  borderSide: const BorderSide(
+                                    color: Colors.grey,
                                   ),
                                 ),
-                                contentPadding:
-                                    const EdgeInsets
-                                        .symmetric(
+                                contentPadding: const EdgeInsets.symmetric(
                                   vertical: 8,
                                 ),
                               ),
@@ -1149,25 +1050,17 @@ bool get canUpdate {
                               height: 5,
                             ),
                             Container(
-                              width:
-                                  double.infinity,
+                              width: double.infinity,
                               height: 46,
-                              padding:
-                                  const EdgeInsets
-                                      .symmetric(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
                               ),
-                              decoration:
-                                  BoxDecoration(
-                                border:
-                                    Border.all(
-                                  color:
-                                      Colors.grey,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.grey,
                                   width: 1,
                                 ),
-                                borderRadius:
-                                    BorderRadius
-                                        .circular(
+                                borderRadius: BorderRadius.circular(
                                   8,
                                 ),
                               ),
@@ -1178,12 +1071,9 @@ bool get canUpdate {
                                       '${selectedDate.day}/'
                                       '${selectedDate.month}/'
                                       '${selectedDate.year}',
-                                      style:
-                                          const TextStyle(
-                                        fontSize:
-                                            15,
-                                        color:
-                                            Color.fromARGB(
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        color: Color.fromARGB(
                                           255,
                                           116,
                                           116,
@@ -1198,10 +1088,8 @@ bool get canUpdate {
                                         context,
                                       );
                                     },
-                                    child:
-                                        const Icon(
-                                      Icons
-                                          .date_range,
+                                    child: const Icon(
+                                      Icons.date_range,
                                     ),
                                   ),
                                 ],
@@ -1220,31 +1108,21 @@ bool get canUpdate {
                               height: 5,
                             ),
                             TextField(
-                              controller:
-                                  createdby,
+                              controller: createdby,
                               readOnly: true,
-                              decoration:
-                                  InputDecoration(
-                                labelStyle:
-                                    const TextStyle(
+                              decoration: InputDecoration(
+                                labelStyle: const TextStyle(
                                   fontSize: 13,
                                 ),
-                                border:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
-                                  borderSide:
-                                      const BorderSide(
-                                    color:
-                                        Colors.grey,
+                                  borderSide: const BorderSide(
+                                    color: Colors.grey,
                                   ),
                                 ),
-                                contentPadding:
-                                    const EdgeInsets
-                                        .symmetric(
+                                contentPadding: const EdgeInsets.symmetric(
                                   vertical: 8,
                                 ),
                               ),
@@ -1262,29 +1140,21 @@ bool get canUpdate {
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: Container(
                                 height: 49,
-                                decoration:
-                                    BoxDecoration(
-                                  border:
-                                      Border.all(
-                                    color:
-                                        const Color
-                                            .fromARGB(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: const Color.fromARGB(
                                       255,
                                       206,
                                       206,
                                       206,
                                     ),
                                   ),
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
                                 ),
@@ -1294,115 +1164,74 @@ bool get canUpdate {
                                       width: 20,
                                     ),
                                     Expanded(
-                                      child:
-                                          InputDecorator(
-                                        decoration:
-                                            const InputDecoration(
-                                          border:
-                                              InputBorder
-                                                  .none,
-                                          hintText:
-                                              'Select Bank',
-                                          contentPadding:
-                                              EdgeInsets
-                                                  .symmetric(
-                                            horizontal:
-                                                1,
+                                      child: InputDecorator(
+                                        decoration: const InputDecoration(
+                                          border: InputBorder.none,
+                                          hintText: 'Select Bank',
+                                          contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 1,
                                           ),
                                         ),
-                                        child:
-                                            DropdownButtonHideUnderline(
-                                          child:
-                                              DropdownButton<
-                                                  int>(
-                                            hint:
-                                                Text(
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<int>(
+                                            hint: Text(
                                               'Select Bank',
-                                              style:
-                                                  TextStyle(
-                                                fontSize:
-                                                    12,
-                                                color:
-                                                    Colors.grey[
-                                                        600],
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
                                               ),
                                             ),
-                                            value:
-                                                safeSelectedBankId,
-                                            isExpanded:
-                                                true,
-                                            dropdownColor:
-                                                Colors.white,
-                                            icon:
-                                                const Icon(
-                                              Icons
-                                                  .arrow_drop_down,
-                                              color:
-                                                  Color.fromARGB(
+                                            value: safeSelectedBankId,
+                                            isExpanded: true,
+                                            dropdownColor: Colors.white,
+                                            icon: const Icon(
+                                              Icons.arrow_drop_down,
+                                              color: Color.fromARGB(
                                                 255,
                                                 107,
                                                 107,
                                                 107,
                                               ),
                                             ),
-                                            onChanged:
-                                                (
-                                              int?
-                                                  newValue,
+                                            onChanged: (
+                                              int? newValue,
                                             ) {
                                               setState(
                                                 () {
-                                                  selectedbankId =
-                                                      newValue;
+                                                  selectedbankId = newValue;
                                                 },
                                               );
                                             },
                                             items:
-                                                bank.map<
-                                                    DropdownMenuItem<
-                                                        int>>(
+                                                bank.map<DropdownMenuItem<int>>(
                                               (
-                                                Map<String,
-                                                        dynamic>
-                                                    bankItem,
+                                                Map<String, dynamic> bankItem,
                                               ) {
-                                                final int?
-                                                    bankId =
-                                                    bankItem['id']
-                                                            is int
-                                                        ? bankItem['id']
-                                                            as int
+                                                final int? bankId =
+                                                    bankItem['id'] is int
+                                                        ? bankItem['id'] as int
                                                         : int.tryParse(
                                                             bankItem['id']
                                                                 .toString(),
                                                           );
 
-                                                if (bankId ==
-                                                    null) {
+                                                if (bankId == null) {
                                                   return const DropdownMenuItem<
                                                       int>(
-                                                    value:
-                                                        null,
-                                                    child:
-                                                        SizedBox(),
+                                                    value: null,
+                                                    child: SizedBox(),
                                                   );
                                                 }
 
-                                                return DropdownMenuItem<
-                                                    int>(
-                                                  value:
-                                                      bankId,
-                                                  child:
-                                                      Text(
+                                                return DropdownMenuItem<int>(
+                                                  value: bankId,
+                                                  child: Text(
                                                     bankItem['name']
                                                             ?.toString() ??
                                                         '',
-                                                    style:
-                                                        const TextStyle(
-                                                      color:
-                                                          Colors.black87,
-                                                      fontSize:
-                                                          12,
+                                                    style: const TextStyle(
+                                                      color: Colors.black87,
+                                                      fontSize: 12,
                                                     ),
                                                   ),
                                                 );
@@ -1429,31 +1258,21 @@ bool get canUpdate {
                               height: 5,
                             ),
                             TextField(
-                              controller:
-                                  transactionid,
-                              decoration:
-                                  InputDecoration(
+                              controller: transactionid,
+                              decoration: InputDecoration(
                                 labelText: 'No.',
-                                labelStyle:
-                                    const TextStyle(
+                                labelStyle: const TextStyle(
                                   fontSize: 13,
                                 ),
-                                border:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
-                                  borderSide:
-                                      const BorderSide(
-                                    color:
-                                        Colors.grey,
+                                  borderSide: const BorderSide(
+                                    color: Colors.grey,
                                   ),
                                 ),
-                                contentPadding:
-                                    const EdgeInsets
-                                        .symmetric(
+                                contentPadding: const EdgeInsets.symmetric(
                                   vertical: 8,
                                 ),
                               ),
@@ -1472,30 +1291,20 @@ bool get canUpdate {
                             ),
                             TextField(
                               controller: remark,
-                              decoration:
-                                  InputDecoration(
-                                labelText:
-                                    'remark',
-                                labelStyle:
-                                    const TextStyle(
+                              decoration: InputDecoration(
+                                labelText: 'remark',
+                                labelStyle: const TextStyle(
                                   fontSize: 13,
                                 ),
-                                border:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
-                                  borderSide:
-                                      const BorderSide(
-                                    color:
-                                        Colors.grey,
+                                  borderSide: const BorderSide(
+                                    color: Colors.grey,
                                   ),
                                 ),
-                                contentPadding:
-                                    const EdgeInsets
-                                        .symmetric(
+                                contentPadding: const EdgeInsets.symmetric(
                                   vertical: 8,
                                 ),
                               ),
@@ -1504,24 +1313,17 @@ bool get canUpdate {
                               height: 15,
                             ),
                             ElevatedButton(
-                              onPressed:
-                                  canUpdate &&
-                                          !isUpdating
-                                      ? updateexpense
-                                      : null,
-                              style:
-                                  ButtonStyle(
+                              onPressed: canUpdate && !isUpdating
+                                  ? updateexpense
+                                  : null,
+                              style: ButtonStyle(
                                 backgroundColor:
-                                    MaterialStateProperty
-                                        .resolveWith<
-                                            Color>(
+                                    MaterialStateProperty.resolveWith<Color>(
                                   (
-                                    Set<MaterialState>
-                                        states,
+                                    Set<MaterialState> states,
                                   ) {
                                     if (states.contains(
-                                      MaterialState
-                                          .disabled,
+                                      MaterialState.disabled,
                                     )) {
                                       return Colors.grey;
                                     }
@@ -1529,52 +1331,39 @@ bool get canUpdate {
                                     return Colors.blue;
                                   },
                                 ),
-                                shape:
-                                    MaterialStateProperty
-                                        .all<
-                                            RoundedRectangleBorder>(
+                                shape: MaterialStateProperty.all<
+                                    RoundedRectangleBorder>(
                                   RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(
+                                    borderRadius: BorderRadius.circular(
                                       10,
                                     ),
                                   ),
                                 ),
-                                fixedSize:
-                                    MaterialStateProperty
-                                        .all<Size>(
+                                fixedSize: MaterialStateProperty.all<Size>(
                                   Size(
-                                    constraints
-                                            .maxWidth *
-                                        0.4,
+                                    constraints.maxWidth * 0.4,
                                     50,
                                   ),
                                 ),
                               ),
-                              child:
-                                  isUpdating
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child:
-                                              CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<
-                                                    Color>(
-                                              Colors.white,
-                                            ),
-                                          ),
-                                        )
-                                      : const Text(
-                                          "Submit",
-                                          style:
-                                              TextStyle(
-                                            color:
-                                                Colors.white,
-                                          ),
+                              child: isUpdating
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
                                         ),
+                                      ),
+                                    )
+                                  : const Text(
+                                      "Submit",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                             const SizedBox(
                               height: 10,

@@ -1869,6 +1869,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'COD Transfer',
                   'COD Transfer List',
                   'Add Commission Recipt',
+                  'Other Receipts List'
                 ]),
                 _buildDropdownTile(context, 'Refund', [
                   'Add Refund',
@@ -1893,6 +1894,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   [
                     'Delivery Order (DO)',
                     'Delivery Order(Printed)',
+                    'Delivery Order(Pending For Packing)',
                     'Packed For Delivery(PFD)',
                     'Out For Delivery(OFD)',
                     'Return From Delivery (RFD)',
@@ -1909,6 +1911,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'Waiting For Confirmation',
                   'DO(Delivery Order)',
                   'Printed',
+                  'Pending For Packing',
                   'PFD (Packed For Delivery)',
                   'OFD (Out For Delivery)',
                   'Return From Delivery',

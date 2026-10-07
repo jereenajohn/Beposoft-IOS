@@ -1,45 +1,80 @@
 import 'dart:convert';
+
 import 'dart:io';
+
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_company.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_department.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/order.review.dart';
+
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/HR/hr_dashboard.dart';
+
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:intl/intl.dart';
+
 import 'package:path_provider/path_provider.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 import 'package:pdf/pdf.dart';
 
 import 'package:printing/printing.dart';
+
 import 'package:pdf/widgets.dart' as pw;
+
 import 'package:excel/excel.dart';
+
 import 'package:open_filex/open_filex.dart';
 
 class OrderList2 extends StatefulWidget {
   var status;
+
   OrderList2({super.key, required this.status});
 
   @override
@@ -48,27 +83,45 @@ class OrderList2 extends StatefulWidget {
 
 class _OrderList2State extends State<OrderList2> {
   List<Map<String, dynamic>> orders = [];
+
   List<Map<String, dynamic>> filteredOrders = [];
+
   String searchQuery = '';
+
   int waitingForConfirmationCount = 0;
+
   DateTime? selectedDate; // For single date filter
+
   DateTime? startDate; // For date range filter
+
   DateTime? endDate; // For date range filter
+
   List<String> orderStatuses = [
     'All',
+
     'Invoice Created',
+
     'Invoice Approved',
+
     'Waiting For Confirmation',
+
     'Packing under progress',
+
     // 'Packing',
+
     'Ready to ship',
+
     'To Print',
+
     'Shipped',
+
     'Invoice Rejected',
+
     // Add other statuses as needed
   ];
 
   String selectedStatus = 'All'; // Default value
+
   void _filterOrdersByStatus(String status) {
     if (status == 'All') {
       setState(() {
@@ -84,6 +137,7 @@ class _OrderList2State extends State<OrderList2> {
   }
 
   drower d = drower();
+
   Widget _buildDropdownTile(
       BuildContext context, String title, List<String> options) {
     return ExpansionTile(
@@ -93,6 +147,7 @@ class _OrderList2State extends State<OrderList2> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
+
             d.navigateToSelectedPage(
                 context, option); // Navigate to selected page
           },
@@ -104,16 +159,19 @@ class _OrderList2State extends State<OrderList2> {
   @override
   void initState() {
     super.initState();
+
     fetchOrderData();
   }
 
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('department');
   }
 
@@ -126,6 +184,9 @@ class _OrderList2State extends State<OrderList2> {
 
       case 'To Print':
         return 'Delivery Order (DO)';
+
+      case 'Packing under progress':
+        return 'Printed';
 
       case 'Packed':
         return 'Packed For Delivery (PFD)';
@@ -141,10 +202,15 @@ class _OrderList2State extends State<OrderList2> {
   Future<void> fetchOrderData() async {
     try {
       final token = await getTokenFromPrefs();
+
       final dep = await getdepFromPrefs();
+
       final jwt = JWT.decode(token!);
+
       var name = jwt.payload['name'];
+
       ;
+
       String url = '$api/api/orders/${widget.status}/';
 
       List<Map<String, dynamic>> orderList = [];
@@ -159,16 +225,20 @@ class _OrderList2State extends State<OrderList2> {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
+
         final List ordersData = responseData['results'];
 
         List<Map<String, dynamic>> newOrders = [];
 
         for (var orderData in ordersData) {
           String rawOrderDate = orderData['order_date'] ?? "";
+
           String formattedOrderDate = rawOrderDate;
+
           try {
             DateTime parsedOrderDate =
                 DateFormat('yyyy-MM-dd').parse(rawOrderDate);
+
             formattedOrderDate =
                 DateFormat('yyyy-MM-dd').format(parsedOrderDate);
           } catch (e) {}
@@ -199,6 +269,7 @@ class _OrderList2State extends State<OrderList2> {
           orders = newOrders;
 
           ;
+
           filteredOrders = newOrders;
         });
       } else {
@@ -212,15 +283,19 @@ class _OrderList2State extends State<OrderList2> {
   void _filterOrders(String query) {
     setState(() {
       searchQuery = query;
+
       if (query.isEmpty) {
         filteredOrders = orders;
       } else {
         filteredOrders = orders.where((order) {
           final customerName =
               order['customer']['name']?.toString().toLowerCase() ?? '';
+
           final invoice = order['invoice']?.toString().toLowerCase() ?? '';
+
           final manageStaff =
               order['manage_staff']?.toString().toLowerCase() ?? '';
+
           final totalAmount =
               order['total_amount']?.toString().toLowerCase() ?? '';
 
@@ -234,11 +309,13 @@ class _OrderList2State extends State<OrderList2> {
   }
 
   // Method to filter orders by single date
+
   void _filterOrdersBySingleDate() {
     if (selectedDate != null) {
       setState(() {
         filteredOrders = orders.where((order) {
           final orderDate = DateTime.parse(order['order_date']);
+
           return orderDate.year == selectedDate!.year &&
               orderDate.month == selectedDate!.month &&
               orderDate.day == selectedDate!.day;
@@ -248,12 +325,15 @@ class _OrderList2State extends State<OrderList2> {
   }
 
   // Method to filter orders between two dates
+
   // Method to filter orders between two dates, inclusive of start and end dates
+
   void _filterOrdersByDateRange() {
     if (startDate != null && endDate != null) {
       setState(() {
         filteredOrders = orders.where((order) {
           final orderDate = DateTime.parse(order['order_date']);
+
           return (orderDate.isAtSameMomentAs(startDate!) ||
               orderDate.isAtSameMomentAs(endDate!) ||
               (orderDate.isAfter(startDate!) && orderDate.isBefore(endDate!)));
@@ -269,10 +349,12 @@ class _OrderList2State extends State<OrderList2> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
     );
+
     if (picked != null && picked != selectedDate) {
       setState(() {
         selectedDate = picked;
       });
+
       _filterOrdersBySingleDate();
     }
   }
@@ -286,21 +368,27 @@ class _OrderList2State extends State<OrderList2> {
           ? DateTimeRange(start: startDate!, end: endDate!)
           : null,
     );
+
     if (picked != null) {
       setState(() {
         startDate = picked.start;
+
         endDate = picked.end;
       });
+
       _filterOrdersByDateRange();
     }
   }
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('userId');
+
     await prefs.remove('token');
 
     // Use a post-frame callback to show the SnackBar after the current frame
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ScaffoldMessenger.of(context).mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -313,9 +401,11 @@ class _OrderList2State extends State<OrderList2> {
     });
 
     // Wait for the SnackBar to disappear before navigating
+
     await Future.delayed(Duration(seconds: 2));
 
     // Navigate to the HomePage after the snackbar is shown
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => login()),
@@ -324,9 +414,11 @@ class _OrderList2State extends State<OrderList2> {
 
   Future<void> exportToExcel() async {
     var excel = Excel.createExcel();
+
     Sheet sheetObject = excel['Order List'];
 
     // Add header row
+
     sheetObject.appendRow([
       'Invoice',
       'Manager',
@@ -356,8 +448,10 @@ class _OrderList2State extends State<OrderList2> {
     ]);
 
     // Populate rows with data
+
     for (var order in filteredOrders) {
       // Iterate through items to create separate rows for each item
+
       for (var item in order['items']) {
         sheetObject.appendRow([
           order['invoice'] ?? '',
@@ -390,12 +484,17 @@ class _OrderList2State extends State<OrderList2> {
     }
 
     // Save the Excel file
+
     final tempDir = await getTemporaryDirectory();
+
     final tempPath = "${tempDir.path}/order_list.xlsx";
+
     final tempFile = File(tempPath);
+
     await tempFile.writeAsBytes(await excel.encode()!);
 
     // Open the file
+
     await OpenFilex.open(tempPath);
   }
 
@@ -403,6 +502,7 @@ class _OrderList2State extends State<OrderList2> {
     final pdf = pw.Document();
 
     // Iterate through each order and add a new page for it
+
     for (var order in filteredOrders) {
       pdf.addPage(
         pw.Page(
@@ -414,6 +514,7 @@ class _OrderList2State extends State<OrderList2> {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   // Title Section
+
                   pw.Center(
                     child: pw.Text(
                       'Order Details',
@@ -423,60 +524,87 @@ class _OrderList2State extends State<OrderList2> {
                       ),
                     ),
                   ),
+
                   pw.SizedBox(height: 20),
 
                   // Invoice and Manager
+
                   pw.Text(
                     'Invoice: ${order['invoice']}',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
+
                   pw.Text('Manager: ${order['manage_staff'] ?? ''}'),
+
                   pw.SizedBox(height: 10),
 
                   // Customer Details
+
                   pw.Text(
                     'Customer Details',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
+
                   pw.Text('Name: ${order['customer']['name'] ?? ''}'),
+
                   pw.Text('Phone: ${order['customer']['phone'] ?? ''}'),
+
                   pw.Text('Email: ${order['customer']['email'] ?? ''}'),
+
                   pw.Text('Address: ${order['customer']['address'] ?? ''}'),
+
                   pw.SizedBox(height: 10),
 
                   // Billing Address
+
                   pw.Text(
                     'Billing Address',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
+
                   pw.Text('Name: ${order['billing_address']['name'] ?? ''}'),
+
                   pw.Text('Email: ${order['billing_address']['email'] ?? ''}'),
+
                   pw.Text('Phone: ${order['billing_address']['phone'] ?? ''}'),
+
                   pw.Text(
                       'Address: ${order['billing_address']['address'] ?? ''}'),
+
                   pw.Text('City: ${order['billing_address']['city'] ?? ''}'),
+
                   pw.Text('State: ${order['billing_address']['state'] ?? ''}'),
+
                   pw.Text(
                       'Zipcode: ${order['billing_address']['zipcode'] ?? ''}'),
+
                   pw.SizedBox(height: 10),
 
                   // Bank Details
+
                   pw.Text(
                     'Bank Details',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
+
                   pw.Text('Name: ${order['bank']['name'] ?? ''}'),
+
                   pw.Text(
                       'Account Number: ${order['bank']['account_number'] ?? ''}'),
+
                   pw.Text('IFSC Code: ${order['bank']['ifsc_code'] ?? ''}'),
+
                   pw.Text('Branch: ${order['bank']['branch'] ?? ''}'),
+
                   pw.SizedBox(height: 10),
 
                   // Items Table
+
                   pw.Text(
                     'Items',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
+
                   pw.Table.fromTextArray(
                     headers: ['Name', 'Quantity', 'Price', 'Tax', 'Discount'],
                     data: [
@@ -506,17 +634,22 @@ class _OrderList2State extends State<OrderList2> {
                       ),
                     ),
                   ),
+
                   pw.SizedBox(height: 10),
 
                   // Order Summary
+
                   pw.Text(
                     'Order Summary',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
+
                   pw.Text(
                     'Status: ${getDisplayStatus(order['status'])}',
                   ),
+
                   pw.Text('Total Amount: ${order['total_amount'].toString()}'),
+
                   pw.Text('Order Date: ${order['order_date'] ?? ''}'),
                 ],
               ),
@@ -531,18 +664,24 @@ class _OrderList2State extends State<OrderList2> {
 
   Future<void> downloadPdf() async {
     final pdf = await createPdf();
+
     final output = await getTemporaryDirectory();
+
     final file = File("${output.path}/order_list.pdf");
+
     await file.writeAsBytes(await pdf.save());
+
     await Printing.sharePdf(
         bytes: await pdf.save(), filename: 'order_list.pdf');
   }
 
   Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
+
     if (dep == "BDO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
@@ -553,13 +692,13 @@ class _OrderList2State extends State<OrderList2> {
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
     } else if (dep == "HR") {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => HrDashboard(),
-                  ),
-                );
-              }else if (dep == "CSO") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HrDashboard(),
+        ),
+      );
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
@@ -567,6 +706,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
@@ -574,6 +714,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 WarehouseDashboard()), // Replace AnotherPage with your target page
@@ -581,6 +722,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 ceo_dashboard()), // Replace AnotherPage with your target page
@@ -588,6 +730,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 ceo_dashboard()), // Replace AnotherPage with your target page
@@ -595,6 +738,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 cso_dashboard()), // Replace AnotherPage with your target page
@@ -602,6 +746,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "Marketing") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 marketing_dashboard()), // Replace AnotherPage with your target page
@@ -609,6 +754,7 @@ class _OrderList2State extends State<OrderList2> {
     } else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 WarehouseAdmin()), // Replace AnotherPage with your target page
@@ -626,7 +772,9 @@ class _OrderList2State extends State<OrderList2> {
     return WillPopScope(
       onWillPop: () async {
         // Trigger the navigation logic when the back swipe occurs
+
         _navigateBack();
+
         return false; // Prevent the default back navigation behavior
       },
       child: Scaffold(
@@ -637,11 +785,14 @@ class _OrderList2State extends State<OrderList2> {
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back), // Custom back arrow
+
             onPressed: () async {
               final dep = await getdepFromPrefs();
+
               if (dep == "BDO") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
@@ -653,9 +804,10 @@ class _OrderList2State extends State<OrderList2> {
                     builder: (context) => HrDashboard(),
                   ),
                 );
-              }else if (dep == "BDM") {
+              } else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
@@ -663,6 +815,7 @@ class _OrderList2State extends State<OrderList2> {
               } else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
@@ -670,6 +823,7 @@ class _OrderList2State extends State<OrderList2> {
               } else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           ceo_dashboard()), // Replace AnotherPage with your target page
@@ -677,6 +831,7 @@ class _OrderList2State extends State<OrderList2> {
               } else if (dep == "COO") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           ceo_dashboard()), // Replace AnotherPage with your target page
@@ -684,6 +839,7 @@ class _OrderList2State extends State<OrderList2> {
               } else if (dep == "CSO") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           cso_dashboard()), // Replace AnotherPage with your target page
@@ -691,6 +847,7 @@ class _OrderList2State extends State<OrderList2> {
               } else if (dep == "Marketing") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           marketing_dashboard()), // Replace AnotherPage with your target page
@@ -708,6 +865,7 @@ class _OrderList2State extends State<OrderList2> {
               } else if (dep == "Warehouse Admin") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           WarehouseAdmin()), // Replace AnotherPage with your target page
@@ -715,6 +873,7 @@ class _OrderList2State extends State<OrderList2> {
               } else {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           dashboard()), // Replace AnotherPage with your target page
@@ -725,32 +884,45 @@ class _OrderList2State extends State<OrderList2> {
           actions: [
             IconButton(
               icon: Icon(Icons.calendar_today), // Calendar icon
+
               onPressed: () => _selectSingleDate(
                   context), // Call the method to select start date
             ),
+
             // Icon button to open date range picker
+
             IconButton(
               icon: Icon(Icons.date_range), // Date range icon
+
               onPressed: () => _selectDateRange(
                   context), // Call the method to select date range
             ),
+
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert), // 3-dot icon
+
               onSelected: (value) {
                 // Handle menu item selection
+
                 switch (value) {
                   case 'Option 1':
                     exportToExcel();
+
                     break;
+
                   case 'Option 2':
                     downloadPdf();
+
                     break;
 
                   default:
+
                     // Handle default case
+
                     break;
                 }
               },
+
               itemBuilder: (BuildContext context) {
                 return [
                   PopupMenuItem<String>(
@@ -769,31 +941,57 @@ class _OrderList2State extends State<OrderList2> {
         body: Column(
           children: [
             // Padding(
+
             //   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+
             //   child: DropdownButtonFormField<String>(
+
             //     value: selectedStatus,
+
             //     decoration: InputDecoration(
+
             //       labelText: "Filter by Status",
+
             //       border: OutlineInputBorder(
+
             //           borderRadius: BorderRadius.circular(30)),
+
             //       contentPadding:
+
             //           EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+
             //     ),
+
             //     onChanged: (value) {
+
             //       setState(() {
+
             //         selectedStatus = value!;
+
             //         _filterOrdersByStatus(selectedStatus);
+
             //       });
+
             //     },
+
             //     items: orderStatuses.map((status) {
+
             //       return DropdownMenuItem<String>(
+
             //         value: status,
+
             //         child: Text(getDisplayStatus(status)),
+
             //       );
+
             //     }).toList(),
+
             //   ),
+
             // ),
+
             // Search Bar
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextField(
@@ -811,6 +1009,7 @@ class _OrderList2State extends State<OrderList2> {
                 onChanged: _filterOrders,
               ),
             ),
+
             Expanded(
               child: filteredOrders.isEmpty
                   ? Center(
@@ -831,6 +1030,7 @@ class _OrderList2State extends State<OrderList2> {
                         padding: const EdgeInsets.only(right: 10, left: 10),
                         itemBuilder: (context, index) {
                           final order = filteredOrders[index];
+
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 3.0),
                             child: GestureDetector(
@@ -853,6 +1053,7 @@ class _OrderList2State extends State<OrderList2> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Header section with Invoice and Order Date
+
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.blue,
@@ -883,7 +1084,9 @@ class _OrderList2State extends State<OrderList2> {
                                         ],
                                       ),
                                     ),
+
                                     // Order details section
+
                                     Padding(
                                       padding: const EdgeInsets.all(8.0),
                                       child: Column(
@@ -978,6 +1181,7 @@ class _OrderList2State extends State<OrderList2> {
                                                       .middle,
                                               children: [
                                                 // Header Row
+
                                                 TableRow(
                                                   decoration: BoxDecoration(
                                                       color:
@@ -1017,7 +1221,9 @@ class _OrderList2State extends State<OrderList2> {
                                                     ),
                                                   ],
                                                 ),
+
                                                 // Data Rows
+
                                                 ...(order['warehouse'] as List)
                                                     .map<TableRow>((wh) {
                                                   return TableRow(

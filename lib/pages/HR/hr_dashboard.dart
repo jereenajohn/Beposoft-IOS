@@ -1969,7 +1969,7 @@ void dispose() {
 
     return _buildCeoStyleDashboardCard(
 
-      title: "Attendance",
+      title: "Div Wise Att",
 
       value: "",
 
@@ -2161,7 +2161,7 @@ void dispose() {
 
       {
 
-        'title': 'Attendance Management',
+        'title': 'Attendance Update',
 
         'icon': Icons.fact_check_outlined,
 
@@ -2179,7 +2179,7 @@ void dispose() {
 
       {
 
-        'title': 'Staff Management',
+        'title': 'Payroll Management',
 
         'icon': Icons.groups_2_outlined,
 
@@ -4082,6 +4082,7 @@ void dispose() {
                   [
                     'Delivery Order (DO)',
                     'Delivery Order(Printed)',
+                    'Delivery Order(Pending For Packing)',
                     'Packed For Delivery(PFD)',
                     'Out For Delivery(OFD)',
                     'Return From Delivery (RFD)',
@@ -4098,6 +4099,7 @@ void dispose() {
                   'Waiting For Confirmation',
                   'DO(Delivery Order)',
                   'Printed',
+                  'Pending For Packing',
                   'PFD (Packed For Delivery)',
                   'OFD (Out For Delivery)',
                   'Return From Delivery',

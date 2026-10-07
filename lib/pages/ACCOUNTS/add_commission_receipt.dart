@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
@@ -140,63 +141,6 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
       'CEO',
       'HR',
     ].contains(department);
-  }
-
-  Future<void> AddStatusTime(
-    BuildContext scaffoldContext,
-  ) async {
-    final String? token = await gettokenFromPrefs();
-
-    try {
-      final http.Response response = await http.post(
-        Uri.parse(
-          '$api/api/datalog/create/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {
-            "Action": "Recipt added ",
-          },
-          'after_data': {
-            "Data": "$respo",
-          },
-          'order': "",
-        }),
-      );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(
-          scaffoldContext,
-        ).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text(
-              'time added Successfully.',
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          scaffoldContext,
-        ).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(
-              'Adding time failed.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint(
-        'Error adding status time: $e',
-      );
-    }
   }
 
   Map<String, String> _headers(String token) => {
@@ -662,7 +606,37 @@ class _CommissionReceiptScreenState extends State<CommissionReceiptScreen> {
         respo = response.body;
       }
 
-      await AddStatusTime(context);
+      String? selectedBankName;
+      for (final bank in banks) {
+        if (_toInt(bank['id']) == selectedBankId) {
+          selectedBankName = bank['name']?.toString();
+          break;
+        }
+      }
+
+      final bool auditCreated = await AuditLogService.logCreate(
+        action: editing
+            ? 'commission_receipt_updated'
+            : 'commission_receipt_created',
+        afterData: {
+          'receipt_id': editing
+              ? editingId
+              : (respo is Map ? _toInt(respo['id']) : null),
+          'order_id': selectedOrderId,
+          'amount': amountController.text.trim(),
+          'bank_id': selectedBankId,
+          'bank': selectedBankName,
+          'transactionID': transactionController.text.trim(),
+          'received_at': DateFormat('yyyy-MM-dd').format(receivedAt),
+          'remark': remarkController.text.trim(),
+        },
+      );
+
+      if (!auditCreated) {
+        debugPrint(
+          'Commission receipt saved successfully, but audit log creation failed.',
+        );
+      }
 
       if (!mounted) return;
 

@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
@@ -37,15 +37,12 @@ import 'package:beposoft/pages/api.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
-
 class update_bank_recipt extends StatefulWidget {
   final id;
   const update_bank_recipt({super.key, required this.id});
-
   @override
   State<update_bank_recipt> createState() => _update_bank_reciptState();
 }
-
 class _update_bank_reciptState extends State<update_bank_recipt> {
   @override
   void initState() {
@@ -55,21 +52,15 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
     getbank();
     getcustomer();
   }
-
   void initdata() async {
     final dep = await getdepFromPrefs();
-
     if (!mounted) return;
-
     setState(() {
       currentDepartment = dep?.trim().toUpperCase() ?? '';
     });
-
     await getreciptlist();
   }
-
   var url = "$api/api/add/department/";
-
   TextEditingController transactionid = TextEditingController();
   TextEditingController purposes = TextEditingController();
   TextEditingController amount = TextEditingController();
@@ -83,7 +74,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
-
   var departments;
   List<Map<String, dynamic>> fam = [];
   List<Map<String, dynamic>> bank = [];
@@ -102,19 +92,16 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
   final TextEditingController searchController = TextEditingController();
   final TextEditingController customerSearchController =
       TextEditingController();
-
   String selectedstaff = '';
   int? selectedstaffId;
   int? selectedbankId;
-
+  Map<String, dynamic> _originalReceiptData = {};
   Future<void> getcustomer() async {
     try {
       final dep = await getdepFromPrefs();
       final token = await gettokenFromPrefs();
-
       final jwt = JWT.decode(token!);
       var name = jwt.payload['name'];
-
       var response = await http.get(
         Uri.parse('$api/api/customers/'),
         headers: {
@@ -122,16 +109,12 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
           'Content-Type': 'application/json',
         },
       );
-
       ;
-
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         var productsData =
             parsed['data']; // Directly accessing 'data' since no pagination
-
         List<Map<String, dynamic>> newCustomers = [];
-
         for (var productData in productsData) {
           newCustomers.add({
             'id': productData['id'],
@@ -139,7 +122,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
             'created_at': productData['created_at'],
           });
         }
-
         // Update UI
         setState(() {
           customer = newCustomers;
@@ -151,7 +133,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       ;
     }
   }
-
   Future<void> getbank() async {
     final token = await gettokenFromPrefs();
     try {
@@ -160,11 +141,9 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
         'Authorization': 'Bearer $token',
       });
       List<Map<String, dynamic>> banklist = [];
-
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         var productsData = parsed['data'];
-
         for (var productData in productsData) {
           String imageUrl = "${productData['image']}";
           banklist.add({
@@ -179,9 +158,7 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       }
     } catch (e) {}
   }
-
   TextEditingController uname = TextEditingController();
-
   List<Map<String, dynamic>> orders = [];
   Future<void> fetchOrderData() async {
     try {
@@ -190,7 +167,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       final jwt = JWT.decode(token!);
       var name = jwt.payload['name'];
       ;
-
       String url = '$api/api/orders/';
       var response = await http.get(
         Uri.parse(url),
@@ -199,17 +175,13 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
           'Content-Type': 'application/json',
         },
       );
-
       ;
       ;
       ;
-
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         final List ordersData = responseData['results'];
-
         List<Map<String, dynamic>> newOrders = [];
-
         for (var orderData in ordersData) {
           newOrders.add({
             'id': orderData['id'],
@@ -217,7 +189,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
             'customer': orderData['customer']['name'],
           });
         }
-
         setState(() {
           orders = newOrders;
           uname.text = name;
@@ -231,38 +202,30 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       ;
     }
   }
-
   void getCurrentTime() {
     // Get current date and time
     DateTime now = DateTime.now();
-
     // Format the time (e.g., HH:mm:ss)
     String formattedTime = DateFormat('HH:mm:ss').format(now);
   }
-
   void removeProduct(int index) {
     setState(() {
       fam.removeAt(index);
     });
   }
-
   String? selectedValue;
   final TextEditingController textEditingController = TextEditingController();
-
   @override
   void dispose() {
     textEditingController.dispose();
     searchController.dispose();
     super.dispose();
   }
-
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
   }
-
   DateTime selectedDate = DateTime.now();
-
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -277,11 +240,9 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       });
     }
   }
-
   String formatDate(DateTime date) {
     return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
-
   Future<void> deletereciptlist() async {
     try {
       final token = await gettokenFromPrefs();
@@ -292,12 +253,10 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
           'Content-Type': 'application/json',
         },
       );
-
       if (response.statusCode == 200) {
       } else {}
     } catch (error) {}
   }
-
   Future<void> getreciptlist() async {
     try {
       final token = await gettokenFromPrefs();
@@ -308,10 +267,16 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
           'Content-Type': 'application/json',
         },
       );
-
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         ;
+        _originalReceiptData = {
+          'amount': parsed['amount']?.toString() ?? '',
+          'received_at': parsed['received_at']?.toString() ?? '',
+          'bank_id': parsed['bank'],
+          'transactionID': parsed['transactionID']?.toString() ?? '',
+          'remark': parsed['remark']?.toString() ?? '',
+        };
         setState(() {
           remark.text = parsed['remark'] ?? '';
           amount.text = parsed['amount'] ?? '';
@@ -320,12 +285,10 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
           selectedbankId = parsed['bank'] ?? '';
           createdby.text = parsed['created_by_name'] ?? '';
         });
-
         deletereciptlist();
       } else {}
     } catch (error) {}
   }
-
   Future<void> AddReceipt2(
     BuildContext scaffoldContext,
   ) async {
@@ -333,10 +296,8 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       final token = await gettokenFromPrefs();
       final jwt = JWT.decode(token!);
       var name = jwt.payload['name'];
-
       // Format the selectedDate as a string
       String formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
-
       final response = await http.post(Uri.parse('$api/api/advancereceipt/'),
           headers: {
             'Content-Type': 'application/json',
@@ -353,8 +314,7 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       if (response.statusCode == 200) {
         var Data = jsonDecode(response.body);
         respo = Data['data'];
-        AddStatusTime(context);
-
+        await _logReceiptCreated();
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
           SnackBar(
             backgroundColor: Colors.green,
@@ -372,42 +332,64 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       }
     } catch (e) {}
   }
-
   var respo;
-  Future<void> AddStatusTime(BuildContext scaffoldContext) async {
-    final token = await gettokenFromPrefs();
-    try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {"Action": "Recipt added "},
-          'after_data': {"Data": "$respo"},
-          'order': "",
-        }),
-      );
-
-      // print("====================${response.body}");
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('time added Successfully.'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding time failed.'),
-          ),
-        );
+  String? _bankNameById(dynamic bankId) {
+    if (bankId == null) return null;
+    for (final bankItem in bank) {
+      if (bankItem['id'].toString() == bankId.toString()) {
+        return bankItem['name']?.toString();
       }
-    } catch (e) {}
+    }
+    return null;
+  }
+
+  Future<void> _logReceiptCreated() async {
+    final bool auditCreated = await AuditLogService.logCreate(
+      action: 'receipt_created',
+      afterData: {
+        'amount': amount.text.trim(),
+        'received_at': formatDate(selectedDate),
+        'bank': _bankNameById(selectedbankId),
+        'bank_id': selectedbankId,
+        'transactionID': transactionid.text.trim(),
+        'remark': remark.text.trim(),
+        'invoice_id': selectedInvoiceId,
+        'customer_id': selectedCustomerId,
+      },
+    );
+    if (!auditCreated) {
+      debugPrint(
+        'Receipt created successfully, but audit log creation failed.',
+      );
+    }
+  }
+
+  Future<void> _logReceiptUpdated() async {
+    final dynamic oldBankId = _originalReceiptData['bank_id'];
+    final bool auditCreated = await AuditLogService.logUpdate(
+      action: 'receipt_updated',
+      beforeData: {
+        'amount': _originalReceiptData['amount'],
+        'received_at': _originalReceiptData['received_at'],
+        'bank': _bankNameById(oldBankId),
+        'bank_id': oldBankId,
+        'transactionID': _originalReceiptData['transactionID'],
+        'remark': _originalReceiptData['remark'],
+      },
+      afterData: {
+        'amount': amount.text.trim(),
+        'received_at': formatDate(selectedDate),
+        'bank': _bankNameById(selectedbankId),
+        'bank_id': selectedbankId,
+        'transactionID': transactionid.text.trim(),
+        'remark': remark.text.trim(),
+      },
+    );
+    if (!auditCreated) {
+      debugPrint(
+        'Receipt updated successfully, but audit log creation failed.',
+      );
+    }
   }
 
   Future<void> AddReceipt(
@@ -417,10 +399,8 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       final token = await gettokenFromPrefs();
       final jwt = JWT.decode(token!);
       var name = jwt.payload['name'];
-
       // Format the selectedDate as a string
       String formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
-
       final response = await http.post(
           Uri.parse('$api/api/payment/$selectedInvoiceId/reciept/'),
           headers: {
@@ -438,8 +418,7 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       if (response.statusCode == 200) {
         var Data = jsonDecode(response.body);
         respo = Data['data'];
-        AddStatusTime(context);
-
+        await _logReceiptCreated();
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
           SnackBar(
             backgroundColor: Colors.green,
@@ -456,18 +435,14 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       }
     } catch (e) {}
   }
-
   void updateexpense() async {
     final token = await gettokenFromPrefs();
-
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? username = prefs.getString('username');
-
       if (username == null) {
         return;
       }
-
       var response = await http.put(
         Uri.parse('$api/api/bankreceipt/view/${widget.id}/'),
         headers: {
@@ -481,12 +456,10 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
           "remark": remark.text,
         },
       );
-
       if (response.statusCode == 200) {
         var responseData = jsonDecode(response.body);
         respo = responseData['data'];
-        AddStatusTime(context);
-
+        await _logReceiptUpdated();
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => bank_recipt_Report()),
@@ -514,7 +487,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
       );
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -584,7 +556,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                 ),
                               ),
                               SizedBox(height: 5),
-
                               // 🔄 Invoice Dropdown
                               Text("Change Invoice",
                                   style: TextStyle(
@@ -656,7 +627,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   ),
                                 ),
                               ),
-
                               SizedBox(height: 10),
                               Text("Select Customer",
                                   style: TextStyle(
@@ -761,7 +731,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   ),
                                 ),
                               ),
-
                               Text(
                                 "Amount",
                                 style: TextStyle(
@@ -792,11 +761,9 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                 ),
                               ),
                               SizedBox(height: 5),
-
                               SizedBox(
                                 height: 5,
                               ),
-
                               Text(
                                 "Payment Date",
                                 style: TextStyle(
@@ -848,7 +815,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   ),
                                 ],
                               ),
-
                               SizedBox(
                                 height: 5,
                               ),
@@ -881,7 +847,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   ),
                                 ),
                               ),
-
                               SizedBox(
                                 height: 5,
                               ),
@@ -892,7 +857,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                               SizedBox(
                                 height: 5,
                               ),
-
                               Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: Container(
@@ -966,7 +930,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   ),
                                 ),
                               ),
-
                               Text(
                                 "Transaction ID",
                                 style: TextStyle(
@@ -994,7 +957,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                 ),
                               ),
                               SizedBox(height: 5),
-
                               Text(
                                 "Remark",
                                 style: TextStyle(
@@ -1065,7 +1027,6 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                                   style: TextStyle(color: Colors.white),
                                 ),
                               ),
-
                               // Displaying the list of departments as a table
                               SizedBox(height: 10),
                             ],
@@ -1075,7 +1036,7 @@ class _update_bank_reciptState extends State<update_bank_recipt> {
                     ),
                     SizedBox(height: 15),
                   ],
-                ),
+                ),  
               ),
             );
           },

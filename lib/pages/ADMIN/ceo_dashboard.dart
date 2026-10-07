@@ -8583,6 +8583,7 @@ _buildDashboardCard(
                     'COD Transfer',
                     'COD Transfer List',
                     'Add Commission Recipt',
+                    'Other Receipts List'
                   ]),
 
                   // ListTile(
@@ -8604,6 +8605,7 @@ _buildDashboardCard(
                   'Delivery Order (DO)',
                   // 'Delivery Order(Packing under Progress)',
                   'Delivery Order(Printed)',
+                  'Delivery Order(Pending For Packing)',
                   'Packed For Delivery(PFD)',
                   'Out For Delivery(OFD)',
                   'Delivery Order(Shipped)',
@@ -8619,6 +8621,7 @@ _buildDashboardCard(
                     'Waiting For Confirmation',
                     'DO(Delivery Order)',
                     'Printed',
+                    'Pending For Packing',
                     'PFD (Packed For Delivery)',
                      'OFD (Out For Delivery)',
                      'Return From Delivery',

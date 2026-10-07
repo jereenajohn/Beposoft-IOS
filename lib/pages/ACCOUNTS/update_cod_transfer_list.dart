@@ -1,19 +1,35 @@
 import 'dart:convert';
 
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/cod_transfer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/cod_transfer_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/internal_tranfer.dart';
+
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:intl/intl.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UpdateCodTransferList extends StatefulWidget {
@@ -25,33 +41,32 @@ class UpdateCodTransferList extends StatefulWidget {
   });
 
   @override
-  State<UpdateCodTransferList> createState() =>
-      _UpdateCodTransferListState();
+  State<UpdateCodTransferList> createState() => _UpdateCodTransferListState();
 }
 
-class _UpdateCodTransferListState
-    extends State<UpdateCodTransferList> {
+class _UpdateCodTransferListState extends State<UpdateCodTransferList> {
   List<Map<String, dynamic>> bank = [];
+
   List<Map<String, dynamic>> salesReportList = [];
+
   List<Map<String, dynamic>> allSalesReportList = [];
 
   int totalReceipts = 0;
+
   double totalAmount = 0.0;
 
-  final TextEditingController uname =
-      TextEditingController();
+  final TextEditingController uname = TextEditingController();
 
-  final TextEditingController amount =
-      TextEditingController();
+  final TextEditingController amount = TextEditingController();
 
-  final TextEditingController transactionid =
-      TextEditingController();
+  final TextEditingController transactionid = TextEditingController();
 
-  final TextEditingController Remark =
-      TextEditingController();
+  final TextEditingController Remark = TextEditingController();
 
   String? selectedInvoiceId;
+
   String? selectedBankId;
+
   String? selectedrecieverId;
 
   DateTime selectedDate = DateTime.now();
@@ -82,100 +97,36 @@ class _UpdateCodTransferListState
   }
 
   Future<void> loadDepartment() async {
-    final String? department =
-        await getdepFromPrefs();
+    final String? department = await getdepFromPrefs();
 
     if (!mounted) return;
 
     setState(() {
-      currentDepartment =
-          department?.trim().toUpperCase() ?? '';
+      currentDepartment = department?.trim().toUpperCase() ?? '';
     });
   }
 
-bool get canUpdate {
-  final String department =
-      currentDepartment.trim().toUpperCase();
+  bool get canUpdate {
+    final String department = currentDepartment.trim().toUpperCase();
 
-  return [
-    'ADMIN',
-    'COO',
-    'CEO',
-    'HR',
-  ].contains(department);
-}
+    return [
+      'ADMIN',
+      'COO',
+      'CEO',
+      'HR',
+    ].contains(department);
+  }
 
   Future<String?> getTokenFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     return prefs.getString('token');
   }
 
   Future<String?> gettokenFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     return prefs.getString('token');
-  }
-
-  Future<void> AddStatusTime(
-    BuildContext scaffoldContext,
-  ) async {
-    final String? token =
-        await gettokenFromPrefs();
-
-    try {
-      final http.Response response =
-          await http.post(
-        Uri.parse(
-          '$api/api/datalog/create/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {
-            "Action": "Recipt added ",
-          },
-          'after_data': {
-            "Data": "$respo",
-          },
-          'order': "",
-        }),
-      );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(
-          scaffoldContext,
-        ).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text(
-              'time added Successfully.',
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          scaffoldContext,
-        ).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(
-              'Adding time failed.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint(
-        'Error adding status time: $e',
-      );
-    }
   }
 
   Future<void> updatebanktransfer() async {
@@ -183,8 +134,7 @@ bool get canUpdate {
       return;
     }
 
-    if (selectedBankId == null ||
-        selectedBankId!.isEmpty) {
+    if (selectedBankId == null || selectedBankId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.red,
@@ -197,8 +147,7 @@ bool get canUpdate {
       return;
     }
 
-    if (selectedrecieverId == null ||
-        selectedrecieverId!.isEmpty) {
+    if (selectedrecieverId == null || selectedrecieverId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.red,
@@ -218,8 +167,7 @@ bool get canUpdate {
     });
 
     try {
-      final String? token =
-          await getTokenFromPrefs();
+      final String? token = await getTokenFromPrefs();
 
       if (token == null || token.isEmpty) {
         throw Exception(
@@ -227,8 +175,7 @@ bool get canUpdate {
         );
       }
 
-      final http.Response response =
-          await http.put(
+      final http.Response response = await http.put(
         Uri.parse(
           '$api/api/cod/transfers/${widget.id}/',
         ),
@@ -239,13 +186,10 @@ bool get canUpdate {
         body: jsonEncode({
           "amount": amount.text,
           "transactionID": transactionid.text,
-          "sender_bank":
-              int.tryParse(selectedBankId ?? '0'),
-          "receiver_bank":
-              int.tryParse(selectedrecieverId ?? '0'),
+          "sender_bank": int.tryParse(selectedBankId ?? '0'),
+          "receiver_bank": int.tryParse(selectedrecieverId ?? '0'),
           "description": Remark.text,
-          "created_at":
-              selectedDate.toIso8601String(),
+          "created_at": selectedDate.toIso8601String(),
         }),
       );
 
@@ -253,12 +197,10 @@ bool get canUpdate {
 
       if (response.statusCode == 200) {
         try {
-          final dynamic responseData =
-              jsonDecode(response.body);
+          final dynamic responseData = jsonDecode(response.body);
 
           if (responseData is Map<String, dynamic>) {
-            respo = responseData['data'] ??
-                responseData;
+            respo = responseData['data'] ?? responseData;
           } else {
             respo = responseData;
           }
@@ -266,7 +208,24 @@ bool get canUpdate {
           respo = response.body;
         }
 
-        await AddStatusTime(context);
+        final bool auditCreated = await AuditLogService.logCreate(
+          action: 'cod_transfer_updated',
+          afterData: {
+            'transfer_id': widget.id,
+            'amount': amount.text.trim(),
+            'transactionID': transactionid.text.trim(),
+            'sender_bank': int.tryParse(selectedBankId ?? '0'),
+            'receiver_bank': int.tryParse(selectedrecieverId ?? '0'),
+            'description': Remark.text.trim(),
+            'created_at': selectedDate.toIso8601String(),
+          },
+        );
+
+        if (!auditCreated) {
+          debugPrint(
+            'COD transfer updated successfully, but audit log creation failed.',
+          );
+        }
 
         if (!mounted) return;
 
@@ -282,8 +241,7 @@ bool get canUpdate {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (BuildContext context) =>
-                cod_transfer_list(),
+            builder: (BuildContext context) => cod_transfer_list(),
           ),
         );
       } else {
@@ -321,12 +279,10 @@ bool get canUpdate {
   }
 
   Future<void> getbank() async {
-    final String? token =
-        await getTokenFromPrefs();
+    final String? token = await getTokenFromPrefs();
 
     try {
-      final http.Response response =
-          await http.get(
+      final http.Response response = await http.get(
         Uri.parse('$api/api/banks/'),
         headers: {
           'Content-Type': 'application/json',
@@ -334,18 +290,14 @@ bool get canUpdate {
         },
       );
 
-      final List<Map<String, dynamic>>
-          banklist = [];
+      final List<Map<String, dynamic>> banklist = [];
 
       if (response.statusCode == 200) {
-        final dynamic parsed =
-            jsonDecode(response.body);
+        final dynamic parsed = jsonDecode(response.body);
 
-        final dynamic productsData =
-            parsed['data'];
+        final dynamic productsData = parsed['data'];
 
-        for (final dynamic productData
-            in productsData) {
+        for (final dynamic productData in productsData) {
           banklist.add({
             'id': productData['id'],
             'name': productData['name'],
@@ -368,23 +320,21 @@ bool get canUpdate {
 
   void _updateTotals() {
     int tempTotalReceipts = 0;
+
     double tempTotalAmount = 0.0;
 
-    for (final Map<String, dynamic> reportData
-        in salesReportList) {
+    for (final Map<String, dynamic> reportData in salesReportList) {
       tempTotalReceipts++;
 
-      final dynamic rawAmount =
-          reportData['amount'];
+      final dynamic rawAmount = reportData['amount'];
 
       if (rawAmount is num) {
         tempTotalAmount += rawAmount.toDouble();
       } else {
-        tempTotalAmount +=
-            double.tryParse(
-                  rawAmount?.toString() ?? '0',
-                ) ??
-                0.0;
+        tempTotalAmount += double.tryParse(
+              rawAmount?.toString() ?? '0',
+            ) ??
+            0.0;
       }
     }
 
@@ -392,6 +342,7 @@ bool get canUpdate {
 
     setState(() {
       totalReceipts = tempTotalReceipts;
+
       totalAmount = tempTotalAmount;
     });
   }
@@ -399,15 +350,13 @@ bool get canUpdate {
   String formatCreatedAtDate(
     Map<String, dynamic> reportData,
   ) {
-    final dynamic rawDate =
-        reportData['created_at'];
+    final dynamic rawDate = reportData['created_at'];
 
     if (rawDate == null) {
       return '';
     }
 
-    final DateTime? parsedDate =
-        DateTime.tryParse(
+    final DateTime? parsedDate = DateTime.tryParse(
       rawDate.toString(),
     );
 
@@ -422,11 +371,9 @@ bool get canUpdate {
 
   Future<void> getreciptReport() async {
     try {
-      final String? token =
-          await getTokenFromPrefs();
+      final String? token = await getTokenFromPrefs();
 
-      final http.Response response =
-          await http.get(
+      final http.Response response = await http.get(
         Uri.parse(
           '$api/api/cod/transfers/',
         ),
@@ -437,77 +384,52 @@ bool get canUpdate {
       );
 
       if (response.statusCode == 200) {
-        final dynamic parsed =
-            jsonDecode(response.body);
+        final dynamic parsed = jsonDecode(response.body);
 
-        final List<Map<String, dynamic>>
-            reciptList = [];
+        final List<Map<String, dynamic>> reciptList = [];
 
         if (parsed is List) {
-          for (final dynamic reportData
-              in parsed) {
+          for (final dynamic reportData in parsed) {
             if (reportData is! Map) {
               continue;
             }
 
             reciptList.add({
               'id': reportData['id'],
-              'transactionID':
-                  reportData['transactionID'] ?? '',
+              'transactionID': reportData['transactionID'] ?? '',
               'amount': double.tryParse(
                     reportData['amount'].toString(),
                   ) ??
                   0.0,
               'bank': reportData['bank'],
-              'receiver_bank_name':
-                  reportData[
-                      'receiver_bank_name'],
-              'sender_bank_name':
-                  reportData['sender_bank_name'],
-              'receiver_bank':
-                  reportData['receiver_bank'],
-              'created_by_name':
-                  reportData['created_by_name'] ??
-                      '',
-              'remark':
-                  reportData['remark'] ?? '',
-              'created_at':
-                  reportData['created_at'],
+              'receiver_bank_name': reportData['receiver_bank_name'],
+              'sender_bank_name': reportData['sender_bank_name'],
+              'receiver_bank': reportData['receiver_bank'],
+              'created_by_name': reportData['created_by_name'] ?? '',
+              'remark': reportData['remark'] ?? '',
+              'created_at': reportData['created_at'],
             });
 
             if (reportData['id'] == widget.id) {
               if (!mounted) return;
 
               setState(() {
-                amount.text =
-                    reportData['amount'].toString();
+                amount.text = reportData['amount'].toString();
 
-                transactionid.text =
-                    reportData['transactionID'] ??
-                        '';
+                transactionid.text = reportData['transactionID'] ?? '';
 
-                selectedBankId =
-                    reportData['sender_bank']
-                        ?.toString();
+                selectedBankId = reportData['sender_bank']?.toString();
 
-                selectedrecieverId =
-                    reportData['receiver_bank']
-                        ?.toString();
+                selectedrecieverId = reportData['receiver_bank']?.toString();
 
-                Remark.text =
-                    reportData['description'] ?? '';
+                Remark.text = reportData['description'] ?? '';
 
-                uname.text =
-                    reportData['created_by_name'] ??
-                        '';
+                uname.text = reportData['created_by_name'] ?? '';
 
-                selectedDate =
-                    DateTime.tryParse(
-                          reportData['created_at']
-                                  ?.toString() ??
-                              '',
-                        ) ??
-                        DateTime.now();
+                selectedDate = DateTime.tryParse(
+                      reportData['created_at']?.toString() ?? '',
+                    ) ??
+                    DateTime.now();
               });
             }
           }
@@ -518,8 +440,7 @@ bool get canUpdate {
         setState(() {
           allSalesReportList = reciptList;
 
-          salesReportList =
-              List<Map<String, dynamic>>.from(
+          salesReportList = List<Map<String, dynamic>>.from(
             allSalesReportList,
           );
         });
@@ -556,22 +477,19 @@ bool get canUpdate {
   }
 
   Future<String?> getdepFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     return prefs.getString('department');
   }
 
   Future<String?> getusername() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     return prefs.getString('username');
   }
 
   Future<void> _navigateBack() async {
-    final String? dep =
-        await getdepFromPrefs();
+    final String? dep = await getdepFromPrefs();
 
     if (!mounted) return;
 
@@ -579,64 +497,56 @@ bool get canUpdate {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              bdo_dashbord(),
+          builder: (BuildContext context) => bdo_dashbord(),
         ),
       );
     } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              ceo_dashboard(),
+          builder: (BuildContext context) => ceo_dashboard(),
         ),
       );
     } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              cso_dashboard(),
+          builder: (BuildContext context) => cso_dashboard(),
         ),
       );
     } else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              bdm_dashbord(),
+          builder: (BuildContext context) => bdm_dashbord(),
         ),
       );
     } else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              WarehouseDashboard(),
+          builder: (BuildContext context) => WarehouseDashboard(),
         ),
       );
     } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              ceo_dashboard(),
+          builder: (BuildContext context) => ceo_dashboard(),
         ),
       );
     } else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              WarehouseAdmin(),
+          builder: (BuildContext context) => WarehouseAdmin(),
         ),
       );
     } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (BuildContext context) =>
-              dashboard(),
+          builder: (BuildContext context) => dashboard(),
         ),
       );
     }
@@ -663,8 +573,7 @@ bool get canUpdate {
 
     final bool exists = bank.any(
       (Map<String, dynamic> bankItem) {
-        return bankItem['id'].toString() ==
-            selectedBankId;
+        return bankItem['id'].toString() == selectedBankId;
       },
     );
 
@@ -678,21 +587,21 @@ bool get canUpdate {
 
     final bool exists = bank.any(
       (Map<String, dynamic> bankItem) {
-        return bankItem['id'].toString() ==
-            selectedrecieverId;
+        return bankItem['id'].toString() == selectedrecieverId;
       },
     );
 
-    return exists
-        ? selectedrecieverId
-        : null;
+    return exists ? selectedrecieverId : null;
   }
 
   @override
   void dispose() {
     uname.dispose();
+
     amount.dispose();
+
     transactionid.dispose();
+
     Remark.dispose();
 
     super.dispose();
@@ -703,11 +612,11 @@ bool get canUpdate {
     return WillPopScope(
       onWillPop: () async {
         await _navigateBack();
+
         return false;
       },
       child: Scaffold(
-        backgroundColor:
-            const Color.fromARGB(
+        backgroundColor: const Color.fromARGB(
           242,
           255,
           255,
@@ -722,8 +631,7 @@ bool get canUpdate {
             ),
           ),
           leading: IconButton(
-            icon:
-                const Icon(Icons.arrow_back),
+            icon: const Icon(Icons.arrow_back),
             onPressed: _navigateBack,
           ),
           actions: [
@@ -737,8 +645,7 @@ bool get canUpdate {
         ),
         body: SingleChildScrollView(
           child: Padding(
-            padding:
-                const EdgeInsets.only(
+            padding: const EdgeInsets.only(
               bottom: 55,
             ),
             child: Container(
@@ -748,27 +655,22 @@ bool get canUpdate {
                     height: 15,
                   ),
                   Padding(
-                    padding:
-                        const EdgeInsets.only(
+                    padding: const EdgeInsets.only(
                       right: 10,
                       top: 10,
                       left: 10,
                     ),
                     child: Container(
                       width: 600,
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            const Color.fromARGB(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(
                           255,
                           34,
                           165,
                           246,
                         ),
-                        border:
-                            Border.all(
-                          color:
-                              const Color.fromARGB(
+                        border: Border.all(
+                          color: const Color.fromARGB(
                             255,
                             202,
                             202,
@@ -783,13 +685,10 @@ bool get canUpdate {
                           ),
                           Text(
                             "COD Transfer Update",
-                            style:
-                                TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
-                              fontWeight:
-                                  FontWeight.bold,
-                              color:
-                                  Colors.white,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                           SizedBox(
@@ -800,26 +699,20 @@ bool get canUpdate {
                     ),
                   ),
                   Padding(
-                    padding:
-                        const EdgeInsets.only(
+                    padding: const EdgeInsets.only(
                       top: 25,
                       left: 15,
                       right: 15,
                     ),
                     child: Container(
                       width: 700,
-                      decoration:
-                          BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
+                        borderRadius: BorderRadius.circular(
                           10,
                         ),
-                        border:
-                            Border.all(
-                          color:
-                              const Color.fromARGB(
+                        border: Border.all(
+                          color: const Color.fromARGB(
                             255,
                             202,
                             202,
@@ -828,14 +721,11 @@ bool get canUpdate {
                         ),
                       ),
                       child: Padding(
-                        padding:
-                            const EdgeInsets.only(
+                        padding: const EdgeInsets.only(
                           left: 10,
                         ),
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(
                               height: 10,
@@ -845,50 +735,34 @@ bool get canUpdate {
                             ),
                             const Text(
                               "Amount",
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: TextField(
-                                controller:
-                                    amount,
-                                decoration:
-                                    InputDecoration(
-                                  labelText:
-                                      'Amount',
-                                  labelStyle:
-                                      const TextStyle(
-                                    fontSize:
-                                        12,
+                                controller: amount,
+                                decoration: InputDecoration(
+                                  labelText: 'Amount',
+                                  labelStyle: const TextStyle(
+                                    fontSize: 12,
                                   ),
-                                  border:
-                                      OutlineInputBorder(
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
                                       10,
                                     ),
-                                    borderSide:
-                                        const BorderSide(
-                                      color:
-                                          Colors.grey,
+                                    borderSide: const BorderSide(
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                  contentPadding:
-                                      const EdgeInsets
-                                          .symmetric(
+                                  contentPadding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
                                 ),
@@ -899,94 +773,62 @@ bool get canUpdate {
                             ),
                             const Text(
                               "Sending Bank",
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: Container(
-                                padding:
-                                    const EdgeInsets
-                                        .symmetric(
-                                  horizontal:
-                                      10,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
                                 ),
-                                decoration:
-                                    BoxDecoration(
-                                  border:
-                                      Border.all(
-                                    color:
-                                        Colors.grey,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.grey,
                                   ),
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
                                 ),
-                                child:
-                                    DropdownButton<
-                                        String>(
-                                  isExpanded:
-                                      true,
-                                  value:
-                                      safeSelectedBankId,
-                                  hint:
-                                      const Text(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: safeSelectedBankId,
+                                  hint: const Text(
                                     'Select Bank',
-                                    style:
-                                        TextStyle(
-                                      fontSize:
-                                          12,
+                                    style: TextStyle(
+                                      fontSize: 12,
                                     ),
                                   ),
-                                  items:
-                                      bank.map(
+                                  items: bank.map(
                                     (
-                                      Map<String,
-                                              dynamic>
-                                          bankItem,
+                                      Map<String, dynamic> bankItem,
                                     ) {
-                                      return DropdownMenuItem<
-                                          String>(
-                                        value: bankItem[
-                                                'id']
-                                            .toString(),
-                                        child:
-                                            Text(
+                                      return DropdownMenuItem<String>(
+                                        value: bankItem['id'].toString(),
+                                        child: Text(
                                           '${bankItem['name']}',
-                                          style:
-                                              const TextStyle(
-                                            fontSize:
-                                                12,
+                                          style: const TextStyle(
+                                            fontSize: 12,
                                           ),
                                         ),
                                       );
                                     },
                                   ).toList(),
-                                  onChanged:
-                                      (String?
-                                          value) {
+                                  onChanged: (String? value) {
                                     setState(
                                       () {
-                                        selectedBankId =
-                                            value;
+                                        selectedBankId = value;
                                       },
                                     );
                                   },
-                                  underline:
-                                      const SizedBox(),
+                                  underline: const SizedBox(),
                                 ),
                               ),
                             ),
@@ -995,94 +837,62 @@ bool get canUpdate {
                             ),
                             const Text(
                               "Reciever Bank",
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: Container(
-                                padding:
-                                    const EdgeInsets
-                                        .symmetric(
-                                  horizontal:
-                                      10,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
                                 ),
-                                decoration:
-                                    BoxDecoration(
-                                  border:
-                                      Border.all(
-                                    color:
-                                        Colors.grey,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.grey,
                                   ),
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
+                                  borderRadius: BorderRadius.circular(
                                     10,
                                   ),
                                 ),
-                                child:
-                                    DropdownButton<
-                                        String>(
-                                  isExpanded:
-                                      true,
-                                  value:
-                                      safeSelectedReceiverBankId,
-                                  hint:
-                                      const Text(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: safeSelectedReceiverBankId,
+                                  hint: const Text(
                                     'Select Bank',
-                                    style:
-                                        TextStyle(
-                                      fontSize:
-                                          12,
+                                    style: TextStyle(
+                                      fontSize: 12,
                                     ),
                                   ),
-                                  items:
-                                      bank.map(
+                                  items: bank.map(
                                     (
-                                      Map<String,
-                                              dynamic>
-                                          bankItem,
+                                      Map<String, dynamic> bankItem,
                                     ) {
-                                      return DropdownMenuItem<
-                                          String>(
-                                        value: bankItem[
-                                                'id']
-                                            .toString(),
-                                        child:
-                                            Text(
+                                      return DropdownMenuItem<String>(
+                                        value: bankItem['id'].toString(),
+                                        child: Text(
                                           '${bankItem['name']}',
-                                          style:
-                                              const TextStyle(
-                                            fontSize:
-                                                12,
+                                          style: const TextStyle(
+                                            fontSize: 12,
                                           ),
                                         ),
                                       );
                                     },
                                   ).toList(),
-                                  onChanged:
-                                      (String?
-                                          value) {
+                                  onChanged: (String? value) {
                                     setState(
                                       () {
-                                        selectedrecieverId =
-                                            value;
+                                        selectedrecieverId = value;
                                       },
                                     );
                                   },
-                                  underline:
-                                      const SizedBox(),
+                                  underline: const SizedBox(),
                                 ),
                               ),
                             ),
@@ -1091,50 +901,34 @@ bool get canUpdate {
                             ),
                             const Text(
                               "Remark",
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: TextField(
-                                controller:
-                                    Remark,
-                                decoration:
-                                    InputDecoration(
-                                  labelText:
-                                      'Remark',
-                                  labelStyle:
-                                      const TextStyle(
-                                    fontSize:
-                                        12,
+                                controller: Remark,
+                                decoration: InputDecoration(
+                                  labelText: 'Remark',
+                                  labelStyle: const TextStyle(
+                                    fontSize: 12,
                                   ),
-                                  border:
-                                      OutlineInputBorder(
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
                                       10,
                                     ),
-                                    borderSide:
-                                        const BorderSide(
-                                      color:
-                                          Colors.grey,
+                                    borderSide: const BorderSide(
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                  contentPadding:
-                                      const EdgeInsets
-                                          .symmetric(
+                                  contentPadding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
                                 ),
@@ -1145,94 +939,65 @@ bool get canUpdate {
                             ),
                             const Text(
                               "Date",
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
-                              child:
-                                  GestureDetector(
-                                onTap:
-                                    () async {
-                                  final DateTime?
-                                      pickedDate =
+                              child: GestureDetector(
+                                onTap: () async {
+                                  final DateTime? pickedDate =
                                       await showDatePicker(
-                                    context:
-                                        context,
-                                    initialDate:
-                                        selectedDate,
-                                    firstDate:
-                                        DateTime(
+                                    context: context,
+                                    initialDate: selectedDate,
+                                    firstDate: DateTime(
                                       2000,
                                     ),
-                                    lastDate:
-                                        DateTime(
+                                    lastDate: DateTime(
                                       2100,
                                     ),
                                   );
 
                                   if (!mounted) return;
 
-                                  if (pickedDate !=
-                                      null) {
+                                  if (pickedDate != null) {
                                     setState(
                                       () {
-                                        selectedDate =
-                                            pickedDate;
+                                        selectedDate = pickedDate;
                                       },
                                     );
                                   }
                                 },
-                                child:
-                                    AbsorbPointer(
-                                  child:
-                                      TextField(
-                                    readOnly:
-                                        true,
-                                    decoration:
-                                        InputDecoration(
-                                      labelText:
-                                          'Date',
-                                      labelStyle:
-                                          const TextStyle(
-                                        fontSize:
-                                            12,
+                                child: AbsorbPointer(
+                                  child: TextField(
+                                    readOnly: true,
+                                    decoration: InputDecoration(
+                                      labelText: 'Date',
+                                      labelStyle: const TextStyle(
+                                        fontSize: 12,
                                       ),
-                                      border:
-                                          OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius
-                                                .circular(
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
                                           10,
                                         ),
-                                        borderSide:
-                                            const BorderSide(
-                                          color:
-                                              Colors.grey,
+                                        borderSide: const BorderSide(
+                                          color: Colors.grey,
                                         ),
                                       ),
                                       contentPadding:
-                                          const EdgeInsets
-                                              .symmetric(
-                                        vertical:
-                                            8,
+                                          const EdgeInsets.symmetric(
+                                        vertical: 8,
                                       ),
                                     ),
-                                    controller:
-                                        TextEditingController(
-                                      text:
-                                          DateFormat(
+                                    controller: TextEditingController(
+                                      text: DateFormat(
                                         'yyyy-MM-dd',
                                       ).format(
                                         selectedDate,
@@ -1247,54 +1012,37 @@ bool get canUpdate {
                             ),
                             const Text(
                               "Name",
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(
                               height: 5,
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets
-                                      .only(
+                              padding: const EdgeInsets.only(
                                 right: 10,
                               ),
                               child: TextField(
-                                controller:
-                                    TextEditingController(
-                                  text:
-                                      uname.text,
+                                controller: TextEditingController(
+                                  text: uname.text,
                                 ),
                                 readOnly: true,
-                                decoration:
-                                    InputDecoration(
-                                  labelText:
-                                      'Name',
-                                  labelStyle:
-                                      const TextStyle(
-                                    fontSize:
-                                        12,
+                                decoration: InputDecoration(
+                                  labelText: 'Name',
+                                  labelStyle: const TextStyle(
+                                    fontSize: 12,
                                   ),
-                                  border:
-                                      OutlineInputBorder(
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
                                       10,
                                     ),
-                                    borderSide:
-                                        const BorderSide(
-                                      color:
-                                          Colors.grey,
+                                    borderSide: const BorderSide(
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                  contentPadding:
-                                      const EdgeInsets
-                                          .symmetric(
+                                  contentPadding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
                                 ),
@@ -1304,43 +1052,30 @@ bool get canUpdate {
                               height: 10,
                             ),
                             Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment
-                                      .center,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 const SizedBox(
                                   width: 20,
                                 ),
                                 SizedBox(
                                   width: 270,
-                                  child:
-                                      ElevatedButton(
-                                    onPressed:
-                                        canUpdate &&
-                                                !isUpdating
-                                            ? updatebanktransfer
-                                            : null,
-                                    style:
-                                        ButtonStyle(
-                                      backgroundColor:
-                                          MaterialStateProperty
-                                              .resolveWith<
-                                                  Color>(
+                                  child: ElevatedButton(
+                                    onPressed: canUpdate && !isUpdating
+                                        ? updatebanktransfer
+                                        : null,
+                                    style: ButtonStyle(
+                                      backgroundColor: MaterialStateProperty
+                                          .resolveWith<Color>(
                                         (
-                                          Set<MaterialState>
-                                              states,
+                                          Set<MaterialState> states,
                                         ) {
-                                          if (states
-                                              .contains(
-                                            MaterialState
-                                                .disabled,
+                                          if (states.contains(
+                                            MaterialState.disabled,
                                           )) {
-                                            return Colors
-                                                .grey;
+                                            return Colors.grey;
                                           }
 
-                                          return const Color
-                                              .fromARGB(
+                                          return const Color.fromARGB(
                                             255,
                                             64,
                                             176,
@@ -1348,55 +1083,40 @@ bool get canUpdate {
                                           );
                                         },
                                       ),
-                                      shape:
-                                          MaterialStateProperty
-                                              .all<
-                                                  RoundedRectangleBorder>(
+                                      shape: MaterialStateProperty.all<
+                                          RoundedRectangleBorder>(
                                         RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius
-                                                  .circular(
+                                          borderRadius: BorderRadius.circular(
                                             10,
                                           ),
                                         ),
                                       ),
                                       fixedSize:
-                                          MaterialStateProperty
-                                              .all<
-                                                  Size>(
+                                          MaterialStateProperty.all<Size>(
                                         const Size(
                                           95,
                                           15,
                                         ),
                                       ),
                                     ),
-                                    child:
-                                        isUpdating
-                                            ? const SizedBox(
-                                                width:
-                                                    18,
-                                                height:
-                                                    18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth:
-                                                      2,
-                                                  valueColor:
-                                                      AlwaysStoppedAnimation<
-                                                          Color>(
-                                                    Colors
-                                                        .white,
-                                                  ),
-                                                ),
-                                              )
-                                            : const Text(
-                                                "Submit",
-                                                style:
-                                                    TextStyle(
-                                                  color:
-                                                      Colors.white,
-                                                ),
+                                    child: isUpdating
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
                                               ),
+                                            ),
+                                          )
+                                        : const Text(
+                                            "Submit",
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                   ),
                                 ),
                               ],

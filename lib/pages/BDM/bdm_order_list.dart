@@ -1,44 +1,80 @@
 import 'dart:async';
+
 import 'dart:convert';
+
 import 'dart:io';
+
 import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
+
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_company.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_department.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/order.review.dart';
+
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:intl/intl.dart';
+
 import 'package:path_provider/path_provider.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 import 'package:pdf/pdf.dart';
+
 import 'package:printing/printing.dart';
+
 import 'package:pdf/widgets.dart' as pw;
+
 import 'package:excel/excel.dart' as ex;
+
 import 'package:open_filex/open_filex.dart';
 
 class bdm_OrderList extends StatefulWidget {
   var status;
+
   bdm_OrderList({super.key, required this.status});
 
   @override
@@ -47,31 +83,47 @@ class bdm_OrderList extends StatefulWidget {
 
 class _bdm_OrderListState extends State<bdm_OrderList> {
   List<Map<String, dynamic>> orders = [];
+
   List<Map<String, dynamic>> filteredOrders = [];
+
   List<String> staffList = [];
+
   List<Map<String, dynamic>> sta = [];
+
   String searchQuery = '';
+
   String selectedStatus = '';
+
   String selectedStaff = '';
+
   List<Map<String, dynamic>> fam = [];
 
   DateTime? selectedDate;
+
   DateTime? startDate;
+
   DateTime? endDate;
 
   int currentPage = 1;
+
   int totalCount = 0;
+
   String? nextPageUrl;
+
   String? previousPageUrl;
 
   int invoiceCreatedCount = 0;
+
   int invoiceApprovedCount = 0;
 
   bool isLoading = true;
+
   bool isLoadingMore = false;
 
   final ScrollController _scrollController = ScrollController();
+
   final TextEditingController searchController = TextEditingController();
+
   Timer? _debounce;
 
   drower d = drower();
@@ -80,6 +132,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
     'Invoice Created',
     'Invoice Approved',
     'Packing under progress',
+    'Pending For Packing',
     'Packed',
     'Ready to ship',
     'Return From Delivery',
@@ -98,6 +151,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
+
             d.navigateToSelectedPage3(context, option);
           },
         );
@@ -108,15 +162,20 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
   @override
   void initState() {
     super.initState();
+
     initdata();
+
     _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+
     _scrollController.dispose();
+
     searchController.dispose();
+
     super.dispose();
   }
 
@@ -126,54 +185,61 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
     });
 
     await getfamily();
+
     await getprofiledata();
+
     await getstaff();
+
     await fetchOrderData(reset: true);
   }
 
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('department');
   }
 
- String getDisplayStatus(dynamic rawStatus) {
-  final String status = (rawStatus ?? '').toString().trim();
+  String getDisplayStatus(dynamic rawStatus) {
+    final String status = (rawStatus ?? '').toString().trim();
 
-  switch (status) {
-    case 'Invoice Created':
-      return 'Waiting For Approval';
+    switch (status) {
+      case 'Invoice Created':
+        return 'Waiting For Approval';
 
-    case 'To Print':
-      return 'Delivery Order (DO)';
+      case 'To Print':
+        return 'Delivery Order (DO)';
 
-    case 'Packing under progress':
-      return 'Printed';
+      case 'Packing under progress':
+        return 'Printed';
 
-    case 'Packed':
-      return 'Packed For Delivery (PFD)';
+      case 'Packed':
+        return 'Packed For Delivery (PFD)';
 
-    case 'Ready to ship':
-      return 'Out For Delivery (OFD)';
+      case 'Ready to ship':
+        return 'Out For Delivery (OFD)';
 
-    case 'Return From Delivery':
-      return 'Return From Delivery';
+      case 'Return From Delivery':
+        return 'Return From Delivery';
 
-    default:
-      return status;
+      default:
+        return status;
+    }
   }
-}
 
   var family = '';
+
   String familyName = '';
 
   Future<void> getstaff() async {
     try {
       final token = await getTokenFromPrefs();
+
       if (token == null) return;
 
       var response = await http.get(
@@ -185,10 +251,12 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
       );
 
       List<Map<String, dynamic>> stafflist = [];
+
       List<String> staffNames = [];
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
 
         for (var productData in productsData) {
@@ -221,6 +289,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
         setState(() {
           sta = stafflist;
+
           staffList = staffNames;
         });
       }
@@ -241,6 +310,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
 
         setState(() {
@@ -271,7 +341,9 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
+
         List<Map<String, dynamic>> familylist = [];
 
         for (var productData in productsData) {
@@ -305,18 +377,25 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
       if (token == null) {
         setState(() {
           isLoading = false;
+
           isLoadingMore = false;
         });
+
         return;
       }
 
       if (reset) {
         setState(() {
           isLoading = true;
+
           currentPage = 1;
+
           orders = [];
+
           filteredOrders = [];
+
           nextPageUrl = null;
+
           previousPageUrl = null;
         });
       } else {
@@ -348,13 +427,16 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
       if (selectedDate != null) {
         final singleDate = DateFormat('yyyy-MM-dd').format(selectedDate!);
+
         queryParams['start_date'] = singleDate;
+
         queryParams['end_date'] = singleDate;
       } else {
         if (startDate != null) {
           queryParams['start_date'] =
               DateFormat('yyyy-MM-dd').format(startDate!);
         }
+
         if (endDate != null) {
           queryParams['end_date'] = DateFormat('yyyy-MM-dd').format(endDate!);
         }
@@ -375,7 +457,9 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
         final parsed = jsonDecode(response.body);
 
         final int count = parsed['count'] ?? 0;
+
         final String? next = parsed['next'];
+
         final String? previous = parsed['previous'];
 
         final Map<String, dynamic> wrapper =
@@ -384,6 +468,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                 : {};
 
         final int createdCount = wrapper['invoice_created_count'] ?? 0;
+
         final int approvedCount = wrapper['invoice_approved_count'] ?? 0;
 
         final List<dynamic> resultsList =
@@ -393,26 +478,32 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
         for (var orderData in resultsList) {
           String rawOrderDate = orderData['order_date']?.toString() ?? "";
+
           String formattedOrderDate = rawOrderDate;
+
           try {
             DateTime parsedOrderDate =
                 DateFormat('yyyy-MM-dd').parse(rawOrderDate);
+
             formattedOrderDate =
                 DateFormat('yyyy-MM-dd').format(parsedOrderDate);
           } catch (e) {}
 
           Map<String, dynamic> customerMap = {};
+
           if (orderData['customer'] is Map) {
             customerMap = Map<String, dynamic>.from(orderData['customer']);
           }
 
           Map<String, dynamic> billingMap = {};
+
           if (orderData['billing_address'] is Map) {
             billingMap =
                 Map<String, dynamic>.from(orderData['billing_address']);
           }
 
           List<Map<String, dynamic>> warehouseList = [];
+
           if (orderData['warehouse'] is List) {
             warehouseList = List<Map<String, dynamic>>.from(
               (orderData['warehouse'] as List).map(
@@ -470,31 +561,40 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
         setState(() {
           totalCount = count;
+
           nextPageUrl = next;
+
           previousPageUrl = previous;
+
           invoiceCreatedCount = createdCount;
+
           invoiceApprovedCount = approvedCount;
 
           if (reset) {
             orders = newOrders;
+
             filteredOrders = newOrders;
           } else {
             orders.addAll(newOrders);
+
             filteredOrders = List<Map<String, dynamic>>.from(orders);
           }
 
           isLoading = false;
+
           isLoadingMore = false;
         });
       } else {
         setState(() {
           isLoading = false;
+
           isLoadingMore = false;
         });
       }
     } catch (error) {
       setState(() {
         isLoading = false;
+
         isLoadingMore = false;
       });
     }
@@ -502,18 +602,23 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
   Future<void> loadNextPage() async {
     if (nextPageUrl == null || isLoadingMore) return;
+
     currentPage += 1;
+
     await fetchOrderData(reset: false);
   }
 
   Future<void> applyFilters() async {
     currentPage = 1;
+
     await fetchOrderData(reset: true);
   }
 
   void _filterOrders(String query) {
     searchQuery = query;
+
     _debounce?.cancel();
+
     _debounce = Timer(const Duration(milliseconds: 500), () async {
       await applyFilters();
     });
@@ -521,12 +626,15 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
   Future<void> _filterOrdersBySingleDate() async {
     startDate = null;
+
     endDate = null;
+
     await applyFilters();
   }
 
   Future<void> _filterOrdersByDateRange() async {
     selectedDate = null;
+
     await applyFilters();
   }
 
@@ -537,12 +645,16 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
     );
+
     if (picked != null) {
       setState(() {
         selectedDate = picked;
+
         startDate = null;
+
         endDate = null;
       });
+
       await _filterOrdersBySingleDate();
     }
   }
@@ -556,33 +668,47 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
           ? DateTimeRange(start: startDate!, end: endDate!)
           : null,
     );
+
     if (picked != null) {
       setState(() {
         selectedDate = null;
+
         startDate = picked.start;
+
         endDate = picked.end;
       });
+
       await _filterOrdersByDateRange();
     }
   }
 
   Future<void> clearAllFilters() async {
     searchController.clear();
+
     setState(() {
       searchQuery = '';
+
       selectedStatus = '';
+
       selectedStaff = '';
+
       selectedDate = null;
+
       startDate = null;
+
       endDate = null;
+
       currentPage = 1;
     });
+
     await fetchOrderData(reset: true);
   }
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('userId');
+
     await prefs.remove('token');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -606,6 +732,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
   Future<void> exportToExcel() async {
     var excel = ex.Excel.createExcel();
+
     ex.Sheet sheetObject = excel['Order List'];
 
     sheetObject.appendRow([
@@ -715,9 +842,13 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
     }
 
     final tempDir = await getTemporaryDirectory();
+
     final tempPath = "${tempDir.path}/order_list.xlsx";
+
     final tempFile = File(tempPath);
+
     await tempFile.writeAsBytes(excel.encode()!);
+
     await OpenFilex.open(tempPath);
   }
 
@@ -837,15 +968,20 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
 
   Future<void> downloadPdf() async {
     final pdf = await createPdf();
+
     final output = await getTemporaryDirectory();
+
     final file = File("${output.path}/order_list.pdf");
+
     await file.writeAsBytes(await pdf.save());
+
     await Printing.sharePdf(
         bytes: await pdf.save(), filename: 'order_list.pdf');
   }
 
   Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
+
     if (dep == "BDO") {
       Navigator.pushReplacement(
         context,
@@ -906,7 +1042,9 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                       icon: const Icon(Icons.close),
                       onPressed: () async {
                         searchController.clear();
+
                         searchQuery = '';
+
                         await applyFilters();
                       },
                     )
@@ -944,6 +1082,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                     setState(() {
                       selectedStatus = value ?? '';
                     });
+
                     await applyFilters();
                   },
                 ),
@@ -976,6 +1115,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                     setState(() {
                       selectedStaff = value ?? '';
                     });
+
                     await applyFilters();
                   },
                 ),
@@ -1243,6 +1383,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                       },
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
+
                         return Container(
                           height: 250,
                           color: Colors.white,
@@ -1478,6 +1619,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                           children: paymentImages.map<Widget>((img) {
                             final String imagePath =
                                 img['image']?.toString() ?? '';
+
                             final String imageUrl = imagePath.startsWith('http')
                                 ? imagePath
                                 : '$api$imagePath';
@@ -1511,6 +1653,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;
+
                                       return Center(
                                         child: _shimmerBox(
                                           height: 58,
@@ -1715,6 +1858,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
           }
 
           final order = filteredOrders[index];
+
           return buildOrderCard(order);
         },
       ),
@@ -1726,6 +1870,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
     return WillPopScope(
       onWillPop: () async {
         _navigateBack();
+
         return false;
       },
       child: Scaffold(
@@ -1738,6 +1883,7 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
               final dep = await getdepFromPrefs();
+
               if (dep == "BDO") {
                 Navigator.pushReplacement(
                   context,
@@ -1793,10 +1939,14 @@ class _bdm_OrderListState extends State<bdm_OrderList> {
                 switch (value) {
                   case 'Option 1':
                     exportToExcel();
+
                     break;
+
                   case 'Option 2':
                     downloadPdf();
+
                     break;
+
                   default:
                     break;
                 }

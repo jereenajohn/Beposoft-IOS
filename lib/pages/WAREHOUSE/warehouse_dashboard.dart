@@ -82,6 +82,7 @@ class _WarehouseDashboardState extends State<WarehouseDashboard>
 static const List<String> warehouseDashboardStatuses = [
   'To Print',
   'Packing under progress',
+  'Pending For Packing',
   'Packed',
   'Ready to ship',
   'Return From Delivery',
@@ -1200,6 +1201,15 @@ static const List<String> warehouseDashboardStatuses = [
             status: 'Packing under progress',
             todayCount: todayCountMap['Packing under progress'] ?? 0,
             allCount: allCountMap['Packing under progress'] ?? 0,
+            isVerySmallPhone: isVerySmallPhone,
+          ),
+        );
+
+        dashboardCards.add(
+          _buildTodayStatusCard(
+            status: 'Pending For Packing (PFP)',
+            todayCount: todayCountMap['Pending For Packing'] ?? 0,
+            allCount: allCountMap['Pending For Packing'] ?? 0,
             isVerySmallPhone: isVerySmallPhone,
           ),
         );

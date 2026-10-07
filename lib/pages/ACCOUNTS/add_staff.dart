@@ -17,6 +17,7 @@ import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:beposoft/pages/api.dart';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -841,14 +842,8 @@ class _add_staffState extends State<add_staff> {
   Future<bool> createStaffAuditLog({
     required String createdStaffId,
   }) async {
-    final token = await gettokenFromPrefs();
-
-    if (token == null || token.isEmpty) {
-      debugPrint('STAFF CREATE AUDIT LOG SKIPPED: AUTH TOKEN MISSING');
-      return false;
-    }
-
     final int? parsedStaffId = int.tryParse(createdStaffId);
+
     if (parsedStaffId == null) {
       debugPrint(
         'STAFF CREATE AUDIT LOG SKIPPED: INVALID STAFF ID $createdStaffId',
@@ -856,38 +851,18 @@ class _add_staffState extends State<add_staff> {
       return false;
     }
 
-    final Map<String, dynamic> auditBody = <String, dynamic>{
-      'staff': parsedStaffId,
-      'before_data': <String, dynamic>{
-        'action': 'Staff Created',
-      },
-      'after_data': _buildStaffCreatedAuditData(),
-    };
+    final Map<String, dynamic> afterData = _buildStaffCreatedAuditData();
 
-    try {
-      debugPrint('========== CREATE STAFF AUDIT LOG ==========');
-      debugPrint('URL: $api/api/datalog/create/');
-      debugPrint('REQUEST: ${jsonEncode(auditBody)}');
+    // AuditLogService adds the action and collects the shared audit context:
+    // device ID/name, platform, app version, public IP, GPS coordinates,
+    // accuracy, capture time and reverse-geocoded location details.
+    afterData.remove('action');
 
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(auditBody),
-      );
-
-      debugPrint('STATUS CODE: ${response.statusCode}');
-      debugPrint('RESPONSE: ${response.body}');
-      debugPrint('============================================');
-
-      return response.statusCode >= 200 && response.statusCode < 300;
-    } catch (e, stackTrace) {
-      debugPrint('CREATE STAFF AUDIT LOG ERROR: $e');
-      debugPrint('CREATE STAFF AUDIT LOG STACKTRACE: $stackTrace');
-      return false;
-    }
+    return AuditLogService.logCreate(
+      action: 'Staff Created',
+      staffId: parsedStaffId,
+      afterData: afterData,
+    );
   }
 
   Future<String?> RegisterUserData(

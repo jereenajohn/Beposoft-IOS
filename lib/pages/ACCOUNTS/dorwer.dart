@@ -15,6 +15,7 @@ import 'package:beposoft/pages/ACCOUNTS/cso_sales_report_summary.dart';
 import 'package:beposoft/pages/ACCOUNTS/cso_staff.dart';
 import 'package:beposoft/pages/ACCOUNTS/dailyproductcategorywisecyclingskating.dart';
 import 'package:beposoft/pages/ACCOUNTS/ordercomparison_report.dart';
+import 'package:beposoft/pages/ACCOUNTS/other_receipts.dart';
 import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_all_team_members.dart';
@@ -412,7 +413,12 @@ class drower {
                   )),
         );
         break;
-
+        case 'Other Receipts List':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => OtherReceiptListPage()),
+        );
+        break;
 
 
       case 'COD Transfer List':
@@ -479,6 +485,18 @@ class drower {
                   )),
         );
         break;
+
+           case 'Delivery Order(Pending For Packing)':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => WarehouseOrderView(
+                    status: 'Pending For Packing',
+                  )),
+        );
+        break;
+
+        
       case 'Packed For Delivery(PFD)':
         Navigator.push(
           context,
@@ -581,6 +599,15 @@ class drower {
           MaterialPageRoute(
               builder: (context) => OrderList2(
                     status: 'Packing under progress',
+                  )),
+        );
+        break;
+        case 'Pending For Packing':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => OrderList2(
+                    status: 'Pending For Packing',
                   )),
         );
         break;

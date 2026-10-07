@@ -556,6 +556,7 @@ String getStatusDisplayName(dynamic status) {
  final List<String> statuses = [
   'To Print',
   'Packing under progress',
+  'Pending For Packing',
   'Packed',
   'Ready to ship',
   'Return From Delivery',
@@ -573,7 +574,13 @@ List<String> getAvailableOrderStatuses() {
       ];
 
     case 'Packing under progress':
-      // Printed -> PFD
+      // Printed -> Pending For Packing
+      return [
+        'Pending For Packing',
+      ];
+
+    case 'Pending For Packing':
+      // Pending For Packing -> PFD
       return [
         'Packed',
       ];

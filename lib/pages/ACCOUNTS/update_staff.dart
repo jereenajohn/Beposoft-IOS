@@ -22,6 +22,7 @@ import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:beposoft/audit/audit_new_service.dart';
 class Staff_Update extends StatefulWidget {
   final dynamic id;
 
@@ -2711,56 +2712,37 @@ class _Staff_UpdateState extends State<Staff_Update> {
     required Map<String, dynamic> afterData,
     bool filesChanged = false,
   }) async {
-    final token = await gettokenFromPrefs();
-    if (token == null || token.isEmpty) return false;
-
     final int? updatedStaffId = int.tryParse(
       (afterData['id'] ?? widget.id).toString(),
     );
 
     if (updatedStaffId == null) {
-      debugPrint('STAFF UPDATE AUDIT LOG SKIPPED: invalid staff id.');
+      debugPrint(
+        'STAFF UPDATE AUDIT LOG SKIPPED: invalid staff id.',
+      );
       return false;
     }
 
-    // IMPORTANT: This intentionally mirrors the React page exactly.
-    // React logs the complete selected field set, not only changed fields.
     final Map<String, dynamic> reactBefore =
         _buildReactBeforeLogData(beforeData);
     final Map<String, dynamic> reactAfter =
         _buildReactAfterLogData(afterData);
 
-    debugPrint('========== REACT-STYLE STAFF AUDIT LOG ==========');
-    debugPrint('STAFF: $updatedStaffId');
-    debugPrint('BEFORE: ${jsonEncode(reactBefore)}');
-    debugPrint('AFTER : ${jsonEncode(reactAfter)}');
-    debugPrint('=================================================');
+    // AuditLogService injects the action into both before_data and
+    // after_data and collects device/IP/GPS/location metadata.
+    reactBefore.remove('action');
+    reactAfter.remove('action');
 
-    try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'staff': updatedStaffId,
-          'before_data': reactBefore,
-          'after_data': reactAfter,
-        }),
-      );
-
-      debugPrint('========== STAFF UPDATE AUDIT RESPONSE ==========');
-      debugPrint('STATUS CODE: ${response.statusCode}');
-      debugPrint('RESPONSE: ${response.body}');
-      debugPrint('=================================================');
-
-      return response.statusCode >= 200 && response.statusCode < 300;
-    } catch (e, stackTrace) {
-      debugPrint('STAFF UPDATE AUDIT LOG ERROR: $e');
-      debugPrint('STAFF UPDATE AUDIT LOG STACKTRACE: $stackTrace');
-      return false;
+    if (filesChanged) {
+      reactAfter['files_changed'] = true;
     }
+
+    return AuditLogService.logUpdate(
+      action: 'Staff Updated',
+      staffId: updatedStaffId,
+      beforeData: reactBefore,
+      afterData: reactAfter,
+    );
   }
 
   Future<bool> registerUserData(BuildContext scaffoldContext) async {

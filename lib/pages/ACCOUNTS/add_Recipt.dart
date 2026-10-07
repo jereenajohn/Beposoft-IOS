@@ -1,20 +1,36 @@
 import 'dart:convert';
 
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+
 import 'package:beposoft/pages/HR/hr_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:intl/intl.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:beposoft/pages/api.dart';
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 class add_receipt extends StatefulWidget {
@@ -36,6 +52,7 @@ class _add_receiptState extends State<add_receipt> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
+
             d.navigateToSelectedPage(context, option);
           },
         );
@@ -44,27 +61,35 @@ class _add_receiptState extends State<add_receipt> {
   }
 
   TextEditingController uname = TextEditingController();
+
   TextEditingController amount = TextEditingController();
+
   TextEditingController transactionid = TextEditingController();
+
   TextEditingController Remark = TextEditingController();
 
   List<Map<String, dynamic>> bank = [];
+
   List<Map<String, dynamic>> orders = [];
+
   List<Map<String, dynamic>> customer = [];
 
   DateTime selectedDate = DateTime.now();
 
   String? selectedInvoiceId;
+
   String? selectedInvoiceLabel;
 
   String? selectedBankId;
 
   String? selectedCustomerId;
+
   String? selectedCustomerName;
 
   var respo;
 
   String? selectedReceiptType;
+
   final List<String> receiptTypes = [
     'Order Receipt',
     'Advance receipt',
@@ -72,40 +97,50 @@ class _add_receiptState extends State<add_receipt> {
   ];
 
   bool isLoadingOrders = false;
+
   bool isLoadingCustomers = false;
 
   @override
   void initState() {
     super.initState();
+
     fetchOrderData();
+
     getbank();
+
     getcustomer();
   }
 
   Future<String?> gettoken() async {
     SharedPreferences pref = await SharedPreferences.getInstance();
+
     return pref.getString('token');
   }
 
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('department');
   }
 
   Future<String?> getusername() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('username');
   }
 
   Future<void> getcustomer() async {
     try {
       final token = await getTokenFromPrefs();
+
       final jwt = JWT.decode(token!);
+
       var name = jwt.payload['name'];
 
       var response = await http.get(
@@ -118,6 +153,7 @@ class _add_receiptState extends State<add_receipt> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         List productsData = parsed['results'] ?? [];
 
         List<Map<String, dynamic>> newCustomers = [];
@@ -132,13 +168,13 @@ class _add_receiptState extends State<add_receipt> {
 
         setState(() {
           customer = newCustomers;
+
           uname.text = name;
         });
       } else {
         throw Exception("Failed to load customer data");
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   Future<List<Map<String, dynamic>>> searchCustomers(String query) async {
@@ -155,6 +191,7 @@ class _add_receiptState extends State<add_receipt> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         List results = parsed['results'] ?? [];
 
         return results.map<Map<String, dynamic>>((cust) {
@@ -167,8 +204,7 @@ class _add_receiptState extends State<add_receipt> {
           };
         }).toList();
       }
-    } catch (e) {
-    }
+    } catch (e) {}
 
     return [];
   }
@@ -176,10 +212,13 @@ class _add_receiptState extends State<add_receipt> {
   Future<void> fetchOrderData() async {
     try {
       final token = await getTokenFromPrefs();
+
       final jwt = JWT.decode(token!);
+
       var name = jwt.payload['name'];
 
       String url = '$api/api/orders/';
+
       var response = await http.get(
         Uri.parse(url),
         headers: {
@@ -187,8 +226,6 @@ class _add_receiptState extends State<add_receipt> {
           'Content-Type': 'application/json',
         },
       );
-
-   
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
@@ -210,14 +247,13 @@ class _add_receiptState extends State<add_receipt> {
 
         setState(() {
           orders = newOrders;
+
           uname.text = name;
         });
-
       } else {
         throw Exception("Failed to load order data");
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   Future<List<Map<String, dynamic>>> searchOrders(String query) async {
@@ -232,10 +268,9 @@ class _add_receiptState extends State<add_receipt> {
         },
       );
 
-    
-
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         List results = parsed['results']?['results'] ?? [];
 
         return results.map<Map<String, dynamic>>((order) {
@@ -249,14 +284,14 @@ class _add_receiptState extends State<add_receipt> {
           };
         }).toList();
       }
-    } catch (e) {
-    }
+    } catch (e) {}
 
     return [];
   }
 
   Future<void> getbank() async {
     final token = await gettoken();
+
     try {
       final response = await http.get(
         Uri.parse('$api/api/banks/'),
@@ -270,6 +305,7 @@ class _add_receiptState extends State<add_receipt> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
 
         for (var productData in productsData) {
@@ -284,49 +320,49 @@ class _add_receiptState extends State<add_receipt> {
           bank = banklist;
         });
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> AddStatusTime(BuildContext scaffoldContext) async {
-    final token = await getTokenFromPrefs();
     try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+      final int? orderId =
+          selectedInvoiceId != null ? int.tryParse(selectedInvoiceId!) : null;
+
+      final bool auditCreated = await AuditLogService.logCreate(
+        action: 'Receipt Added',
+        orderId: orderId,
+        afterData: <String, dynamic>{
+          'receipt_type': selectedReceiptType,
+          'receipt_data': respo,
+          'invoice_id': selectedInvoiceId,
+          'invoice': selectedInvoiceLabel,
+          'customer_id': selectedCustomerId,
+          'customer': selectedCustomerName,
+          'bank_id': selectedBankId,
+          'amount': amount.text.trim(),
+          'transaction_id': transactionid.text.trim(),
+          'received_at': DateFormat('yyyy-MM-dd').format(selectedDate),
+          'remark': Remark.text.trim(),
         },
-        body: jsonEncode({
-          'before_data': {"Action": "Recipt added "},
-          'after_data': {"Data": "$respo"},
-          'order': "",
-        }),
       );
 
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('time added Successfully.'),
-          ),
-        );
+      if (auditCreated) {
+        debugPrint('RECEIPT AUDIT LOG CREATED SUCCESSFULLY.');
       } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding time failed.'),
-          ),
-        );
+        debugPrint('RECEIPT AUDIT LOG CREATION FAILED.');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('RECEIPT AUDIT LOG ERROR: $e');
+      debugPrint(stackTrace.toString());
     }
   }
 
   Future<void> AddReceipt(BuildContext scaffoldContext) async {
     try {
       final token = await getTokenFromPrefs();
+
       final jwt = JWT.decode(token!);
+
       var name = jwt.payload['name'];
 
       String formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
@@ -349,7 +385,9 @@ class _add_receiptState extends State<add_receipt> {
 
       if (response.statusCode == 200) {
         var Data = jsonDecode(response.body);
+
         respo = Data['data'];
+
         AddStatusTime(scaffoldContext);
 
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
@@ -371,8 +409,7 @@ class _add_receiptState extends State<add_receipt> {
           ),
         );
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> AddReceipt2(BuildContext scaffoldContext) async {
@@ -399,7 +436,9 @@ class _add_receiptState extends State<add_receipt> {
 
       if (response.statusCode == 200) {
         var Data = jsonDecode(response.body);
+
         respo = Data['data'];
+
         AddStatusTime(scaffoldContext);
 
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
@@ -421,8 +460,7 @@ class _add_receiptState extends State<add_receipt> {
           ),
         );
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> AddReceipt3(BuildContext scaffoldContext) async {
@@ -448,7 +486,9 @@ class _add_receiptState extends State<add_receipt> {
 
       if (response.statusCode == 200) {
         var Data = jsonDecode(response.body);
+
         respo = Data['data'];
+
         AddStatusTime(scaffoldContext);
 
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
@@ -470,13 +510,14 @@ class _add_receiptState extends State<add_receipt> {
           ),
         );
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('userId');
+
     await prefs.remove('token');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -500,6 +541,7 @@ class _add_receiptState extends State<add_receipt> {
 
   Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
+
     if (dep == "BDO") {
       Navigator.pushReplacement(
         context,
@@ -515,7 +557,7 @@ class _add_receiptState extends State<add_receipt> {
         context,
         MaterialPageRoute(builder: (context) => WarehouseDashboard()),
       );
-    }  else if (dep == "HR") {
+    } else if (dep == "HR") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -532,14 +574,12 @@ class _add_receiptState extends State<add_receipt> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    } 
-
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }else if (dep == "Warehouse Admin") {
+    } else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => WarehouseAdmin()),
@@ -554,7 +594,9 @@ class _add_receiptState extends State<add_receipt> {
 
   Future<void> _openCustomerSearch() async {
     final TextEditingController searchController = TextEditingController();
+
     List<Map<String, dynamic>> results = List.from(customer);
+
     bool loading = false;
 
     await showModalBottomSheet(
@@ -573,6 +615,7 @@ class _add_receiptState extends State<add_receipt> {
 
               setSheetState(() {
                 results = data;
+
                 loading = false;
               });
             }
@@ -616,6 +659,7 @@ class _add_receiptState extends State<add_receipt> {
                                   itemCount: results.length,
                                   itemBuilder: (context, index) {
                                     final cust = results[index];
+
                                     return ListTile(
                                       title: Text(cust['name'] ?? ''),
                                       subtitle: Text(
@@ -625,8 +669,10 @@ class _add_receiptState extends State<add_receipt> {
                                         setState(() {
                                           selectedCustomerId =
                                               cust['id'].toString();
+
                                           selectedCustomerName = cust['name'];
                                         });
+
                                         Navigator.pop(sheetContext);
                                       },
                                     );
@@ -645,7 +691,9 @@ class _add_receiptState extends State<add_receipt> {
 
   Future<void> _openInvoiceSearch() async {
     final TextEditingController searchController = TextEditingController();
+
     List<Map<String, dynamic>> results = List.from(orders);
+
     bool loading = false;
 
     await showModalBottomSheet(
@@ -659,8 +707,10 @@ class _add_receiptState extends State<add_receipt> {
               if (value.trim().isEmpty) {
                 setSheetState(() {
                   results = List.from(orders);
+
                   loading = false;
                 });
+
                 return;
               }
 
@@ -672,6 +722,7 @@ class _add_receiptState extends State<add_receipt> {
 
               setSheetState(() {
                 results = data;
+
                 loading = false;
               });
             }
@@ -715,6 +766,7 @@ class _add_receiptState extends State<add_receipt> {
                                   itemCount: results.length,
                                   itemBuilder: (context, index) {
                                     final order = results[index];
+
                                     return ListTile(
                                       title: Text(order['invoice'] ?? ''),
                                       subtitle: Text(order['customer'] ?? ''),
@@ -726,9 +778,11 @@ class _add_receiptState extends State<add_receipt> {
                                         setState(() {
                                           selectedInvoiceId =
                                               order['id'].toString();
+
                                           selectedInvoiceLabel =
                                               '${order['invoice']} - ${order['customer']}';
                                         });
+
                                         Navigator.pop(sheetContext);
                                       },
                                     );
@@ -783,6 +837,7 @@ class _add_receiptState extends State<add_receipt> {
     return WillPopScope(
       onWillPop: () async {
         _navigateBack();
+
         return false;
       },
       child: Scaffold(
@@ -796,19 +851,20 @@ class _add_receiptState extends State<add_receipt> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
               final dep = await getdepFromPrefs();
+
               if (dep == "BDO") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => bdo_dashbord()),
                 );
-              }  else if (dep == "HR") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HrDashboard(),
-        ),
-      );
-    } else if (dep == "BDM") {
+              } else if (dep == "HR") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HrDashboard(),
+                  ),
+                );
+              } else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => bdm_dashbord()),
@@ -828,14 +884,12 @@ class _add_receiptState extends State<add_receipt> {
                   context,
                   MaterialPageRoute(builder: (context) => ceo_dashboard()),
                 );
-              } 
-    
-    else if (dep == "CSO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => cso_dashboard()),
-      );
-    }else if (dep == "Warehouse Admin") {
+              } else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => cso_dashboard()),
+                );
+              } else if (dep == "Warehouse Admin") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => WarehouseAdmin()),
@@ -940,9 +994,13 @@ class _add_receiptState extends State<add_receipt> {
                                 onChanged: (value) {
                                   setState(() {
                                     selectedReceiptType = value;
+
                                     selectedInvoiceId = null;
+
                                     selectedInvoiceLabel = null;
+
                                     selectedCustomerId = null;
+
                                     selectedCustomerName = null;
                                   });
                                 },
@@ -1123,6 +1181,7 @@ class _add_receiptState extends State<add_receipt> {
                                   firstDate: DateTime(2000),
                                   lastDate: DateTime(2100),
                                 );
+
                                 if (pickedDate != null) {
                                   setState(() {
                                     selectedDate = pickedDate;
@@ -1200,8 +1259,10 @@ class _add_receiptState extends State<add_receipt> {
                                                 Text('Please select invoice'),
                                           ),
                                         );
+
                                         return;
                                       }
+
                                       AddReceipt(context);
                                     } else if (selectedReceiptType ==
                                         'Advance receipt') {
@@ -1214,8 +1275,10 @@ class _add_receiptState extends State<add_receipt> {
                                                 Text('Please select customer'),
                                           ),
                                         );
+
                                         return;
                                       }
+
                                       AddReceipt2(context);
                                     } else if (selectedReceiptType ==
                                         'other Receipt') {

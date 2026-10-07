@@ -131,6 +131,7 @@ class _OrderReviewState extends State<OrderReview> {
     'Waiting For Confirmation',
     'To Print',
     'Packing under progress',
+    'Pending For Packing',
     'Packed',
     'Ready to ship',
     'Return From Delivery',
@@ -205,6 +206,7 @@ class _OrderReviewState extends State<OrderReview> {
     'Waiting For Confirmation',
     'To Print',
     'Packing under progress',
+    'Pending For Packing',
     'Packed',
     'Ready to ship',
     'Return From Delivery',
@@ -241,6 +243,11 @@ class _OrderReviewState extends State<OrderReview> {
     ],
     'Packing under progress': [
       'Packing under progress',
+      'Pending For Packing',
+      'Invoice Rejected',
+    ],
+    'Pending For Packing': [
+      'Pending For Packing',
       'Packed',
       'Invoice Rejected',
     ],
