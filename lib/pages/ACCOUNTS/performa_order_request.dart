@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'dart:async';
 
 import 'package:beposoft/loginpage.dart';
@@ -137,8 +138,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
       orElse: () => <String, dynamic>{'name': ''},
     );
 
-    loggedInFamilyName =
-        loggedInFamily['name']?.toString() ?? '';
+    loggedInFamilyName = loggedInFamily['name']?.toString() ?? '';
 
     if (canChooseStaffAndFamily) {
       await getstaff();
@@ -203,58 +203,35 @@ class _Performa_order_requestState extends State<Performa_order_request> {
     } catch (error) {}
   }
 
+  List<dynamic> _auditCartProducts = <dynamic>[];
+
   Future<void> createlog({
     required BuildContext scaffoldContext,
     required dynamic createdProformaData,
     required dynamic createdProformaId,
+    required Map<String, dynamic> submittedData,
+    required dynamic productDetails,
   }) async {
-    final String? token = await gettokenFromPrefs();
-
-    if (token == null || token.trim().isEmpty) {
-      debugPrint(
-        'Unable to create proforma log: authentication token not found.',
-      );
-      return;
-    }
-
     try {
-      final http.Response response = await http.post(
-        Uri.parse(
-          '$api/api/datalog/create/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+      final logged = await AuditLogService.logCreate(
+        action: 'proforma_created',
+        afterData: <String, dynamic>{
+          'proforma_id': createdProformaId,
+          'submitted_data': submittedData,
+          'product_details': productDetails,
+          'response_data': createdProformaData,
+          'metadata': <String, dynamic>{
+            'source': 'Performa_order_request',
+            'method': 'POST',
+            'endpoint': '/api/perfoma/invoice/create/',
+            'http_status': 201,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
         },
-        body: jsonEncode({
-          'before_data': {
-            'Action': 'Proforma created',
-          },
-          'after_data': {
-            'Data': createdProformaData,
-          },
-          'order': '',
-        }),
       );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 ||
-          response.statusCode == 201) {
-        debugPrint(
-          'Proforma creation log added successfully. '
-          'Proforma ID: $createdProformaId',
-        );
-      } else {
-        debugPrint(
-          'Proforma creation log failed: '
-          '${response.statusCode} - ${response.body}',
-        );
-      }
+      if (!logged) debugPrint('Proforma creation audit failed.');
     } catch (error) {
-      debugPrint(
-        'Error creating proforma log: $error',
-      );
+      debugPrint('Proforma creation audit error: ${error.runtimeType}');
     }
   }
 
@@ -264,24 +241,27 @@ class _Performa_order_requestState extends State<Performa_order_request> {
     try {
       warehouse = await getwarehouseFromPrefs();
       final token = await gettokenFromPrefs();
+      final submittedData = <String, dynamic>{
+        'manage_staff': selectedstaffId,
+        "company": selectedCompanyId,
+        "customer": selectedCustomerId,
+        "warehouse_id": warehouse,
+        'billing_address': selectedAddressId,
+        'order_date':
+            "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}",
+        "family": selectedFamilyId,
+        "state": selectedstateId,
+        'total_amount': tot,
+      };
+      final productDetails = jsonDecode(jsonEncode(
+          _auditCartProducts.isNotEmpty ? _auditCartProducts : cartdata));
       var response = await http.post(
         Uri.parse('$api/api/perfoma/invoice/create/'),
         headers: {
           "Content-Type": "application/json",
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({
-          'manage_staff': selectedstaffId,
-          "company": selectedCompanyId,
-          "customer": selectedCustomerId,
-          "warehouse_id": warehouse,
-          'billing_address': selectedAddressId,
-          'order_date':
-              "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}",
-          "family": selectedFamilyId,
-          "state": selectedstateId,
-          'total_amount': tot,
-        }),
+        body: jsonEncode(submittedData),
       );
       if (response.statusCode == 201) {
         dynamic createdProformaData;
@@ -292,8 +272,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
 
           if (createdProformaData is Map) {
             createdProformaId =
-                createdProformaData['id'] ??
-                createdProformaData['data']?['id'];
+                createdProformaData['id'] ?? createdProformaData['data']?['id'];
           }
         } catch (_) {
           createdProformaData = response.body;
@@ -303,6 +282,8 @@ class _Performa_order_requestState extends State<Performa_order_request> {
           scaffoldContext: scaffoldContext,
           createdProformaData: createdProformaData,
           createdProformaId: createdProformaId,
+          submittedData: submittedData,
+          productDetails: productDetails,
         );
 
         if (!mounted) return;
@@ -419,6 +400,8 @@ class _Performa_order_requestState extends State<Performa_order_request> {
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
         final List<dynamic> cartsData = parsed['data'];
+        _auditCartProducts =
+            List<dynamic>.from(jsonDecode(jsonEncode(cartsData)) as List);
         List<Map<String, dynamic>> cartList = [];
 
         double total = 0.0; // Initialize total here
@@ -1511,7 +1494,6 @@ class _Performa_order_requestState extends State<Performa_order_request> {
     );
   }
 
-
   static const Color _primaryColor = Color(0xFF2563EB);
   static const Color _primaryDark = Color(0xFF1D4ED8);
   static const Color _pageBackground = Color(0xFFF4F7FB);
@@ -1679,11 +1661,8 @@ class _Performa_order_requestState extends State<Performa_order_request> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
-                fontWeight:
-                    hasValue ? FontWeight.w600 : FontWeight.w400,
-                color: hasValue
-                    ? _textPrimary
-                    : const Color(0xFF98A2B3),
+                fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
+                color: hasValue ? _textPrimary : const Color(0xFF98A2B3),
               ),
             ),
           ),
@@ -1812,8 +1791,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
                   child: Text(
                     addres
                         .firstWhere(
-                          (address) =>
-                              address['id'] == selectedAddressId,
+                          (address) => address['id'] == selectedAddressId,
                           orElse: () => {'address': ''},
                         )['address']
                         .toString(),
@@ -2047,8 +2025,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
                           final Map<String, dynamic> selectedFamily =
                               fam.firstWhere(
                             (family) => family['id'] == value,
-                            orElse: () =>
-                                <String, dynamic>{'name': ''},
+                            orElse: () => <String, dynamic>{'name': ''},
                           );
 
                           setState(() {

@@ -99,6 +99,9 @@ List<Map<String, dynamic>> staffHourlySummaryList = [];
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    final today = DateTime.now();
+    final currentDate = DateTime(today.year, today.month, today.day);
+    selectedDateRange = DateTimeRange(start: currentDate, end: currentDate);
     _initPage();
   }
 
@@ -442,7 +445,9 @@ List<Map<String, dynamic>> staffHourlySummaryList = [];
 
   void _clearDateRange() {
     setState(() {
-      selectedDateRange = null;
+      final today = DateTime.now();
+      final currentDate = DateTime(today.year, today.month, today.day);
+      selectedDateRange = DateTimeRange(start: currentDate, end: currentDate);
     });
     fetchDsrList(isRefresh: true);
   }
@@ -630,7 +635,9 @@ List<Map<String, dynamic>> staffHourlySummaryList = [];
   void _clearAllFilters() {
     setState(() {
       _searchController.clear();
-      selectedDateRange = null;
+      final today = DateTime.now();
+      final currentDate = DateTime(today.year, today.month, today.day);
+      selectedDateRange = DateTimeRange(start: currentDate, end: currentDate);
       selectedSummaryFilter = "";
 
       selectedStaffId = null;
@@ -1895,7 +1902,9 @@ tempStaffHourlySummaryList.add({
                   onTap: () {
                     setState(() {
                       _searchController.clear();
-                      selectedDateRange = null;
+                      final today = DateTime.now();
+      final currentDate = DateTime(today.year, today.month, today.day);
+      selectedDateRange = DateTimeRange(start: currentDate, end: currentDate);
                       selectedSummaryFilter = "";
                       selectedStaffId = null;
                       selectedStaffName = "";
@@ -2164,7 +2173,9 @@ tempStaffHourlySummaryList.add({
                   onPressed: () {
                     setState(() {
                       _searchController.clear();
-                      selectedDateRange = null;
+                      final today = DateTime.now();
+      final currentDate = DateTime(today.year, today.month, today.day);
+      selectedDateRange = DateTimeRange(start: currentDate, end: currentDate);
                       selectedSummaryFilter = "";
                       selectedStaffId = null;
                       selectedStaffName = "";
@@ -2495,6 +2506,34 @@ tempStaffHourlySummaryList.add({
                             color: Colors.white.withOpacity(0.85),
                           ),
                         ),
+                        if (selectedDateRange != null) ...[
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 12,
+                                color: Colors.white70,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  formatDateOnly(selectedDateRange!.start) ==
+                                          formatDateOnly(selectedDateRange!.end)
+                                      ? formatDateOnly(selectedDateRange!.start)
+                                      : "${formatDateOnly(selectedDateRange!.start)} to ${formatDateOnly(selectedDateRange!.end)}",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withOpacity(0.90),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

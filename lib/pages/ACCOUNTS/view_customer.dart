@@ -1,37 +1,65 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_company.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_department.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:beposoft/main.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_credit_note.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/recipts_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_new_stock.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/credit_note_list.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/new_product.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/order_request.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/purchases_request.dart';
+
 import 'package:dropdown_button2/dropdown_button2.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_new_customer.dart';
 
 class view_customer extends StatefulWidget {
   const view_customer({super.key, required this.customerid});
+
   final int customerid;
 
   @override
@@ -39,52 +67,127 @@ class view_customer extends StatefulWidget {
 }
 
 class _view_customerState extends State<view_customer> {
+  Map<String, dynamic> _savedCustomerForAudit = <String, dynamic>{};
+
+  String? _auditName(List<Map<String, dynamic>> values, dynamic id) {
+    for (final value in values) {
+      if (value['id'].toString() == id.toString()) {
+        return value['name']?.toString();
+      }
+    }
+    return null;
+  }
+
+  Future<void> _logCustomerUpdate(Map<String, dynamic> beforeData,
+      Map<String, dynamic> afterData, http.Response response) async {
+    try {
+      dynamic responseDetails;
+      try {
+        responseDetails = jsonDecode(response.body);
+      } catch (_) {
+        responseDetails = response.body;
+      }
+      final logged = await AuditLogService.logUpdate(
+        action: 'customer_updated',
+        beforeData: <String, dynamic>{
+          'customer_id': widget.customerid,
+          ...beforeData,
+        },
+        afterData: <String, dynamic>{
+          'customer_id': widget.customerid,
+          ...afterData,
+          'response_data': responseDetails,
+          'metadata': <String, dynamic>{
+            'source': 'view_customer',
+            'method': 'PUT',
+            'endpoint': '/api/customer/update/${widget.customerid}/',
+            'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        },
+      );
+      if (!logged) debugPrint('Customer update audit failed.');
+    } catch (error) {
+      debugPrint('Customer update audit error: ${error.runtimeType}');
+    }
+  }
+
   List<Map<String, dynamic>> manager = [];
+
   List<Map<String, dynamic>> statess = [];
+
   List<Map<String, dynamic>> customer = [];
 
   List<String> categories = ["customer", "warehouse"];
+
   String selectedCategory = "customer"; // Default value
 
   String? selectedManagerName;
+
   int? selectedManagerId;
+
   String? selectstate;
+
   int? selectedStateId;
+
   int? selectedId; // variable to store selected id
+
   TextEditingController gstno = TextEditingController();
+
   TextEditingController name = TextEditingController();
+
   TextEditingController phone = TextEditingController();
+
   TextEditingController altphone = TextEditingController();
+
   TextEditingController email = TextEditingController();
+
   TextEditingController address = TextEditingController();
+
   TextEditingController zipcode = TextEditingController();
+
   TextEditingController city = TextEditingController();
+
   TextEditingController states = TextEditingController();
+
   TextEditingController comment = TextEditingController();
+
   List<String> gst = ["NO GST", "Yes"];
+
   String selectedgst = ""; // Default value
+
   @override
   void initState() {
     super.initState();
+
     // getcustomertype();
+
     // getcustomers();
+
     // getmanagers();
+
     // getstates();
 
     getprofiledata();
+
     initCustomerData();
   }
 
   Future<void> initCustomerData() async {
     await getprofiledata(); // Load profile first (for family, dep, etc.)
+
     await getcustomertype(); // Load customer types
+
     await getcustomers(); // ✅ Fetch existing customer first to get managerfetchid
+
     await getmanagers(); // ✅ Then load managers (now managerfetchid is available)
+
     await getstates(); // Finally load states
   }
 
   void initdata() async {
     await getmanagers();
+
     await getstates();
   }
 
@@ -92,12 +195,14 @@ class _view_customerState extends State<view_customer> {
 
   Future<void> getcustomertype() async {
     final token = await gettokenFromPrefs();
+
     try {
       final response =
           await http.get(Uri.parse('$api/api/customer-types/'), headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       });
+
       List<Map<String, dynamic>> banklist = [];
 
       if (response.statusCode == 200) {
@@ -109,6 +214,7 @@ class _view_customerState extends State<view_customer> {
             'name': productData['type_name'],
           });
         }
+
         setState(() {
           type = banklist;
         });
@@ -118,49 +224,18 @@ class _view_customerState extends State<view_customer> {
 
   Future<void> storeUserData(String token) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     await prefs.setString('token', token);
   }
 
   Future<String?> gettokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
-  Future<void> AddStatusTime(BuildContext scaffoldContext) async {
-    final token = await gettokenFromPrefs();
-    try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {"Action": "${name.text} Customer updated "},
-          'after_data': {"Data": "$responseData"},
-          'order': "",
-        }),
-      );
-
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('time added Successfully.'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding time failed.'),
-          ),
-        );
-      }
-    } catch (e) {}
-  }
-
   var responseData;
+
   void updateCustomer(
     String gst,
     String name,
@@ -178,6 +253,7 @@ class _view_customerState extends State<view_customer> {
     final token = await gettokenFromPrefs();
 
     // ✅ Check before sending API request
+
     if (manager == 0 || state == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -189,35 +265,50 @@ class _view_customerState extends State<view_customer> {
           duration: Duration(seconds: 3),
         ),
       );
+
       return; // ⛔ Stop execution here
     }
 
     try {
+      final beforeData = Map<String, dynamic>.from(
+          jsonDecode(jsonEncode(_savedCustomerForAudit)) as Map);
+      final submittedData = <String, dynamic>{
+        "gst": gst,
+        "name": name,
+        "manager": manager,
+        "phone": phone,
+        "alt_phone": altPhone,
+        "email": email,
+        "address": address,
+        "zip_code": zipcode,
+        "city": city,
+        "state": state,
+        "gst_confirm": selectedgst,
+        "comment": comment,
+      };
+      final auditAfterData = <String, dynamic>{
+        ...submittedData,
+        'manager_name': _auditName(this.manager, manager),
+        'state_name': _auditName(statess, state),
+      };
       var response = await http.put(
         Uri.parse("$api/api/customer/update/${widget.customerid}/"),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          "gst": gst,
-          "name": name,
-          "manager": manager,
-          "phone": phone,
-          "alt_phone": altPhone,
-          "email": email,
-          "address": address,
-          "zip_code": zipcode,
-          "city": city,
-          "state": state,
-          "gst_confirm": selectedgst,
-          "comment": comment,
-        }),
+        body: jsonEncode(submittedData),
       );
 
       if (response.statusCode == 200) {
         responseData = jsonDecode(response.body);
-        AddStatusTime(context);
+
+        await _logCustomerUpdate(beforeData, auditAfterData, response);
+        _savedCustomerForAudit = <String, dynamic>{
+          ...beforeData,
+          ...auditAfterData,
+        };
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color.fromARGB(255, 49, 212, 4),
@@ -226,6 +317,7 @@ class _view_customerState extends State<view_customer> {
         );
       } else {
         // show API error message in snackbar
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
@@ -244,12 +336,15 @@ class _view_customerState extends State<view_customer> {
   }
 
   var managerfetchid;
+
   var statefetchid;
+
   String? managerfetchname;
 
   Future<void> getcustomers() async {
     try {
       final token = await gettokenFromPrefs();
+
       var response = await http.get(
         Uri.parse('$api/api/customer/update/${widget.customerid}/'),
         headers: {
@@ -260,24 +355,38 @@ class _view_customerState extends State<view_customer> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
+        _savedCustomerForAudit = Map<String, dynamic>.from(
+            jsonDecode(jsonEncode(productsData)) as Map);
 
         gstno.text = productsData['gst'] ?? '';
+
         name.text = productsData['name'] ?? '';
+
         phone.text = productsData['phone'] ?? '';
+
         altphone.text = productsData['alt_phone'] ?? '';
+
         email.text = productsData['email'] ?? '';
+
         address.text = productsData['address'] ?? '';
+
         zipcode.text = productsData['zip_code']?.toString() ?? '';
+
         city.text = productsData['city'] ?? '';
+
         comment.text = productsData['comment'] ?? '';
+
         selectedgst = (productsData['gst'] != null &&
                 productsData['gst'].toString().trim().isNotEmpty)
             ? "Yes"
             : "";
 
         // 🔹 Manager and state
+
         managerfetchname = productsData['manager']; // string
+
         statefetchid = productsData['state'] is int
             ? productsData['state']
             : int.tryParse(productsData['state'].toString());
@@ -290,16 +399,23 @@ class _view_customerState extends State<view_customer> {
   }
 
   // Future<String?> gettokenFromPrefs() async {
+
   //   SharedPreferences prefs = await SharedPreferences.getInstance();
+
   //   return prefs.getString('token');
+
   // }
+
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('department');
   }
 
   var family;
+
   var staffid;
+
   var allocatedstates;
 
   Future<void> getprofiledata() async {
@@ -316,14 +432,17 @@ class _view_customerState extends State<view_customer> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
 
         setState(() {
           allocatedstates = productsData['allocated_states'];
 
           family = productsData['family'];
+
           staffid = productsData['id'];
         });
+
         getstates();
       }
     } catch (error) {}
@@ -332,7 +451,9 @@ class _view_customerState extends State<view_customer> {
   Future<void> getmanagers() async {
     try {
       final token = await gettokenFromPrefs();
+
       var dep = await getdepFromPrefs();
+
       var response = await http.get(
         Uri.parse('$api/api/staffs/'),
         headers: {
@@ -343,6 +464,7 @@ class _view_customerState extends State<view_customer> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
 
         List<Map<String, dynamic>> managerlist = [];
@@ -371,12 +493,15 @@ class _view_customerState extends State<view_customer> {
         }
 
         // 🔹 Match by name, since API returns manager name string
+
         int? matchedId;
+
         if (managerfetchname != null) {
           for (var m in managerlist) {
             if (m['name'].toString().trim().toLowerCase() ==
                 managerfetchname!.trim().toLowerCase()) {
               matchedId = m['id'];
+
               break;
             }
           }
@@ -384,6 +509,7 @@ class _view_customerState extends State<view_customer> {
 
         setState(() {
           manager = managerlist;
+
           if (matchedId != null) {
             selectedManagerId = matchedId;
           }
@@ -395,7 +521,9 @@ class _view_customerState extends State<view_customer> {
   Future<void> getstates() async {
     try {
       final token = await gettokenFromPrefs();
+
       var dep = await getdepFromPrefs();
+
       var response = await http.get(
         Uri.parse('$api/api/states/'),
         headers: {
@@ -408,6 +536,7 @@ class _view_customerState extends State<view_customer> {
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         var productsData = parsed['data'];
 
         for (var productData in productsData) {
@@ -418,11 +547,13 @@ class _view_customerState extends State<view_customer> {
         }
 
         // Filter to keep only allocated states
+
         if (dep == "BDO" || dep == "BDM") {
           if (allocatedstates.isNotEmpty) {
             List<Map<String, dynamic>> filteredStates = stateslist
                 .where((state) => allocatedstates.contains(state['id']))
                 .toList();
+
             setState(() {
               statess = filteredStates;
             });
@@ -439,6 +570,7 @@ class _view_customerState extends State<view_customer> {
   }
 
   drower d = drower();
+
   Widget _buildDropdownTile(
       BuildContext context, String title, List<String> options) {
     return ExpansionTile(
@@ -448,6 +580,7 @@ class _view_customerState extends State<view_customer> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
+
             d.navigateToSelectedPage(
                 context, option); // Navigate to selected page
           },
@@ -458,10 +591,13 @@ class _view_customerState extends State<view_customer> {
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('userId');
+
     await prefs.remove('token');
 
     // Use a post-frame callback to show the SnackBar after the current frame
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ScaffoldMessenger.of(context).mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -474,9 +610,11 @@ class _view_customerState extends State<view_customer> {
     });
 
     // Wait for the SnackBar to disappear before navigating
+
     await Future.delayed(Duration(seconds: 2));
 
     // Navigate to the HomePage after the snackbar is shown
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => login()),
@@ -484,6 +622,7 @@ class _view_customerState extends State<view_customer> {
   }
 
   // String selectstate = "Kerala";
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -511,6 +650,7 @@ class _view_customerState extends State<view_customer> {
             child: Column(
               children: [
                 SizedBox(height: 20),
+
                 Padding(
                   padding: const EdgeInsets.only(left: 75),
                   child: Row(
@@ -524,7 +664,9 @@ class _view_customerState extends State<view_customer> {
                     ],
                   ),
                 ),
+
                 SizedBox(height: 15),
+
                 SizedBox(
                   height: 570,
                   width: 340,
@@ -547,7 +689,9 @@ class _view_customerState extends State<view_customer> {
                               style: TextStyle(
                                   fontSize: 15, fontWeight: FontWeight.bold),
                             ),
+
                             SizedBox(height: 10),
+
                             Container(
                               width: double.infinity,
                               padding: EdgeInsets.symmetric(horizontal: 10),
@@ -559,13 +703,17 @@ class _view_customerState extends State<view_customer> {
                                 value: categories.contains(selectedCategory)
                                     ? selectedCategory
                                     : null, // Ensure valid selection
+
                                 isExpanded: true,
+
                                 underline: SizedBox(),
+
                                 onChanged: (String? newValue) {
                                   setState(() {
                                     selectedCategory = newValue!;
                                   });
                                 },
+
                                 items: categories.map<DropdownMenuItem<String>>(
                                     (String category) {
                                   return DropdownMenuItem<String>(
@@ -573,29 +721,51 @@ class _view_customerState extends State<view_customer> {
                                     child: Text(category),
                                   );
                                 }).toList(),
+
                                 icon: Icon(Icons.arrow_drop_down),
                               ),
                             ),
+
                             SizedBox(height: 15),
+
                             // Text(
+
                             //   "GSTIN Number",
+
                             //   style: TextStyle(
+
                             //       fontSize: 15, fontWeight: FontWeight.bold),
+
                             // ),
+
                             // SizedBox(height: 10),
+
                             // TextField(
+
                             //   controller: gstno,
+
                             //   decoration: InputDecoration(
+
                             //     labelText: 'AAA00',
+
                             //     prefixIcon: Icon(Icons.numbers),
+
                             //     border: OutlineInputBorder(
+
                             //       borderRadius: BorderRadius.circular(10.0),
+
                             //       borderSide: BorderSide(color: Colors.grey),
+
                             //     ),
+
                             //     contentPadding:
+
                             //         EdgeInsets.symmetric(vertical: 8.0),
+
                             //   ),
+
                             // ),
+
                             // SizedBox(height: 10),
 
                             Text(
@@ -603,7 +773,9 @@ class _view_customerState extends State<view_customer> {
                               style: TextStyle(
                                   fontSize: 15, fontWeight: FontWeight.bold),
                             ),
+
                             SizedBox(height: 10),
+
                             Container(
                               width: double.infinity,
                               padding: EdgeInsets.symmetric(horizontal: 10),
@@ -653,10 +825,13 @@ class _view_customerState extends State<view_customer> {
                             ],
 
                             SizedBox(height: 10),
+
                             Text("Name of customer ",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 10),
+
                             TextField(
                               controller: name,
                               decoration: InputDecoration(
@@ -673,6 +848,7 @@ class _view_customerState extends State<view_customer> {
                                     EdgeInsets.symmetric(vertical: 8.0),
                               ),
                             ),
+
                             SizedBox(height: 10),
 
                             DropdownButtonHideUnderline(
@@ -707,10 +883,13 @@ class _view_customerState extends State<view_customer> {
                             ),
 
                             SizedBox(height: 10),
+
                             Text("Technical manager",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 10),
+
                             Container(
                               width: 310,
                               height: 49,
@@ -732,10 +911,13 @@ class _view_customerState extends State<view_customer> {
                                       child:
                                           DropdownButton<Map<String, dynamic>>(
                                         isExpanded: true,
+
                                         underline: const SizedBox(),
+
                                         icon: const Icon(Icons.arrow_drop_down),
 
                                         // ✅ Fix: Ensure correct manager is preselected
+
                                         value: manager.isNotEmpty
                                             ? manager.firstWhere(
                                                 (m) =>
@@ -751,6 +933,7 @@ class _view_customerState extends State<view_customer> {
                                             setState(() {
                                               selectedManagerId =
                                                   newValue['id'];
+
                                               selectedManagerName =
                                                   newValue['name'];
                                             });
@@ -796,8 +979,11 @@ class _view_customerState extends State<view_customer> {
                 SizedBox(height: 5),
 
                 SizedBox(height: 15),
+
                 // Continue adding form elements here
+
                 SizedBox(height: 15),
+
                 SizedBox(
                   height: 690,
                   width: 340,
@@ -821,31 +1007,53 @@ class _view_customerState extends State<view_customer> {
                             Text("Client information ",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 20),
+
                             // Text("Discount : ",
+
                             //     style: TextStyle(
+
                             //         fontSize: 15, fontWeight: FontWeight.bold)),
+
                             // SizedBox(height: 10),
+
                             // TextField(
+
                             //   decoration: InputDecoration(
+
                             //     labelText: 'Discount ',
+
                             //     border: OutlineInputBorder(
+
                             //       borderRadius: BorderRadius.circular(10.0),
+
                             //       borderSide: BorderSide(color: Colors.grey),
+
                             //     ),
+
                             //     contentPadding:
+
                             //         EdgeInsets.symmetric(vertical: 8.0),
+
                             //   ),
+
                             // ),
+
                             // SizedBox(height: 10),
+
                             Text("Phone Number * : ",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 10),
+
                             TextField(
                               controller: phone,
+
                               keyboardType: TextInputType
                                   .phone, // 👈 Number/Phone keyboard
+
                               decoration: InputDecoration(
                                 labelText: 'Phone Number',
                                 border: OutlineInputBorder(
@@ -856,17 +1064,23 @@ class _view_customerState extends State<view_customer> {
                                     EdgeInsets.symmetric(vertical: 8.0),
                               ),
                             ),
+
                             SizedBox(height: 10),
+
                             Text(
                               "Alternate Number : ",
                               style: TextStyle(
                                   fontSize: 15, fontWeight: FontWeight.bold),
                             ),
+
                             SizedBox(height: 10),
+
                             TextField(
                               controller: altphone,
+
                               keyboardType: TextInputType
                                   .phone, // 👈 Number/Phone keyboard
+
                               decoration: InputDecoration(
                                 labelText: 'Alternate Number',
                                 border: OutlineInputBorder(
@@ -879,10 +1093,13 @@ class _view_customerState extends State<view_customer> {
                             ),
 
                             SizedBox(height: 10),
+
                             Text("Mail Id : ",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 10),
+
                             TextField(
                               controller: email,
                               decoration: InputDecoration(
@@ -898,7 +1115,9 @@ class _view_customerState extends State<view_customer> {
                                     EdgeInsets.symmetric(vertical: 8.0),
                               ),
                             ),
+
                             SizedBox(height: 30),
+
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -909,11 +1128,15 @@ class _view_customerState extends State<view_customer> {
                                 ),
                               ],
                             ),
+
                             SizedBox(height: 20),
+
                             Text("Address/Building Name/ Building Number ",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 13),
+
                             TextField(
                               controller: address,
                               decoration: InputDecoration(
@@ -929,7 +1152,9 @@ class _view_customerState extends State<view_customer> {
                                     EdgeInsets.symmetric(vertical: 8.0),
                               ),
                             ),
+
                             SizedBox(height: 10),
+
                             Row(
                               children: [
                                 Column(
@@ -997,11 +1222,15 @@ class _view_customerState extends State<view_customer> {
                                 )
                               ],
                             ),
+
                             SizedBox(height: 10),
+
                             Text("State *:",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
+
                             SizedBox(height: 10),
+
                             Container(
                               width: double.infinity,
                               height: 49,
@@ -1027,6 +1256,7 @@ class _view_customerState extends State<view_customer> {
                                         ? (Map<String, dynamic>? newValue) {
                                             setState(() {
                                               selectstate = newValue!['name'];
+
                                               selectedStateId = newValue[
                                                   'id']; // Store the selected state's ID
                                             });
@@ -1059,20 +1289,35 @@ class _view_customerState extends State<view_customer> {
                             ),
 
                             // SizedBox(height: 20),
+
                             // Text("Country ",
+
                             //     style: TextStyle(
+
                             //         fontSize: 15, fontWeight: FontWeight.bold)),
+
                             // SizedBox(height: 10),
+
                             // TextField(
+
                             //   decoration: InputDecoration(
+
                             //     labelText: 'Country',
+
                             //     border: OutlineInputBorder(
+
                             //       borderRadius: BorderRadius.circular(10.0),
+
                             //       borderSide: BorderSide(color: Colors.grey),
+
                             //     ),
+
                             //     contentPadding:
+
                             //         EdgeInsets.symmetric(vertical: 8.0),
+
                             //   ),
+
                             // ),
                           ],
                         ),
@@ -1080,7 +1325,9 @@ class _view_customerState extends State<view_customer> {
                     ),
                   ),
                 ),
+
                 SizedBox(height: 15),
+
                 SizedBox(
                   height: 150,
                   width: 340,
@@ -1127,7 +1374,9 @@ class _view_customerState extends State<view_customer> {
                     ),
                   ),
                 ),
+
                 SizedBox(height: 20),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1138,7 +1387,9 @@ class _view_customerState extends State<view_customer> {
                     ),
                   ],
                 ),
+
                 SizedBox(height: 13),
+
                 Padding(
                   padding: const EdgeInsets.only(),
                   child: Row(
@@ -1155,6 +1406,7 @@ class _view_customerState extends State<view_customer> {
                                   content: Text("Please select GST option"),
                                 ),
                               );
+
                               return;
                             }
 
@@ -1166,10 +1418,12 @@ class _view_customerState extends State<view_customer> {
                                   content: Text("GSTIN number required"),
                                 ),
                               );
+
                               return;
                             }
 
                             final String phoneNumber = phone.text.trim();
+
                             if (phoneNumber.length != 10 ||
                                 !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1179,6 +1433,7 @@ class _view_customerState extends State<view_customer> {
                                       'Phone number must be exactly 10 digits.'),
                                 ),
                               );
+
                               return;
                             }
 
@@ -1218,6 +1473,7 @@ class _view_customerState extends State<view_customer> {
                     ],
                   ),
                 ),
+
                 SizedBox(height: 35),
               ],
             ),

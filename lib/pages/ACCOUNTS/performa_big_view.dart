@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
@@ -40,6 +41,131 @@ class PerformaInvoice_BigView_List extends StatefulWidget {
 
 class _PerformaInvoice_BigView_ListState
     extends State<PerformaInvoice_BigView_List> {
+  dynamic _auditCopy(dynamic value) {
+    // Detach the snapshot before any asynchronous request or UI refresh.
+    return jsonDecode(jsonEncode(value, toEncodable: (value) => value.toString()));
+  }
+
+  Map<String, dynamic> _loadedProforma = <String, dynamic>{};
+
+  Map<String, dynamic> _auditSnapshot(int orderId, int? itemId) {
+    final matchingOrders = orders.where(
+      (order) => order['id']?.toString() == orderId.toString(),
+    ).toList();
+    final rawItems = _loadedProforma['perfoma_items'];
+    final previousItems = rawItems is List
+        ? rawItems.where((item) => item is Map &&
+            item['id']?.toString() == itemId?.toString()).toList()
+        : <dynamic>[];
+    return Map<String, dynamic>.from(_auditCopy(<String, dynamic>{
+      'order_id': orderId,
+      'invoice': widget.invoice,
+      if (itemId != null) 'item_id': itemId,
+      'loaded_proforma_response': _loadedProforma,
+      'order_details': matchingOrders,
+      if (itemId != null) 'item_details': previousItems,
+    }) as Map);
+  }
+
+  dynamic _auditResponseData(http.Response response) {
+    if (response.body.trim().isEmpty) return null;
+    try {
+      return jsonDecode(response.body);
+    } catch (_) {
+      return response.body;
+    }
+  }
+
+  Future<void> _recordMutation({
+    required int orderId,
+    required int? itemId,
+    required String action,
+    required String method,
+    required Uri uri,
+    required Map<String, dynamic> before,
+    required dynamic submitted,
+    http.Response? response,
+    Object? error,
+  }) async {
+    // Keep logging errors separate from the completed business operation.
+    try {
+      final successful = response != null &&
+          response.statusCode >= 200 && response.statusCode < 300;
+      final logged = await AuditLogService.log(
+        action: successful ? action : '${action}_failed',
+        orderId: orderId,
+        beforeData: before,
+        afterData: <String, dynamic>{
+          'order_id': orderId,
+          'invoice': widget.invoice,
+          if (itemId != null) 'item_id': itemId,
+          'submitted_data': submitted,
+          'response_data': response == null ? null : _auditResponseData(response),
+          'outcome': successful ? 'success' : 'failed',
+          if (method == 'DELETE' && successful) 'deleted': true,
+          if (error != null) 'error_type': error.runtimeType.toString(),
+          'metadata': <String, dynamic>{
+            'source': 'PerformaInvoice_BigView_List',
+            'method': method,
+            'endpoint': uri.path,
+            if (response != null) 'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+            // submitted_data is the request, response_data is server output.
+            // Do not pretend a partial response is a full refreshed record.
+          },
+        },
+      );
+      if (!logged) debugPrint('Audit log creation failed [$action].');
+    } catch (auditError, stackTrace) {
+      debugPrint('Audit log creation failed [$action]: $auditError');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<http.Response> _auditMutation(
+    int orderId,
+    int? itemId,
+    String method,
+    String action,
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+    Encoding? encoding,
+  }) async {
+    final before = _auditSnapshot(orderId, itemId);
+    dynamic submitted = body;
+    if (body is String) {
+      try { submitted = jsonDecode(body); } catch (_) {}
+    }
+    submitted = _auditCopy(submitted);
+    late final http.Response response;
+    try {
+      switch (method) {
+        case 'POST':
+          response = await http.post(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'PUT':
+          response = await http.put(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'PATCH':
+          response = await http.patch(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        default:
+          throw ArgumentError.value(method, 'method');
+      }
+    } catch (error) {
+      await _recordMutation(orderId: orderId, itemId: itemId, action: action, method: method, uri: uri,
+          before: before, submitted: submitted, error: error);
+      rethrow;
+    }
+    await _recordMutation(orderId: orderId, itemId: itemId, action: action, method: method, uri: uri,
+        before: before, submitted: submitted, response: response);
+    return response;
+  }
+
   drower d = drower();
   List<Map<String, dynamic>> orders = [];
   List<Map<String, dynamic>> stat = [];
@@ -626,7 +752,7 @@ class _PerformaInvoice_BigView_ListState
         return false;
       }
 
-      final response = await http.put(
+      final response = await _auditMutation(orderId, null, 'PUT', 'proforma_details_updated', 
         Uri.parse(
           '$api/api/perfoma/order/$orderId/update/',
         ),
@@ -1656,6 +1782,7 @@ class _PerformaInvoice_BigView_ListState
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+        _loadedProforma = Map<String, dynamic>.from(_auditCopy(parsed) as Map);
 
         List<Map<String, dynamic>> performaInvoiceList = [];
 
@@ -2223,7 +2350,7 @@ class _PerformaInvoice_BigView_ListState
               ? description.trim()
               : 'Updated product';
 
-      final http.Response response = await http.put(
+      final http.Response response = await _auditMutation(orderId, itemId, 'PUT', 'proforma_item_updated', 
         Uri.parse(
           '$api/api/perfoma/order/$orderId/item/$itemId/update/',
         ),
@@ -2340,7 +2467,7 @@ class _PerformaInvoice_BigView_ListState
         return false;
       }
 
-      final http.Response response = await http.delete(
+      final http.Response response = await _auditMutation(orderId, itemId, 'DELETE', 'proforma_item_deleted', 
         Uri.parse(
           '$api/api/perfoma/order/$orderId/item/$itemId/delete/',
         ),

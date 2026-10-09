@@ -1,7 +1,12 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StaffSelfAttendanceScreen extends StatefulWidget {
@@ -13,18 +18,65 @@ class StaffSelfAttendanceScreen extends StatefulWidget {
 }
 
 class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
+  Future<void> _recordAttendanceAudit({
+    required String action,
+    required Map<String, dynamic> beforeData,
+    required Map<String, dynamic> submittedData,
+    required http.Response response,
+    required String endpoint,
+    int? attendanceId,
+  }) async {
+    try {
+      dynamic savedData;
+      try {
+        savedData = jsonDecode(response.body);
+      } catch (_) {
+        savedData = response.body;
+      }
+      final logged = await AuditLogService.log(
+        action: action,
+        staffId: int.tryParse(currentStaffId ?? ''),
+        beforeData: beforeData,
+        afterData: <String, dynamic>{
+          ...submittedData,
+          if (attendanceId != null) 'attendance_id': attendanceId,
+          'staff_name': currentStaffName,
+          'team_name': currentTeamName,
+          'team_leader_name': currentTeamLeaderName,
+          'response_data': savedData,
+          'metadata': <String, dynamic>{
+            'source': 'StaffSelfAttendanceScreen',
+            'method': action == 'attendance_created' ? 'POST' : 'PUT',
+            'endpoint': endpoint,
+            'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        },
+      );
+      if (!logged) debugPrint('Attendance audit failed: $action');
+    } catch (error) {
+      debugPrint('Attendance audit error: ${error.runtimeType}');
+    }
+  }
+
   List<Map<String, dynamic>> selectedDateAttendance = [];
 
   String? currentStaffId;
+
   String currentStaffName = '';
+
   String currentTeamName = '';
+
   String currentTeamLeaderName = '';
 
   String selectedStatus = 'present';
+
   int? editingAttendanceId;
 
   bool isLoading = false;
+
   bool isSaving = false;
+
   bool isProfileLoading = false;
 
   final TextEditingController attendanceTimeController =
@@ -39,23 +91,27 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
 
   Future<String?> getTokenFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
   @override
   void initState() {
     super.initState();
+
     refreshAll();
   }
 
   @override
   void dispose() {
     attendanceTimeController.dispose();
+
     super.dispose();
   }
 
   Future<void> refreshAll() async {
     await getProfile();
+
     await getMyAttendance();
   }
 
@@ -74,16 +130,19 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       );
 
       debugPrint("PROFILE STATUS: ${response.statusCode}");
+
       debugPrint("PROFILE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         final data = parsed['data'] ?? {};
 
         final rawStaffId = data['id'];
 
         if (rawStaffId == null || int.tryParse(rawStaffId.toString()) == null) {
           showMsg("Valid staff id not found in profile");
+
           return;
         }
 
@@ -96,6 +155,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
               '';
 
           currentTeamName = data['team_name']?.toString() ?? '';
+
           currentTeamLeaderName = data['team_leader_name']?.toString() ?? '';
         });
 
@@ -105,6 +165,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       }
     } catch (e) {
       debugPrint("PROFILE ERROR: $e");
+
       showMsg("Failed to fetch profile");
     } finally {
       if (mounted) {
@@ -128,6 +189,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       );
 
       debugPrint("MY ATTENDANCE STATUS: ${response.statusCode}");
+
       debugPrint("MY ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
@@ -172,6 +234,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       }
     } catch (e) {
       debugPrint("Fetch self attendance error: $e");
+
       showMsg("Failed to fetch attendance");
     } finally {
       if (mounted) {
@@ -183,12 +246,14 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
   Future<void> markAttendance() async {
     if (currentStaffId == null) {
       showMsg("Profile staff id not found");
+
       return;
     }
 
     if (selectedStatus != 'absent' &&
         attendanceTimeController.text.trim().isEmpty) {
       showMsg("Choose reporting time");
+
       return;
     }
 
@@ -200,6 +265,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
 
     if (alreadyMarked) {
       showMsg("Your attendance is already marked for today");
+
       return;
     }
 
@@ -227,15 +293,27 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       );
 
       debugPrint("MARK ATTENDANCE STATUS: ${response.statusCode}");
+
       debugPrint("MARK ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        await _recordAttendanceAudit(
+          action: 'attendance_created',
+          beforeData: <String, dynamic>{},
+          submittedData: Map<String, dynamic>.from(body),
+          response: response,
+          endpoint: '/api/staff/attendance/',
+        );
+
         showMsg("Attendance marked successfully");
 
         setState(() {
           selectedStatus = 'present';
+
           editingAttendanceId = null;
+
           attendanceViewDate = DateTime.now();
+
           attendanceTimeController.clear();
         });
 
@@ -253,6 +331,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       }
     } catch (e) {
       debugPrint("Mark attendance error: $e");
+
       showMsg("Failed to mark attendance");
     } finally {
       if (mounted) {
@@ -264,17 +343,20 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
   Future<void> updateAttendance() async {
     if (editingAttendanceId == null) {
       showMsg("Select attendance to update");
+
       return;
     }
 
     if (currentStaffId == null) {
       showMsg("Profile staff id not found");
+
       return;
     }
 
     if (selectedStatus != 'absent' &&
         attendanceTimeController.text.trim().isEmpty) {
       showMsg("Choose reporting time");
+
       return;
     }
 
@@ -292,6 +374,17 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
         "status": selectedStatus,
       };
 
+      final auditAttendanceId = editingAttendanceId;
+      final beforeData = <String, dynamic>{
+        'attendance_id': auditAttendanceId,
+      };
+      for (final attendance in selectedDateAttendance) {
+        if (attendance['id'].toString() == auditAttendanceId.toString()) {
+          beforeData.addAll(Map<String, dynamic>.from(
+              jsonDecode(jsonEncode(attendance)) as Map));
+          break;
+        }
+      }
       final response = await http.put(
         Uri.parse('$api/api/staff/attendance/edit/$editingAttendanceId/'),
         headers: {
@@ -302,15 +395,28 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       );
 
       debugPrint("UPDATE ATTENDANCE STATUS: ${response.statusCode}");
+
       debugPrint("UPDATE ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
+        await _recordAttendanceAudit(
+          action: 'attendance_updated',
+          beforeData: beforeData,
+          submittedData: Map<String, dynamic>.from(body),
+          response: response,
+          attendanceId: auditAttendanceId,
+          endpoint: '/api/staff/attendance/edit/$auditAttendanceId/',
+        );
+
         showMsg("Attendance updated successfully");
 
         setState(() {
           selectedStatus = 'present';
+
           editingAttendanceId = null;
+
           attendanceViewDate = DateTime.now();
+
           attendanceTimeController.clear();
         });
 
@@ -320,6 +426,7 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
       }
     } catch (e) {
       debugPrint("Update attendance error: $e");
+
       showMsg("Failed to update attendance");
     } finally {
       if (mounted) {
@@ -362,7 +469,9 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
   void cancelEdit() {
     setState(() {
       selectedStatus = 'present';
+
       editingAttendanceId = null;
+
       attendanceTimeController.clear();
     });
   }
@@ -372,12 +481,15 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
 
     if (approvalStatus == 'approved') {
       showMsg("Approved attendance cannot be edited");
+
       return;
     }
 
     setState(() {
       editingAttendanceId = item['id'];
+
       selectedStatus = item['status'] ?? 'present';
+
       attendanceTimeController.text = item['attendance_time']?.toString() ?? '';
     });
   }
@@ -394,10 +506,13 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
     switch (status) {
       case 'present':
         return 'Present';
+
       case 'absent':
         return 'Absent';
+
       case 'half_day':
         return 'Half Day';
+
       default:
         return status;
     }
@@ -407,10 +522,13 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
     switch (status) {
       case 'present':
         return const Color(0xff16a34a);
+
       case 'absent':
         return const Color(0xffdc2626);
+
       case 'half_day':
         return const Color(0xfff59e0b);
+
       default:
         return const Color(0xff64748b);
     }
@@ -806,8 +924,10 @@ class _StaffSelfAttendanceScreenState extends State<StaffSelfAttendanceScreen> {
                       children: selectedDateAttendance.map<Widget>((item) {
                         final approvalStatus =
                             item['approval_status']?.toString() ?? 'pending';
+
                         final canEdit = approvalStatus == 'pending' ||
                             approvalStatus == 'rejected';
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),

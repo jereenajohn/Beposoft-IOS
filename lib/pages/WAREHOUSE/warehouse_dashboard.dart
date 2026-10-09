@@ -1362,7 +1362,10 @@ static const List<String> warehouseDashboardStatuses = [
   final IconData statusIcon = _getStatusIcon(status);
 
   final String displayName = _getStatusDisplayName(status);
-
+final String currentMonthLabel =
+    DateFormat('MMM yy', 'en_US')
+        .format(DateTime.now())
+        .toUpperCase();
   return Material(
     color: Colors.transparent,
     child: InkWell(
@@ -1542,14 +1545,22 @@ static const List<String> warehouseDashboardStatuses = [
                       ),
                       child: Row(
                         children: [
-                          Text(
-                            'Till Today',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isVerySmallPhone ? 10.5 : 11.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                       Flexible(
+  child: FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: Alignment.centerLeft,
+    child: Text(
+      currentMonthLabel,
+      maxLines: 1,
+      softWrap: false,
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: isVerySmallPhone ? 10.5 : 11.5,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  ),
+),
                           const Spacer(),
                           Flexible(
                             child: FittedBox(

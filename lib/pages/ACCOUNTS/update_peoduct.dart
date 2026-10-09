@@ -86,6 +86,9 @@ class _update_productState extends State<update_product> {
   TextEditingController sellingprice = TextEditingController();
   TextEditingController excludedprice = TextEditingController();
   TextEditingController stock = TextEditingController();
+  final TextEditingController lockedStockController = TextEditingController();
+  final TextEditingController rackLockController = TextEditingController();
+  bool canEditStockLocks = false;
   TextEditingController damagedStock = TextEditingController();
   TextEditingController partiallyDamagedStock = TextEditingController();
   TextEditingController liquidationStock = TextEditingController();
@@ -134,6 +137,7 @@ class _update_productState extends State<update_product> {
   @override
   void initState() {
     super.initState();
+    _loadStockLockPermission();
     initdata();
     getfamily();
     getmanagers();
@@ -143,6 +147,23 @@ class _update_productState extends State<update_product> {
     getproductcategory();
     getrack();
     print("widget.id: ${widget.id}");
+  }
+
+  Future<void> _loadStockLockPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    // Department must come from the authenticated session, not user input.
+    final department = (prefs.getString('dep') ??
+            prefs.getString('department') ??
+            prefs.getString('department_name') ??
+            '')
+        .trim()
+        .toLowerCase();
+    setState(() {
+      canEditStockLocks = const {
+        'ceo', 'coo', 'information technology', 'it'
+      }.contains(department);
+    });
   }
 
   void initdata() {
@@ -635,6 +656,8 @@ class _update_productState extends State<update_product> {
                     singleProducts[0]['purchase_rate']?.toString() ?? '';
 
                 stock.text = singleProducts[0]['stock']?.toString() ?? '0';
+                lockedStockController.text =
+                    singleProducts[0]['locked_stock']?.toString() ?? '0';
 
                 damagedStock.text =
                     singleProducts[0]['damaged_stock']?.toString() ?? '0';
@@ -706,6 +729,8 @@ class _update_productState extends State<update_product> {
                     singleProducts[0]['purchase_rate']?.toString() ?? '';
 
                 stock.text = singleProducts[0]['stock']?.toString() ?? '0';
+                lockedStockController.text =
+                    singleProducts[0]['locked_stock']?.toString() ?? '0';
 
                 damagedStock.text =
                     singleProducts[0]['damaged_stock']?.toString() ?? '0';
@@ -767,6 +792,17 @@ class _update_productState extends State<update_product> {
   Future<void> updateProduct(BuildContext scaffoldContext) async {
     final token = await gettokenFromPrefs();
     try {
+      if (canEditStockLocks &&
+          (int.tryParse(lockedStockController.text.trim()) == null ||
+              int.parse(lockedStockController.text.trim()) < 0 ||
+              rackDetailsList.any((rack) =>
+                  int.tryParse((rack['rack_lock'] ?? 0).toString()) == null ||
+                  int.parse((rack['rack_lock'] ?? 0).toString()) < 0))) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(content: Text('Stock locks must be non-negative whole numbers.')),
+        );
+        return;
+      }
       // Create the request
       var request = http.Request(
         'PUT',
@@ -808,6 +844,8 @@ class _update_productState extends State<update_product> {
         'landing_cost': landingPriceValue,
         'warehouse': selectedwarehouseId,
         'stock': stock.text.trim().isEmpty ? '0' : stock.text.trim(),
+        if (canEditStockLocks)
+          'locked_stock': int.parse(lockedStockController.text.trim()),
         'damaged_stock':
             damagedStock.text.trim().isEmpty ? '0' : damagedStock.text.trim(),
         'partially_damaged_stock': partiallyDamagedStock.text.trim().isEmpty
@@ -1028,6 +1066,8 @@ class _update_productState extends State<update_product> {
     sellingprice.dispose();
     excludedprice.dispose();
     stock.dispose();
+    lockedStockController.dispose();
+    rackLockController.dispose();
     damagedStock.dispose();
     partiallyDamagedStock.dispose();
     liquidationStock.dispose();
@@ -1502,6 +1542,8 @@ class _update_productState extends State<update_product> {
                                             tappedRack['usability'];
                                         rackStockController.text =
                                             tappedRack['rack_stock'].toString();
+                                        rackLockController.text =
+                                            (tappedRack['rack_lock'] ?? 0).toString();
                                         columnNames = List<String>.from(
                                             matchingRack['column_names']);
                                       });
@@ -1650,6 +1692,27 @@ class _update_productState extends State<update_product> {
                             SizedBox(
                               height: 10,
                             ),
+                            if (editingRackIndex != null) ...[
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: rackLockController,
+                                enabled: canEditStockLocks,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Rack Lock',
+                                  helperText: canEditStockLocks
+                                      ? 'Authorized departments only'
+                                      : 'DO NOT EDIT',
+                                  helperStyle: TextStyle(
+                                    color: canEditStockLocks ? Colors.grey : Colors.red,
+                                    fontWeight: canEditStockLocks
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
+                                  ),
+                                  border: const OutlineInputBorder(),
+                                ),
+                              ),
+                            ],
                             if (rackDetails.isNotEmpty)
                               ...rackDetails.map((rack) => ListTile(
                                     title: Text(
@@ -1670,7 +1733,10 @@ class _update_productState extends State<update_product> {
                                       "rack_stock": int.tryParse(
                                               rackStockController.text) ??
                                           0,
-                                      'rack_lock': 0
+                                      'rack_lock': canEditStockLocks
+                                          ? (int.tryParse(rackLockController.text) ??
+                                              rackDetailsList[editingRackIndex!]['rack_lock'] ?? 0)
+                                          : (rackDetailsList[editingRackIndex!]['rack_lock'] ?? 0)
                                     };
 
                                     setState(() {
@@ -1684,6 +1750,7 @@ class _update_productState extends State<update_product> {
                                       selectedColumn = null;
                                       selectedUsability = null;
                                       rackStockController.clear();
+                                      rackLockController.clear();
                                       columnNames = [];
                                       getrack();
                                     });
@@ -2035,6 +2102,25 @@ class _update_productState extends State<update_product> {
                               ),
                             ),
                             SizedBox(height: 10),
+                            Text('No of Products in Invoices',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: lockedStockController,
+                              enabled: canEditStockLocks,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                helperText: canEditStockLocks ? 'Authorized departments only' : 'DO NOT EDIT',
+                                helperStyle: TextStyle(
+                                  color: canEditStockLocks ? Colors.grey : Colors.red,
+                                  fontWeight: canEditStockLocks
+                                      ? FontWeight.normal
+                                      : FontWeight.bold,
+                                ),
+                                border: const OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
                             Text("Damaged Stock",
                                 style: TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),

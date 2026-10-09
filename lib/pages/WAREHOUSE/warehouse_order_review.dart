@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'dart:io';
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
@@ -53,6 +54,143 @@ String getStatusDisplayName(dynamic status) {
       return value;
   }
 }
+
+  Map<String, dynamic> _loadedAuditOrder = <String, dynamic>{};
+
+  dynamic _auditCopy(dynamic value) {
+    // Detach the snapshot before any asynchronous request or UI refresh.
+    return jsonDecode(jsonEncode(value, toEncodable: (value) => value.toString()));
+  }
+
+  Map<String, dynamic> _auditSnapshot() {
+    return Map<String, dynamic>.from(_auditCopy(<String, dynamic>{
+      'order_id': widget.id,
+      'loaded_order_response': _loadedAuditOrder,
+      'order': ord,
+      'items': items,
+      'warehouse': ord?['warehouse'],
+      'payment_images': selectedImageData,
+    }) as Map);
+  }
+
+  dynamic _auditResponseData(http.Response response) {
+    if (response.body.trim().isEmpty) return null;
+    try {
+      return jsonDecode(response.body);
+    } catch (_) {
+      return response.body;
+    }
+  }
+
+  Future<void> _recordMutation({
+    required String action,
+    required String method,
+    required Uri uri,
+    required Map<String, dynamic> before,
+    required dynamic submitted,
+    http.Response? response,
+    Object? error,
+  }) async {
+    // Keep logging errors separate from the completed business operation.
+    try {
+      final successful = response != null &&
+          response.statusCode >= 200 && response.statusCode < 300;
+      final logged = await AuditLogService.log(
+        action: successful ? action : '${action}_failed',
+        orderId: int.tryParse(widget.id.toString()),
+        beforeData: before,
+        afterData: <String, dynamic>{
+          'order_id': widget.id,
+          'submitted_data': submitted,
+          'response_data': response == null ? null : _auditResponseData(response),
+          'outcome': successful ? 'success' : 'failed',
+          if (method == 'DELETE' && successful) 'deleted': true,
+          if (error != null) 'error_type': error.runtimeType.toString(),
+          'metadata': <String, dynamic>{
+            'source': 'WarehouseOrderReview',
+            'method': method,
+            'endpoint': uri.path,
+            if (response != null) 'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+            // submitted_data is the request, response_data is server output.
+            // Do not pretend a partial response is a full refreshed record.
+          },
+        },
+      );
+      if (!logged) debugPrint('Audit log creation failed [$action].');
+    } catch (auditError, stackTrace) {
+      debugPrint('Audit log creation failed [$action]: $auditError');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<http.Response> _auditMutation(
+    String method,
+    String action,
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+    Encoding? encoding,
+  }) async {
+    final before = _auditSnapshot();
+    dynamic submitted = body;
+    if (body is String) {
+      try { submitted = jsonDecode(body); } catch (_) {}
+    }
+    submitted = _auditCopy(submitted);
+    late final http.Response response;
+    try {
+      switch (method) {
+        case 'POST':
+          response = await http.post(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'PUT':
+          response = await http.put(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'PATCH':
+          response = await http.patch(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        default:
+          throw ArgumentError.value(method, 'method');
+      }
+    } catch (error) {
+      await _recordMutation(action: action, method: method, uri: uri,
+          before: before, submitted: submitted, error: error);
+      rethrow;
+    }
+    await _recordMutation(action: action, method: method, uri: uri,
+        before: before, submitted: submitted, response: response);
+    return response;
+  }
+
+  Future<http.Response> _auditMultipart(http.MultipartRequest request, String action) async {
+    final before = _auditSnapshot();
+    final submitted = <String, dynamic>{
+      'fields': Map<String, String>.from(request.fields),
+      'files': request.files.map((file) => <String, dynamic>{
+        'field': file.field,
+        'filename': file.filename,
+        'size_bytes': file.length,
+        'content_type': file.contentType.toString(),
+      }).toList(),
+    };
+    late final http.Response response;
+    try {
+      response = await http.Response.fromStream(await request.send());
+    } catch (error) {
+      await _recordMutation(action: action,
+          method: 'POST', uri: request.url, before: before,
+          submitted: submitted, error: error);
+      rethrow;
+    }
+    await _recordMutation(action: action,
+        method: 'POST', uri: request.url, before: before,
+        submitted: submitted, response: response);
+    return response;
+  }
 
   Drawer d = Drawer();
   var ord;
@@ -228,20 +366,9 @@ String getStatusDisplayName(dynamic status) {
       }
 
       // Send request
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      final response = await _auditMultipart(request, 'payment_screenshots_uploaded');
       if (response.statusCode == 201) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Payment images uploaded',
-          beforeData: {
-            'Action': 'Payment images upload',
-          },
-          afterData: {
-            'Action': 'Payment images uploaded',
-            'Image Count': selectedImageslist.length,
-          },
-        );
+        
 
         getimage();
         setState(() {
@@ -271,7 +398,7 @@ String getStatusDisplayName(dynamic status) {
       final token = await getTokenFromPrefs();
 
       ;
-      var response = await http.delete(
+      var response = await _auditMutation('DELETE', 'payment_screenshot_deleted', 
         Uri.parse('$api/api/order/images/delete/${Id}/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -280,18 +407,7 @@ String getStatusDisplayName(dynamic status) {
       );
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Payment image deleted',
-          beforeData: {
-            'Action': 'Payment image existed',
-            'Image ID': Id,
-          },
-          afterData: {
-            'Action': 'Payment image deleted',
-            'Image ID': Id,
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -493,59 +609,7 @@ String getStatusDisplayName(dynamic status) {
     return prefs.getString('token');
   }
 
-  Future<void> createlog({
-    required BuildContext scaffoldContext,
-    required String action,
-    dynamic beforeData,
-    dynamic afterData,
-  }) async {
-    final String? token = await getTokenFromPrefs();
 
-    if (token == null || token.trim().isEmpty) {
-      debugPrint(
-        'Unable to create log for "$action": authentication token not found.',
-      );
-      return;
-    }
-
-    try {
-      final http.Response response = await http.post(
-        Uri.parse(
-          '$api/api/datalog/create/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': beforeData ??
-              {
-                'Action': action,
-              },
-          'after_data': afterData ??
-              {
-                'Action': action,
-              },
-          'order': widget.id,
-        }),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        debugPrint(
-          'Log added successfully: $action',
-        );
-      } else {
-        debugPrint(
-          'Log creation failed for "$action": '
-          '${response.statusCode} - ${response.body}',
-        );
-      }
-    } catch (error) {
-      debugPrint(
-        'Error creating log for "$action": $error',
-      );
-    }
-  }
 
 
   Future<String?> getdepartment() async {
@@ -638,7 +702,7 @@ List<String> getAvailableOrderStatuses() {
   final token = await getTokenFromPrefs();
 
   try {
-    final response = await http.post(
+    final response = await _auditMutation('POST', 'delivery_note_unlocked', 
       Uri.parse('$api/api/orders/unlock/$id/'),
       headers: {
         'Content-Type': 'application/json',
@@ -650,18 +714,7 @@ List<String> getAvailableOrderStatuses() {
     if (!mounted) return;
 
     if (response.statusCode == 200) {
-      await createlog(
-        scaffoldContext: context,
-        action: 'Delivery note unlocked',
-        beforeData: {
-          'Action': 'Delivery note locked',
-          'Order ID': id,
-        },
-        afterData: {
-          'Action': 'Delivery note unlocked',
-          'Order ID': id,
-        },
-      );
+      
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -756,7 +809,7 @@ List<String> getAvailableOrderStatuses() {
         payload['delivery_return_reason'] = reason;
       }
 
-      final response = await http.put(
+      final response = await _auditMutation('PUT', 'order_status_updated', 
         Uri.parse('$api/api/shipping/${widget.id}/order/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -768,18 +821,7 @@ List<String> getAvailableOrderStatuses() {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Order status updated',
-          beforeData: {
-            'Status': ord?['status'],
-          },
-          afterData: {
-            'Status': selectedOrderStatus,
-            if (selectedOrderStatus == 'Return From Delivery')
-              'Delivery Return Reason': deliveryReturnReason?.trim() ?? '',
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -911,7 +953,7 @@ List<String> getAvailableOrderStatuses() {
 
       String formattedTime = DateFormat("HH:mm").format(DateTime.now());
 
-      var response = await http.patch(
+      var response = await _auditMutation('PATCH', 'box_count_updated', 
         Uri.parse('$api/api/order/box/count/${widget.id}/cod/split/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -922,16 +964,7 @@ List<String> getAvailableOrderStatuses() {
         }),
       );
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Box count updated',
-          beforeData: {
-            'Box Count': boxCount,
-          },
-          afterData: {
-            'Box Count': count.text,
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1042,7 +1075,7 @@ List<String> getAvailableOrderStatuses() {
       final token = await getTokenFromPrefs();
 
       ;
-      var response = await http.put(
+      var response = await _auditMutation('PUT', 'box_verifier_updated', 
         Uri.parse('$api/api/warehouse/detail/$orderId/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -1057,18 +1090,7 @@ List<String> getAvailableOrderStatuses() {
       ;
       ;
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Box verification updated',
-          beforeData: {
-            'Action': 'Verification update requested',
-            'Warehouse Box ID': orderId,
-          },
-          afterData: {
-            'Verified By': selectedManagerId,
-            'Warehouse Box ID': orderId,
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1101,7 +1123,7 @@ List<String> getAvailableOrderStatuses() {
       final token = await getTokenFromPrefs();
 
       ;
-      var response = await http.put(
+      var response = await _auditMutation('PUT', 'box_status_updated', 
         Uri.parse('$api/api/warehouse/detail/$orderId/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -1115,18 +1137,7 @@ List<String> getAvailableOrderStatuses() {
       );
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Box status updated',
-          beforeData: {
-            'Action': 'Previous box status',
-            'Warehouse Box ID': orderId,
-          },
-          afterData: {
-            'Status': selectedBoxStatus,
-            'Warehouse Box ID': orderId,
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1159,7 +1170,7 @@ List<String> getAvailableOrderStatuses() {
       ;
       final token = await getTokenFromPrefs();
 
-      var response = await http.delete(
+      var response = await _auditMutation('DELETE', 'box_deleted', 
         Uri.parse('$api/api/warehouse/detail/$orderId/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -1168,18 +1179,7 @@ List<String> getAvailableOrderStatuses() {
       );
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Warehouse box deleted',
-          beforeData: {
-            'Action': 'Warehouse box existed',
-            'Warehouse Box ID': orderId,
-          },
-          afterData: {
-            'Action': 'Warehouse box deleted',
-            'Warehouse Box ID': orderId,
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1710,107 +1710,11 @@ selectedBoxStatus = order['status']?.toString();
     );
   }
 
-  Future<void> AddStatusTime(BuildContext scaffoldContext) async {
-    final token = await gettoken();
-    try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {"status": "N/A"},
-          'after_data': {"status": "Created ${box.text}"},
-          'order': widget.id,
-        }),
-      );
 
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('time added Successfully.'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding time failed.'),
-          ),
-        );
-      }
-    } catch (e) {}
-  }
 
-  Future<void> Addboxcount(BuildContext scaffoldContext) async {
-    final token = await gettoken();
-    try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {"status": "Box count added"},
-          'after_data': {"status": "Count: ${count.text}"},
-          'order': widget.id,
-        }),
-      );
 
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('time added Successfully.'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding time failed.'),
-          ),
-        );
-      }
-    } catch (e) {}
-  }
 
-  Future<void> deleteboxlog(BuildContext scaffoldContext, var box) async {
-    final token = await gettoken();
-    try {
-      final response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {"status": "Box deleted"},
-          'after_data': {"status": "Count: ${box}"},
-          'order': widget.id,
-        }),
-      );
 
-      if (response.statusCode == 201) {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('time added Successfully.'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Adding time failed.'),
-          ),
-        );
-      }
-    } catch (e) {}
-  }
 
   void addboxdetails(
     File? image1,
@@ -1863,26 +1767,11 @@ selectedBoxStatus = order['status']?.toString();
             await http.MultipartFile.fromPath('image_before', image2.path));
       }
 
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      final response = await _auditMultipart(request, 'warehouse_box_created');
 
       // Handle response based on status code
       if (response.statusCode == 201) {
-        await createlog(
-          scaffoldContext: scaffoldContext,
-          action: 'Warehouse box added',
-          beforeData: {
-            'Action': 'New warehouse box',
-          },
-          afterData: {
-            'Box': box.text,
-            'Tracking ID': transactionid.text,
-            'Parcel Service': selectedserviceId,
-            'Packed By': selectedManagerId ?? loginid,
-            'Shipped Date':
-                selectedDate.toIso8601String().substring(0, 10),
-          },
-        );
+        
 
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
           SnackBar(
@@ -1918,7 +1807,7 @@ selectedBoxStatus = order['status']?.toString();
   try {
     final token = await getTokenFromPrefs();
 
-    final response = await http.put(
+    final response = await _auditMutation('PUT', 'parcel_details_updated', 
       Uri.parse('$api/api/shipping/${widget.id}/order/'),
       headers: {
         'Authorization': 'Bearer $token',
@@ -1931,18 +1820,7 @@ selectedBoxStatus = order['status']?.toString();
     );
 
     if (response.statusCode == 200) {
-      await createlog(
-        scaffoldContext: context,
-        action: 'Parcel service updated',
-        beforeData: {
-          'Parcel Service': ord?['parcel_service'],
-          'Parcel Service Note': ord?['parcel_service_note'],
-        },
-        afterData: {
-          'Parcel Service': selectedserviceId,
-          'Parcel Service Note': parcelNoteController.text.trim(),
-        },
-      );
+      
 
       await fetchOrderItems();
 
@@ -2065,35 +1943,10 @@ selectedBoxStatus = order['status']?.toString();
 
       // ---------------------------------------------------------
 
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      final response = await _auditMultipart(request, 'warehouse_box_details_updated');
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: scaffoldContext,
-          action: 'Warehouse box details updated',
-          beforeData: {
-            'Warehouse Box ID': order['id'],
-            'Box': order['box'],
-            'Length': order['length'],
-            'Breadth': order['breadth'],
-            'Height': order['height'],
-            'Weight': order['weight'],
-            'Status': order['status'],
-          },
-          afterData: {
-            'Warehouse Box ID': order['id'],
-            'Box': updatebox.text,
-            'Length': length.text,
-            'Breadth': breadth.text,
-            'Height': height.text,
-            'Weight': weight.text,
-            'Status': selectedBoxStatus,
-            'Parcel Service': selectedserviceId,
-            'Parcel Service Note': parcelNoteController.text.trim(),
-            'Packed By': selectedManagerId ?? loginid,
-          },
-        );
+        
 
         fetchOrderItems();
 
@@ -2298,7 +2151,7 @@ selectedBoxStatus = order['status']?.toString();
     try {
       final token = await gettoken();
 
-      var response = await http.put(
+      var response = await _auditMutation('PUT', 'billing_address_updated', 
         Uri.parse('$api/api/shipping/${widget.id}/order/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -2314,19 +2167,7 @@ selectedBoxStatus = order['status']?.toString();
       );
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Order address updated',
-          beforeData: {
-            'Billing Address': ord?['billing_address'],
-            'Note': ord?['note'],
-          },
-          afterData: {
-            'Billing Address ID': selectedAddressId,
-            'Note': noteController.text,
-            'Status': ord?['status'],
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2473,7 +2314,7 @@ selectedBoxStatus = order['status']?.toString();
       String formattedReceivedDate =
           DateFormat('yyyy-MM-dd').format(selectedDate);
       final response =
-          await http.post(Uri.parse('$api/api/payment/${widget.id}/reciept/'),
+          await _auditMutation('POST', 'payment_receipt_created', Uri.parse('$api/api/payment/${widget.id}/reciept/'),
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer $token',
@@ -2488,21 +2329,7 @@ selectedBoxStatus = order['status']?.toString();
               }));
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: scaffoldContext,
-          action: 'Receipt added',
-          beforeData: {
-            'Action': 'Receipt creation',
-          },
-          afterData: {
-            'Amount': amountController.text,
-            'Bank': selectedBank,
-            'Tracking ID': transactionIdController.text,
-            'Received At': formattedReceivedDate,
-            'Created By': createdBy,
-            'Remark': remarkController.text,
-          },
-        );
+        
 
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
           SnackBar(
@@ -2555,6 +2382,7 @@ selectedBoxStatus = order['status']?.toString();
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+        _loadedAuditOrder = Map<String, dynamic>.from(_auditCopy(parsed) as Map);
         ord = parsed['order'];
         int fetchedBoxCount =
             int.tryParse(parsed['order']['box_count']?.toString() ?? '0') ?? 0;
@@ -2650,7 +2478,7 @@ selectedBoxStatus = order['status']?.toString();
     final token = await getTokenFromPrefs();
 
     try {
-      final response = await http.delete(
+      final response = await _auditMutation('DELETE', 'order_item_deleted', 
         Uri.parse('$api/api/remove/order/$Id/item/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -2746,7 +2574,7 @@ selectedBoxStatus = order['status']?.toString();
   Future<void> updatedetails(int id, int quantity, double discount) async {
     try {
       final token = await getTokenFromPrefs();
-      final response = await http.put(
+      final response = await _auditMutation('PUT', 'order_item_updated', 
         Uri.parse('$api/api/remove/order/$id/item/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -2759,18 +2587,7 @@ selectedBoxStatus = order['status']?.toString();
       );
 
       if (response.statusCode == 200) {
-        await createlog(
-          scaffoldContext: context,
-          action: 'Order item updated',
-          beforeData: {
-            'Order Item ID': id,
-          },
-          afterData: {
-            'Order Item ID': id,
-            'Quantity': quantity,
-            'Discount': discount,
-          },
-        );
+        
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -3712,7 +3529,7 @@ selectedBoxStatus = order['status']?.toString();
                           height: 44,
                           child: ElevatedButton(
                             onPressed: () {
-                              Addboxcount(context);
+                              
                               updatecount();
                             },
                             style: ElevatedButton.styleFrom(
@@ -3857,7 +3674,7 @@ selectedBoxStatus = order['status']?.toString();
                           children: [
                             ElevatedButton(
                               onPressed: () {
-                                AddStatusTime(context);
+                                
 
                                 addboxdetails(selectedImage, selectedImage2,
                                     selectedDate, context);
@@ -4005,8 +3822,7 @@ selectedBoxStatus = order['status']?.toString();
                                               GestureDetector(
                                                 onTap: () {
                                                   deletebox(order['id']);
-                                                  deleteboxlog(
-                                                      context, order['box']);
+                                                  
                                                 },
                                                 child: Image.asset(
                                                   "lib/assets/close.png",

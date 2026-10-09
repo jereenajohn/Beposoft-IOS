@@ -68,7 +68,7 @@ import 'package:printing/printing.dart';
 
 import 'package:pdf/widgets.dart' as pw;
 
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 
 import 'package:open_filex/open_filex.dart';
 
@@ -82,6 +82,30 @@ class OrderList extends StatefulWidget {
 }
 
 class _OrderListState extends State<OrderList> {
+  final ScrollController _orderScrollController = ScrollController();
+
+  int _orderRequestVersion = 0;
+
+  bool _exportingExcel = false;
+
+  void _loadNextOrders() {
+    if (!_orderScrollController.hasClients || isLoadingMore || !hasNextPage)
+      return;
+
+    if (_orderScrollController.position.extentAfter < 300) {
+      fetchOrderData(loadMore: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _orderRequestVersion++;
+
+    _orderScrollController.dispose();
+
+    super.dispose();
+  }
+
   List<Map<String, dynamic>> orders = [];
 
   List<Map<String, dynamic>> filteredOrders = [];
@@ -174,6 +198,8 @@ class _OrderListState extends State<OrderList> {
   void initState() {
     super.initState();
 
+    _orderScrollController.addListener(_loadNextOrders);
+
     fetchOrderData();
   }
 
@@ -216,13 +242,34 @@ class _OrderListState extends State<OrderList> {
     }
   }
 
-  Future<void> fetchOrderData() async {
+  Future<void> fetchOrderData({bool loadMore = false}) async {
+    if (loadMore && (isLoadingMore || !hasNextPage)) return;
+
+    final requestVersion =
+        loadMore ? _orderRequestVersion : ++_orderRequestVersion;
+
+    final requestedPage = loadMore ? currentPage + 1 : 1;
+
+    bool loadedSuccessfully = false;
+
+    if (!mounted) return;
+
+    setState(() {
+      isLoadingMore = true;
+
+      if (!loadMore) {
+        currentPage = 1;
+
+        hasNextPage = true;
+      }
+    });
+
     try {
       final token = await getTokenFromPrefs();
 
       Uri uri = Uri.parse("$api/api/orders/").replace(
         queryParameters: {
-          'page': currentPage.toString(),
+          'page': requestedPage.toString(),
           'search': searchQuery.isNotEmpty ? searchQuery : null,
           'status': selectedStatus != 'All' ? selectedStatus : null,
           'start_date': startDate != null
@@ -241,6 +288,8 @@ class _OrderListState extends State<OrderList> {
           'Content-Type': 'application/json',
         },
       );
+
+      if (!mounted || requestVersion != _orderRequestVersion) return;
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
@@ -273,16 +322,43 @@ class _OrderListState extends State<OrderList> {
           }
         }
 
-        setState(() {
-          orders = newOrders;
+        loadedSuccessfully = true;
 
-          filteredOrders = newOrders;
+        setState(() {
+          currentPage = requestedPage;
+
+          if (loadMore) {
+            final ids = orders.map((order) => order['id']).toSet();
+
+            orders = <Map<String, dynamic>>[
+              ...orders,
+              ...newOrders.where((order) => ids.add(order['id'])),
+            ];
+          } else {
+            orders = newOrders;
+          }
+
+          filteredOrders = List<Map<String, dynamic>>.from(orders);
         });
       } else {
         print("Order fetch failed: ${response.body}");
       }
     } catch (e) {
       print("Error fetching orders: $e");
+    } finally {
+      if (mounted && requestVersion == _orderRequestVersion) {
+        setState(() => isLoadingMore = false);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && loadedSuccessfully) {
+            if (filteredOrders.isEmpty && hasNextPage) {
+              fetchOrderData(loadMore: true);
+            } else {
+              _loadNextOrders();
+            }
+          }
+        });
+      }
     }
   }
 
@@ -290,77 +366,6 @@ class _OrderListState extends State<OrderList> {
     setState(() {
       filteredOrders = orders;
     });
-  }
-
-  void goToPage(int page) {
-    if (page < 1 || page > totalPages) return;
-
-    setState(() {
-      currentPage = page;
-    });
-
-    fetchOrderData();
-  }
-
-  Widget buildPagination() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // PREVIOUS BUTTON
-
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  currentPage == 1 ? Colors.grey.shade300 : Colors.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
-            ),
-            onPressed: currentPage == 1
-                ? null
-                : () {
-                    goToPage(currentPage - 1);
-                  },
-            child: const Text("Prev"),
-          ),
-
-          // PAGE TEXT
-
-          Text(
-            "Page $currentPage / $totalPages",
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-
-          // NEXT BUTTON
-
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: currentPage == totalPages
-                  ? Colors.grey.shade300
-                  : Colors.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
-            ),
-            onPressed: currentPage == totalPages
-                ? null
-                : () {
-                    goToPage(currentPage + 1);
-                  },
-            child: const Text("Next"),
-          ),
-        ],
-      ),
-    );
   }
 
   void _filterOrders(String query) {
@@ -473,90 +478,373 @@ class _OrderListState extends State<OrderList> {
     );
   }
 
-  Future<void> exportToExcel() async {
-    var excel = Excel.createExcel();
+  String _excelText(dynamic value) {
+    if (value == null) return '';
 
-    Sheet sheetObject = excel['Order List'];
+    if (value is Map) {
+      for (final key in [
+        'name',
+        'company_name',
+        'staff_name',
+        'family_name',
+        'payment_method',
+        'username'
+      ]) {
+        if (value[key] != null) return value[key].toString();
+      }
 
-    // Add header row
+      return '';
+    }
 
-    sheetObject.appendRow([
-      'Invoice',
-      'Manager',
-      'Customer Name',
-      'Customer Phone',
-      'Customer Email',
-      'Customer Address',
-      'Billing Name',
-      'Billing Email',
-      'Billing Phone',
-      'Billing Address',
-      'Billing City',
-      'Billing State',
-      'Billing Zipcode',
-      'Bank Name',
-      'Bank Account Number',
-      'Bank IFSC Code',
-      'Bank Branch',
-      'Item Name',
-      'Item Quantity',
-      'Item Price',
-      'Item Tax',
-      'Item Discount',
-      'Order Status',
-      'Total Amount',
-      'Order Date',
-    ]);
+    return value.toString();
+  }
 
-    // Populate rows with data
+  String _excelStatus(dynamic value) {
+    final status = (value ?? '').toString().trim();
 
-    for (var order in filteredOrders) {
-      // Iterate through items to create separate rows for each item
+    if (status == 'Return From Delivery') return 'Return From Delivery (RFD)';
 
-      for (var item in order['items']) {
-        sheetObject.appendRow([
-          order['invoice'] ?? '',
-          order['manage_staff'] ?? '',
-          order['customer']['name'] ?? '',
-          order['customer']['phone'] ?? '',
-          order['customer']['email'] ?? '',
-          order['customer']['address'] ?? '',
-          order['billing_address']['name'] ?? '',
-          order['billing_address']['email'] ?? '',
-          order['billing_address']['phone'] ?? '',
-          order['billing_address']['address'] ?? '',
-          order['billing_address']['city'] ?? '',
-          order['billing_address']['state'] ?? '',
-          order['billing_address']['zipcode'] ?? '',
-          order['bank']['name'] ?? '',
-          order['bank']['account_number'] ?? '',
-          order['bank']['ifsc_code'] ?? '',
-          order['bank']['branch'] ?? '',
-          item['name'] ?? '',
-          item['quantity'] ?? '',
-          item['price'] ?? '',
-          item['tax'] ?? '',
-          item['discount'] ?? '',
-          getDisplayStatus(order['status']),
-          order['total_amount'] ?? '',
-          order['order_date'] ?? '',
-        ]);
+    return getDisplayStatus(status);
+  }
+
+  double _excelAmount(dynamic value) => value is num
+      ? value.toDouble()
+      : double.tryParse((value ?? '').toString()) ?? 0;
+
+  Future<List<Map<String, dynamic>>> _fetchExcelOrders() async {
+    final token = await getTokenFromPrefs();
+
+    final parameters = <String, String>{
+      if (searchQuery.isNotEmpty) 'search': searchQuery,
+      if (selectedStatus != 'All') 'status': selectedStatus,
+      if (startDate != null)
+        'start_date': DateFormat('yyyy-MM-dd').format(startDate!),
+      if (endDate != null)
+        'end_date': DateFormat('yyyy-MM-dd').format(endDate!),
+    };
+
+    final pageStatus = widget.status;
+
+    final result = <Map<String, dynamic>>[];
+
+    final seenPages = <String>{};
+
+    final seenIds = <String>{};
+
+    Uri? next = Uri.parse('$api/api/orders/')
+        .replace(queryParameters: {...parameters, 'page': '1'});
+
+    while (next != null) {
+      if (!mounted) throw Exception('Page closed');
+
+      if (!seenPages.add(next.toString()))
+        throw Exception('Repeated export page');
+
+      final response = await http.get(next, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode != 200) {
+        throw Exception('Unable to fetch orders (${response.statusCode})');
+      }
+
+      final decoded = jsonDecode(response.body);
+
+      dynamic data = decoded;
+
+      if (data is Map) data = data['results'] ?? data['data'];
+
+      if (data is Map) data = data['results'] ?? data['data'];
+
+      if (data is! List) throw Exception('Unexpected order response');
+
+      for (final entry in data) {
+        if (entry is Map &&
+            (pageStatus == null || pageStatus == entry['status'])) {
+          final id = entry['id'];
+
+          if (id == null || seenIds.add(id.toString())) {
+            result.add(Map<String, dynamic>.from(entry));
+          }
+        }
+      }
+
+      final nextValue = decoded is Map ? decoded['next'] : null;
+
+      if (nextValue == null || nextValue.toString().isEmpty) {
+        next = null;
+      } else {
+        final resolved = next.resolve(nextValue.toString());
+
+        next = Uri.parse('$api/api/orders/').replace(queryParameters: {
+          ...resolved.queryParameters,
+          ...parameters,
+        });
       }
     }
 
-    // Save the Excel file
+    return result;
+  }
 
-    final tempDir = await getTemporaryDirectory();
+  void _styleExcelRow(Sheet sheet, int row, int columns,
+      {String background = '#FFFFFF',
+      String foreground = '#203040',
+      bool bold = false}) {
+    for (var column = 0; column < columns; column++) {
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: column, rowIndex: row))
+          .cellStyle = CellStyle(
+        backgroundColorHex: background,
+        fontColorHex: foreground,
+        bold: bold,
+        verticalAlign: VerticalAlign.Center,
+        horizontalAlign:
+            column == 0 ? HorizontalAlign.Center : HorizontalAlign.Left,
+        textWrapping: TextWrapping.WrapText,
+      );
+    }
+  }
 
-    final tempPath = "${tempDir.path}/order_list.xlsx";
+  Future<void> exportToExcel() async {
+    if (_exportingExcel || !mounted) return;
 
-    final tempFile = File(tempPath);
+    _exportingExcel = true;
 
-    await tempFile.writeAsBytes(await excel.encode()!);
+    final messenger = ScaffoldMessenger.of(context);
 
-    // Open the file
+    final progress = messenger.showSnackBar(const SnackBar(
+        content: Text('Preparing Excel export…'), duration: Duration(days: 1)));
 
-    await OpenFilex.open(tempPath);
+    try {
+      final data = await _fetchExcelOrders();
+
+      if (!mounted) return;
+
+      if (data.isEmpty) throw Exception('No orders match the selected filters');
+
+      final excel = Excel.createExcel();
+
+      // Keep the package's default sheet: rename/delete mutates
+      // the archive's unmodifiable file list in older Excel versions.
+
+      final summary = excel['Status Summary'];
+
+      final details = excel['Orders'];
+
+      excel.setDefaultSheet('Status Summary');
+
+      final statusColors = <String, String>{
+        'Waiting For Approval': '#DCEBFF',
+        'Invoice Approved': '#D9EAD3',
+        'Pre Booked': '#E4E0FF',
+        'Waiting For Confirmation': '#FFF2CC',
+        'Delivery Order (DO)': '#D9EAF7',
+        'Printed': '#EADCF8',
+        'Pending For Packing': '#FFE5CC',
+        'Packed For Delivery (PFD)': '#D9EAD3',
+        'Return From Delivery (RFD)': '#FCE4D6',
+        'Out For Delivery (OFD)': '#D9EAF7',
+        'Shipped': '#C6EFCE',
+        'Invoice Rejected': '#FFC7CE',
+      };
+
+      final counts = <String, int>{
+        for (final status in statusColors.keys) status: 0
+      };
+
+      double total = 0;
+
+      for (final order in data) {
+        final status = _excelStatus(order['status']);
+
+        counts[status] = (counts[status] ?? 0) + 1;
+
+        total += _excelAmount(order['total_amount']);
+      }
+
+      summary.appendRow(['BEPOSOFT - ORDER STATUS REPORT', '']);
+
+      summary.merge(
+          CellIndex.indexByString('A1'), CellIndex.indexByString('B1'));
+
+      summary.appendRow([
+        'Generated: ${DateFormat('dd/MM/yyyy, hh:mm:ss a').format(DateTime.now())}',
+        ''
+      ]);
+
+      summary.merge(
+          CellIndex.indexByString('A2'), CellIndex.indexByString('B2'));
+
+      summary.appendRow([]);
+
+      summary.appendRow(['TOTAL ORDERS', data.length]);
+
+      summary.appendRow(
+          ['TOTAL ORDER AMOUNT', double.parse(total.toStringAsFixed(2))]);
+
+      summary.appendRow([]);
+
+      summary.appendRow(['ORDER STATUS', 'COUNT']);
+
+      _styleExcelRow(summary, 0, 2,
+          background: '#17365D', foreground: '#FFFFFF', bold: true);
+
+      _styleExcelRow(summary, 3, 2,
+          background: '#198754', foreground: '#FFFFFF', bold: true);
+
+      _styleExcelRow(summary, 6, 2,
+          background: '#17365D', foreground: '#FFFFFF', bold: true);
+
+      var summaryRow = 7;
+
+      for (final entry in counts.entries) {
+        summary.appendRow([entry.key, entry.value]);
+
+        _styleExcelRow(summary, summaryRow++, 2,
+            background: statusColors[entry.key] ?? '#FFFFFF', bold: true);
+      }
+
+      summary.setColWidth(0, 38);
+
+      summary.setColWidth(1, 22);
+
+      const headers = [
+        'Order #',
+        'Invoice No',
+        'Company Name',
+        'Order Date',
+        'Status',
+        'Customer Name',
+        'Staff',
+        'Family',
+        'Total Amount',
+        'Payment Method'
+      ];
+
+      details.appendRow(List<dynamic>.from(headers));
+
+      _styleExcelRow(details, 0, 10,
+          background: '#17365D', foreground: '#FFFFFF', bold: true);
+
+      const widths = [
+        12.0,
+        19.0,
+        48.0,
+        18.0,
+        32.0,
+        35.0,
+        25.0,
+        20.0,
+        20.0,
+        28.0
+      ];
+
+      for (var column = 0; column < widths.length; column++) {
+        details.setColWidth(column, widths[column]);
+      }
+
+      for (var index = 0; index < data.length; index++) {
+        final order = data[index];
+
+        final customer =
+            order['customer'] is Map ? order['customer'] as Map : {};
+
+        final status = _excelStatus(order['status']);
+
+        details.appendRow([
+          index + 1,
+          _excelText(order['invoice']),
+          _excelText(order['company_name'] ?? order['company']),
+          _excelText(order['order_date']),
+          status,
+          _excelText(
+              customer['name'] ?? order['customer_name'] ?? order['customer']),
+          _excelText(order['manage_staff_name'] ??
+              order['staff_name'] ??
+              order['manage_staff']),
+          _excelText(order['family_name'] ?? order['family']),
+          double.parse(_excelAmount(order['total_amount']).toStringAsFixed(2)),
+          _excelText(order['payment_method']),
+        ]);
+
+        _styleExcelRow(details, index + 1, 10,
+            background: index.isEven ? '#FFFFFF' : '#F2F6FC');
+
+        details
+                .cell(CellIndex.indexByColumnRow(
+                    columnIndex: 4, rowIndex: index + 1))
+                .cellStyle =
+            CellStyle(
+                backgroundColorHex: statusColors[status] ?? '#FFFFFF',
+                fontColorHex: '#203040',
+                bold: true,
+                textWrapping: TextWrapping.WrapText);
+
+        details
+                .cell(CellIndex.indexByColumnRow(
+                    columnIndex: 8, rowIndex: index + 1))
+                .cellStyle =
+            CellStyle(
+                backgroundColorHex: index.isEven ? '#FFFFFF' : '#F2F6FC',
+                fontColorHex: '#198754',
+                bold: true,
+                horizontalAlign: HorizontalAlign.Right);
+      }
+
+      details.appendRow([
+        '',
+        'GRAND TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        double.parse(total.toStringAsFixed(2)),
+        ''
+      ]);
+
+      _styleExcelRow(details, data.length + 1, 10,
+          background: '#17365D', foreground: '#FFFFFF', bold: true);
+
+      final bytes = excel.encode();
+
+      if (bytes == null || bytes.isEmpty)
+        throw Exception('Unable to encode Excel file');
+
+      final directory = await getApplicationDocumentsDirectory();
+
+      final filePath =
+          '${directory.path}/Beposoft_Orders_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.xlsx';
+
+      await File(filePath).writeAsBytes(bytes, flush: true);
+
+      progress.close();
+
+      if (!mounted) return;
+
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Excel exported successfully')));
+
+      final opened = await OpenFilex.open(filePath);
+
+      if (opened.type != ResultType.done && mounted) {
+        messenger.showSnackBar(SnackBar(
+            content: Text(
+                'Excel saved at $filePath. Unable to open: ${opened.message}')));
+      }
+    } catch (error) {
+      progress.close();
+
+      if (mounted)
+        messenger.showSnackBar(
+            SnackBar(content: Text('Excel export failed: $error')));
+    } finally {
+      progress.close();
+
+      _exportingExcel = false;
+    }
   }
 
   Future<pw.Document> createPdf() async {
@@ -967,7 +1255,9 @@ class _OrderListState extends State<OrderList> {
 
                 switch (value) {
                   case 'Option 1':
-                    exportToExcel();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) exportToExcel();
+                    });
 
                     break;
 
@@ -1052,10 +1342,6 @@ class _OrderListState extends State<OrderList> {
 
             SizedBox(height: 10),
 
-            buildPagination(),
-
-            SizedBox(height: 10),
-
             Expanded(
               child: filteredOrders.isEmpty
                   ? Center(
@@ -1070,28 +1356,20 @@ class _OrderListState extends State<OrderList> {
                       ),
                     )
                   : RefreshIndicator(
-                      onRefresh: fetchOrderData,
+                      onRefresh: () => fetchOrderData(),
                       child: ListView.builder(
-                        itemCount: filteredOrders.length,
+                        controller: _orderScrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount:
+                            filteredOrders.length + (isLoadingMore ? 1 : 0),
                         padding: const EdgeInsets.only(right: 10, left: 10),
                         itemBuilder: (context, index) {
-                          // if (index == filteredOrders.length) {
-
-                          //   fetchOrderData(loadMore: true);
-
-                          //   return const Center(
-
-                          //     child: Padding(
-
-                          //       padding: EdgeInsets.all(10),
-
-                          //       child: CircularProgressIndicator(),
-
-                          //     ),
-
-                          //   );
-
-                          // }
+                          if (index == filteredOrders.length) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
 
                           final order = filteredOrders[index];
 

@@ -1,23 +1,40 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'dart:async';
 
 import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
+
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/HR/hr_dashboard.dart';
+
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/performa_cart.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+
 import 'package:beposoft/pages/api.dart';
 
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CreatePerformaProduct_List extends StatefulWidget {
@@ -35,24 +52,76 @@ class CreatePerformaProduct_List extends StatefulWidget {
 
 class _CreatePerformaProduct_ListState
     extends State<CreatePerformaProduct_List> {
+  Future<http.Response> _postWithProductAudit(
+    Uri endpoint, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final submittedData = body is String
+        ? jsonDecode(body) as Map<String, dynamic>
+        : <String, dynamic>{};
+    final product = _findProductDataById(submittedData['product']);
+    final productSnapshot =
+        product == null ? null : jsonDecode(jsonEncode(product));
+    final isProforma = endpoint.path.contains('/perfoma/order/');
+    final response = await http.post(endpoint, headers: headers, body: body);
+    // Audit collection must not turn a successful save into a UI error.
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      try {
+        dynamic savedData;
+        try {
+          savedData = jsonDecode(response.body);
+        } catch (_) {
+          savedData = response.body;
+        }
+        final logged = await AuditLogService.logCreate(
+          action: isProforma ? 'proforma_product_added' : 'cart_product_added',
+          afterData: <String, dynamic>{
+            'submitted_data': submittedData,
+            'product_details': productSnapshot,
+            if (isProforma) 'proforma_order_id': widget.proformaOrderId,
+            'response_data': savedData,
+            'metadata': <String, dynamic>{
+              'source': 'CreatePerformaProduct_List',
+              'method': 'POST',
+              'endpoint': endpoint.path,
+              'http_status': response.statusCode,
+              'recorded_at': DateTime.now().toUtc().toIso8601String(),
+            },
+          },
+        );
+        if (!logged) debugPrint('Product addition audit failed.');
+      } catch (error) {
+        debugPrint('Product addition audit error: ${error.runtimeType}');
+      }
+    }
+    return response;
+  }
+
   drower d = drower();
 
   List<Map<String, dynamic>> products = [];
+
   List<Map<String, dynamic>> filteredProducts = [];
+
   List<Map<String, dynamic>> Warehouses = [];
 
   String? dep;
+
   var warehouse;
 
   String? selectedCategoryId;
 
   List<String> categories = ["All Categories"];
+
   String selectedCategory = "All Categories";
 
   int currentPage = 1;
+
   int totalProductCount = 0;
 
   String? nextPageUrl;
+
   String? previousPageUrl;
 
   bool isProductLoading = false;
@@ -64,6 +133,7 @@ class _CreatePerformaProduct_ListState
   TextEditingController searchController = TextEditingController();
 
   bool isDefaultWarehouse = true;
+
   String? defaultWarehouse;
 
   @override
@@ -71,6 +141,7 @@ class _CreatePerformaProduct_ListState
     super.initState();
 
     initdata();
+
     getwarehouse();
   }
 
@@ -79,6 +150,7 @@ class _CreatePerformaProduct_ListState
       if (mounted) {
         Navigator.of(context).pop(false);
       }
+
       return;
     }
 
@@ -214,8 +286,11 @@ class _CreatePerformaProduct_ListState
   }
 
   // ============================================================
+
   // LOCKED INVOICE PERMISSION
+
   // Only CEO, COO and Accounts / Accounting can see locked invoices
+
   // ============================================================
 
   bool get canViewLockedInvoices {
@@ -240,6 +315,7 @@ class _CreatePerformaProduct_ListState
 
     setState(() {
       filteredProducts = products;
+
       isDefaultWarehouse = true;
     });
   }
@@ -333,7 +409,9 @@ class _CreatePerformaProduct_ListState
         );
 
         // ============================================================
+
         // PAGINATION
+
         // ============================================================
 
         totalProductCount = parsed['count'] ?? 0;
@@ -345,7 +423,9 @@ class _CreatePerformaProduct_ListState
         currentPage = page;
 
         // ============================================================
+
         // API PRODUCT DATA
+
         // ============================================================
 
         final List<dynamic> productsData = parsed['results']?['data'] is List
@@ -359,22 +439,39 @@ class _CreatePerformaProduct_ListState
         final Set<String> categorySet = <String>{};
 
         // ============================================================
+
         // PROCESS PRODUCTS
+
         //
+
         // IMPORTANT:
+
         //
+
         // Variant parent approval_status is NOT used to decide
+
         // whether its children should be shown.
+
         //
+
         // Example:
+
         //
+
         // Parent:
+
         // approval_status = Disapproved
+
         //
+
         // Child variant:
+
         // approval_status = Approved
+
         //
+
         // The approved child MUST still be displayed.
+
         // ============================================================
 
         for (final dynamic rawProduct in productsData) {
@@ -396,15 +493,25 @@ class _CreatePerformaProduct_ListState
               : <dynamic>[];
 
           // ==========================================================
+
           // VARIANT PRODUCT / PRODUCT GROUP
+
           //
+
           // Do NOT check:
+
           //
+
           // product['approval_status']
+
           //
+
           // here.
+
           //
+
           // We only check approval_status of each actual variant.
+
           // ==========================================================
 
           if (productType == 'variant' || rawVariants.isNotEmpty) {
@@ -418,7 +525,9 @@ class _CreatePerformaProduct_ListState
               );
 
               // ======================================================
+
               // ONLY APPROVED VARIANTS
+
               // ======================================================
 
               final String variantApproval =
@@ -429,9 +538,13 @@ class _CreatePerformaProduct_ListState
               }
 
               // ======================================================
+
               // INHERIT CATEGORY FROM PARENT
+
               //
+
               // Some variant objects may not contain category details.
+
               // ======================================================
 
               final String variantCategoryName =
@@ -447,9 +560,13 @@ class _CreatePerformaProduct_ListState
               }
 
               // ======================================================
+
               // INHERIT IMAGE FROM PARENT
+
               //
+
               // Only when variant image is unavailable.
+
               // ======================================================
 
               final String variantImage =
@@ -460,7 +577,9 @@ class _CreatePerformaProduct_ListState
               }
 
               // ======================================================
+
               // INHERIT OTHER SAFE DISPLAY DATA WHEN MISSING
+
               // ======================================================
 
               if (variant['brand'] == null) {
@@ -472,18 +591,31 @@ class _CreatePerformaProduct_ListState
               }
 
               // ======================================================
+
               // FLATTEN VARIANT
+
               //
+
               // This variant is now treated as an independent product
+
               // row in Flutter.
+
               //
+
               // Setting type = single means the existing UI shows:
+
               //
+
               // ADD
+
               //
+
               // instead of:
+
               //
+
               // VIEW
+
               // ======================================================
 
               variant['type'] = 'single';
@@ -491,7 +623,9 @@ class _CreatePerformaProduct_ListState
               variant['variantIDs'] = <dynamic>[];
 
               // Keep information that this originally came
+
               // from a variant group if needed later.
+
               variant['_is_variant'] = true;
 
               variant['_parent_product_id'] = product['id'];
@@ -499,7 +633,9 @@ class _CreatePerformaProduct_ListState
               variant['_parent_product_name'] = product['name'];
 
               // ======================================================
+
               // CATEGORY COLLECTION
+
               // ======================================================
 
               final String categoryName =
@@ -512,7 +648,9 @@ class _CreatePerformaProduct_ListState
               }
 
               // ======================================================
+
               // ADD VARIANT AS SEPARATE PRODUCT
+
               // ======================================================
 
               productList.add(
@@ -528,22 +666,34 @@ class _CreatePerformaProduct_ListState
             }
 
             // ========================================================
+
             // IMPORTANT
+
             //
+
             // Do NOT add the main/parent product.
+
             //
+
             // User requirement:
+
             // variants should appear separately.
+
             // ========================================================
 
             continue;
           }
 
           // ==========================================================
+
           // NORMAL SINGLE PRODUCT
+
           //
+
           // Unlike a variant parent, a normal single product must
+
           // itself be Approved.
+
           // ==========================================================
 
           final String productApproval =
@@ -554,7 +704,9 @@ class _CreatePerformaProduct_ListState
           }
 
           // ==========================================================
+
           // CATEGORY
+
           // ==========================================================
 
           final String categoryName =
@@ -567,10 +719,13 @@ class _CreatePerformaProduct_ListState
           }
 
           // No nested variant UI is needed for single products.
+
           product['variantIDs'] = <dynamic>[];
 
           // ==========================================================
+
           // ADD SINGLE PRODUCT
+
           // ==========================================================
 
           productList.add(
@@ -585,7 +740,9 @@ class _CreatePerformaProduct_ListState
         }
 
         // ============================================================
+
         // DEBUG
+
         // ============================================================
 
         debugPrint(
@@ -612,7 +769,9 @@ class _CreatePerformaProduct_ListState
         }
 
         // ============================================================
+
         // UPDATE UI
+
         // ============================================================
 
         setState(() {
@@ -624,7 +783,9 @@ class _CreatePerformaProduct_ListState
           ];
 
           // ==========================================================
+
           // CATEGORY RESET
+
           // ==========================================================
 
           if (!categories.contains(
@@ -634,7 +795,9 @@ class _CreatePerformaProduct_ListState
           }
 
           // ==========================================================
+
           // APPLY CATEGORY FILTER
+
           // ==========================================================
 
           filteredProducts = products.where(
@@ -695,9 +858,13 @@ class _CreatePerformaProduct_ListState
       }
     }
   }
+
   // ============================================================
+
   // LOCKED INVOICE API
+
   // Same API used in normal order_products page
+
   // ============================================================
 
   Future<List<Map<String, dynamic>>> showlockedstockinvoice(
@@ -775,7 +942,7 @@ class _CreatePerformaProduct_ListState
     );
 
     try {
-      final http.Response response = await http.post(
+      final http.Response response = await _postWithProductAudit(
         Uri.parse(
           '$api/api/cart/product/excel/',
         ),
@@ -920,7 +1087,7 @@ class _CreatePerformaProduct_ListState
     );
 
     try {
-      final http.Response response = await http.post(
+      final http.Response response = await _postWithProductAudit(
         Uri.parse(
           '$api/api/cart/product/excel/',
         ),
@@ -1051,6 +1218,7 @@ class _CreatePerformaProduct_ListState
           "Authentication token not found.",
         );
       }
+
       return false;
     }
 
@@ -1083,7 +1251,7 @@ class _CreatePerformaProduct_ListState
         rawDescription.isNotEmpty ? rawDescription : 'Additional product';
 
     try {
-      final http.Response response = await http.post(
+      final http.Response response = await _postWithProductAudit(
         Uri.parse(
           '$api/api/perfoma/order/$orderId/item/add/',
         ),
@@ -1161,8 +1329,11 @@ class _CreatePerformaProduct_ListState
   }
 
   // ============================================================
+
   // QUANTITY DIALOG
+
   // Added locked invoice fetching without changing cart logic
+
   // ============================================================
 
   Future<void> showSizeDialog3(
@@ -1190,6 +1361,7 @@ class _CreatePerformaProduct_ListState
         stock <= 0 || rawAvailableStock <= 0 ? 0 : rawAvailableStock;
 
     // Locked invoices are fetched only for permitted departments.
+
     List<Map<String, dynamic>> lockedInvoices = [];
 
     if (canViewLockedInvoices) {
@@ -1232,6 +1404,7 @@ class _CreatePerformaProduct_ListState
       if (!mounted || !added) return;
 
       Navigator.of(this.context).pop(true);
+
       return;
     }
 
@@ -1301,6 +1474,7 @@ class _CreatePerformaProduct_ListState
             onPressed: () async {
               if (widget.proformaOrderId != null) {
                 Navigator.of(context).pop(false);
+
                 return;
               }
 
@@ -1770,16 +1944,20 @@ class _CreatePerformaProduct_ListState
 }
 
 // ============================================================================
+
 // PERFORMA QUANTITY DIALOG
+
 // ============================================================================
 
 class _PerformaQuantityDialog extends StatefulWidget {
   final String productName;
 
   final num availableStock;
+
   final num stock;
 
   final bool canViewStock;
+
   final bool canAddToCart;
 
   final bool canViewLockedInvoices;
@@ -1871,6 +2049,7 @@ class _PerformaQuantityDialogState extends State<_PerformaQuantityDialog> {
         horizontal: 20,
         vertical: 40,
       ),
+
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(
           20,
@@ -1878,12 +2057,19 @@ class _PerformaQuantityDialogState extends State<_PerformaQuantityDialog> {
       ),
 
       // =========================================================
+
       // FIX:
+
       // Do NOT add MediaQuery.viewInsets.bottom here.
+
       //
+
       // Dialog already handles the keyboard inset.
+
       // Adding viewInsets.bottom again was creating the huge
+
       // blank space and pushing the dialog content upward.
+
       // =========================================================
 
       child: Padding(
@@ -1955,8 +2141,11 @@ class _PerformaQuantityDialogState extends State<_PerformaQuantityDialog> {
               ),
 
               // ==================================================
+
               // LOCKED INVOICES
+
               // Visible ONLY for CEO, COO, Accounts / Accounting
+
               // ==================================================
 
               if (widget.canViewLockedInvoices &&
@@ -2000,15 +2189,21 @@ class _PerformaQuantityDialogState extends State<_PerformaQuantityDialog> {
 
               TextField(
                 controller: _quantityController,
+
                 enabled: !_isSubmitting,
 
                 // Keeps keyboard opening immediately.
+
                 // Dialog will now stay compact correctly.
+
                 autofocus: true,
 
                 keyboardType: TextInputType.number,
+
                 textInputAction: TextInputAction.done,
+
                 onSubmitted: (_) => _submit(),
+
                 decoration: InputDecoration(
                   labelText: "Enter Quantity",
                   errorText: _validationMessage,

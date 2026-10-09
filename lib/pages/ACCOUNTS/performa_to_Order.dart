@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -53,6 +54,165 @@ class proforma_to_order_request extends StatefulWidget {
 }
 
 class _proforma_to_order_requestState extends State<proforma_to_order_request> {
+  Map<String, dynamic> _loadedAuditOrder = <String, dynamic>{};
+
+  dynamic _auditCopy(dynamic value) {
+    // Detach the snapshot before any asynchronous request or UI refresh.
+    return jsonDecode(jsonEncode(value, toEncodable: (value) => value.toString()));
+  }
+
+  Map<String, dynamic> _auditSnapshot() {
+    return Map<String, dynamic>.from(_auditCopy(<String, dynamic>{
+      'proforma_invoice': widget.invoice,
+      'loaded_proforma_response': _loadedAuditOrder,
+      'proforma_details': orders,
+      'cart_details': cartdata,
+    }) as Map);
+  }
+
+  int? _createdOrderId(dynamic data) {
+    if (data is! Map) return null;
+    final nestedData = data['data'];
+    final nestedOrder = data['order'];
+    final value = data['order_id'] ?? data['id'] ??
+        (nestedOrder is Map ? nestedOrder['id'] ?? nestedOrder['order_id'] : null) ??
+        (nestedData is Map ? nestedData['order_id'] ?? nestedData['id'] : null);
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  dynamic _auditResponseData(http.Response response) {
+    if (response.body.trim().isEmpty) return null;
+    try {
+      return jsonDecode(response.body);
+    } catch (_) {
+      return response.body;
+    }
+  }
+
+  Future<void> _recordMutation({
+    required String action,
+    required String method,
+    required Uri uri,
+    required Map<String, dynamic> before,
+    required dynamic submitted,
+    http.Response? response,
+    Object? error,
+  }) async {
+    // Keep logging errors separate from the completed business operation.
+    try {
+      final successful = response != null &&
+          response.statusCode >= 200 && response.statusCode < 300;
+      final logged = await AuditLogService.log(
+        action: successful ? action : '${action}_failed',
+        orderId: action == 'order_created_from_proforma' && successful
+            ? _createdOrderId(_auditResponseData(response!)) : null,
+        beforeData: before,
+        afterData: <String, dynamic>{
+          'proforma_invoice': widget.invoice,
+          if (action == 'order_created_from_proforma' && successful)
+            'created_order_id': _createdOrderId(_auditResponseData(response!)),
+          'submitted_data': submitted,
+          'response_data': response == null ? null : _auditResponseData(response),
+          'outcome': successful ? 'success' : 'failed',
+          if (method == 'DELETE' && successful) 'deleted': true,
+          if (error != null) 'error_type': error.runtimeType.toString(),
+          'metadata': <String, dynamic>{
+            'source': 'proforma_to_order_request',
+            'method': method,
+            'endpoint': uri.path,
+            if (response != null) 'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+            // submitted_data is the request, response_data is server output.
+            // Do not pretend a partial response is a full refreshed record.
+          },
+        },
+      );
+      if (!logged) debugPrint('Audit log creation failed [$action].');
+    } catch (auditError, stackTrace) {
+      debugPrint('Audit log creation failed [$action]: $auditError');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<http.Response> _auditMutation(
+    String method,
+    String action,
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+    Encoding? encoding,
+  }) async {
+    final before = _auditSnapshot();
+    try {
+      final cartResponse = await http.get(
+        Uri.parse('$api/api/cart/products/'), headers: headers,
+      );
+      before['cart_snapshot_http_status'] = cartResponse.statusCode;
+      if (cartResponse.statusCode == 200) {
+        before['server_cart_before'] = _auditResponseData(cartResponse);
+      }
+    } catch (error) {
+      before['cart_snapshot_error_type'] = error.runtimeType.toString();
+    }
+    dynamic submitted = body;
+    if (body is String) {
+      try { submitted = jsonDecode(body); } catch (_) {}
+    }
+    submitted = _auditCopy(submitted);
+    late final http.Response response;
+    try {
+      switch (method) {
+        case 'POST':
+          response = await http.post(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'PUT':
+          response = await http.put(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'PATCH':
+          response = await http.patch(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: headers, body: body, encoding: encoding);
+          break;
+        default:
+          throw ArgumentError.value(method, 'method');
+      }
+    } catch (error) {
+      await _recordMutation(action: action, method: method, uri: uri,
+          before: before, submitted: submitted, error: error);
+      rethrow;
+    }
+    await _recordMutation(action: action, method: method, uri: uri,
+        before: before, submitted: submitted, response: response);
+    return response;
+  }
+
+  Future<http.Response> _auditMultipart(http.MultipartRequest request, String action) async {
+    final before = _auditSnapshot();
+    final submitted = <String, dynamic>{
+      'fields': Map<String, String>.from(request.fields),
+      'files': request.files.map((file) => <String, dynamic>{
+        'field': file.field,
+        'filename': file.filename,
+        'size_bytes': file.length,
+        'content_type': file.contentType.toString(),
+      }).toList(),
+    };
+    late final http.Response response;
+    try {
+      response = await http.Response.fromStream(await request.send());
+    } catch (error) {
+      await _recordMutation(action: action,
+          method: 'POST', uri: request.url, before: before,
+          submitted: submitted, error: error);
+      rethrow;
+    }
+    await _recordMutation(action: action,
+        method: 'POST', uri: request.url, before: before,
+        submitted: submitted, response: response);
+    return response;
+  }
+
   drower d = drower();
   Widget _buildDropdownTile(
       BuildContext context, String title, List<String> options) {
@@ -365,6 +525,7 @@ final TextEditingController accountsNoteController =
       );
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+        _loadedAuditOrder = Map<String, dynamic>.from(_auditCopy(parsed) as Map);
 
         List<Map<String, dynamic>> performaInvoiceList = [];
 
@@ -451,7 +612,7 @@ final TextEditingController accountsNoteController =
       throw Exception('Authentication token not found.');
     }
 
-    final http.Response response = await http.delete(
+    final http.Response response = await _auditMutation('DELETE', 'proforma_cart_cleared', 
       Uri.parse('$api/api/cart/delete/all/'),
       headers: {
         'Authorization': 'Bearer $token',
@@ -547,7 +708,7 @@ final TextEditingController accountsNoteController =
     );
 
     final http.Response response =
-        await http.post(
+        await _auditMutation('POST', 'proforma_product_added_to_cart', 
       Uri.parse(
         '$api/api/cart/product/excel/',
       ),
@@ -604,61 +765,7 @@ final TextEditingController accountsNoteController =
   await fetchCartData();
 }
 
-  Future<void> createlog({
-    required dynamic createdOrderData,
-    required dynamic createdOrderId,
-  }) async {
-    final String? token = await gettokenFromPrefs();
 
-    if (token == null || token.trim().isEmpty) {
-      debugPrint(
-        'Unable to create order log: authentication token not found.',
-      );
-      return;
-    }
-
-    try {
-      final http.Response response = await http.post(
-        Uri.parse(
-          '$api/api/datalog/create/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'before_data': {
-            'Action': 'Order created from proforma',
-            'Proforma ID':
-                orders.isNotEmpty ? orders.first['id'] : null,
-            'Proforma Invoice':
-                orders.isNotEmpty ? orders.first['invoice'] : null,
-          },
-          'after_data': {
-            'Data': createdOrderData,
-          },
-          'order': createdOrderId?.toString() ?? '',
-        }),
-      );
-
-      if (response.statusCode == 200 ||
-          response.statusCode == 201) {
-        debugPrint(
-          'Order creation log added successfully. '
-          'Order ID: $createdOrderId',
-        );
-      } else {
-        debugPrint(
-          'Order creation log failed: '
-          '${response.statusCode} - ${response.body}',
-        );
-      }
-    } catch (error) {
-      debugPrint(
-        'Error creating order log: $error',
-      );
-    }
-  }
 
   Future<void> ordercreate(
     BuildContext scaffoldContext,
@@ -824,11 +931,7 @@ final TextEditingController accountsNoteController =
         );
       }
 
-      final http.StreamedResponse streamedResponse =
-          await request.send();
-
-      final http.Response response =
-          await http.Response.fromStream(streamedResponse);
+      final http.Response response = await _auditMultipart(request, 'order_created_from_proforma');
 
       if (!mounted) return;
 
@@ -851,10 +954,7 @@ final TextEditingController accountsNoteController =
           createdOrderData = response.body;
         }
 
-        await createlog(
-          createdOrderData: createdOrderData,
-          createdOrderId: createdOrderId,
-        );
+        
 
         if (!mounted) return;
 

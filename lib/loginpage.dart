@@ -1,23 +1,42 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 
 import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/ASD_dashborad.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
+
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/HR/hr_dashboard.dart';
+
 import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:beposoft/registerationpage.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+
 import 'package:local_auth/local_auth.dart';
 
 class login extends StatefulWidget {
@@ -28,16 +47,59 @@ class login extends StatefulWidget {
 }
 
 class _loginState extends State<login> {
+  Future<void> _logSuccessfulLogin({
+    required String method,
+    required String authenticatedToken,
+    required Map<String, dynamic> userDetails,
+  }) async {
+    try {
+      // The shared audit service uses the saved authenticated token.
+      // Avoid attributing this event to an old account if token storage failed.
+      final savedToken = await getTokenFromPrefs();
+      if (savedToken == null || savedToken != authenticatedToken) {
+        debugPrint('Login audit skipped: authenticated token was not saved.');
+        return;
+      }
+      final logged = await AuditLogService.logCreate(
+        action: method == 'biometric'
+            ? 'biometric_login_successful'
+            : 'password_login_successful',
+        afterData: <String, dynamic>{
+          'login_method': method,
+          'outcome': 'success',
+          ...userDetails,
+          'metadata': <String, dynamic>{
+            'source': 'login_page',
+            'method': 'POST',
+            // The biometric URL includes a token; record only a safe template.
+            'endpoint':
+                method == 'biometric' ? '/api/login/{token}/' : '/api/login/',
+            'http_status': 200,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        },
+      );
+      if (!logged) debugPrint('Successful login audit creation failed.');
+    } catch (error) {
+      // Never expose credential-bearing response data or interrupt login.
+      debugPrint('Successful login audit error: ${error.runtimeType}');
+    }
+  }
+
   var url = "$api/api/login/";
 
   static const Color logoBlue1 = Color(0xFF3F82F6);
+
   static const Color logoBlue2 = Color(0xFF20B8F6);
+
   static const Color logoCyan = Color(0xFF05C7E8);
 
   TextEditingController email = TextEditingController();
+
   TextEditingController password = TextEditingController();
 
   bool isLoading = false;
+
   bool isPasswordVisible = false;
 
   final LocalAuthentication auth = LocalAuthentication();
@@ -52,7 +114,9 @@ class _loginState extends State<login> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     await prefs.setString('token', token);
+
     await prefs.setString('department', department);
+
     await prefs.setString('username', username);
 
     if (warehouse is int) {
@@ -65,6 +129,7 @@ class _loginState extends State<login> {
   Future<void> biometricLogin() async {
     try {
       bool isSupported = await auth.isDeviceSupported();
+
       bool canCheck = await auth.canCheckBiometrics;
 
       if (!isSupported || !canCheck) {
@@ -74,6 +139,7 @@ class _loginState extends State<login> {
             content: Text("Biometric not available"),
           ),
         );
+
         return;
       }
 
@@ -87,6 +153,7 @@ class _loginState extends State<login> {
 
       if (authenticated) {
         final token = await getTokenFromPrefs();
+
         if (token != null && token.isNotEmpty) {
           await addfingerprint();
         } else {
@@ -111,11 +178,13 @@ class _loginState extends State<login> {
 
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
   Future<void> addfingerprint() async {
     final token = await getTokenFromPrefs();
+
     try {
       final response = await http.post(
         Uri.parse('$api/api/login/$token/'),
@@ -128,46 +197,87 @@ class _loginState extends State<login> {
       var active = jsonDecode(response.body)['user']['department'];
 
       if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final user = decoded is Map && decoded['user'] is Map
+            ? decoded['user'] as Map
+            : <String, dynamic>{};
+        await _logSuccessfulLogin(
+          method: 'biometric',
+          authenticatedToken: token ?? '',
+          userDetails: <String, dynamic>{
+            'user_id': user['id'],
+            'username': user['username'],
+            'name': user['name'],
+            'department': active,
+            'warehouse_id': user['warehouse_id'],
+          },
+        );
+        if (!mounted) return;
+
         Widget targetPage;
 
         switch (active) {
           case 'Information Technology':
           case 'Accounts / Accounting':
             targetPage = dashboard();
+
             break;
+
           case 'warehouse':
             targetPage = WarehouseDashboard();
+
             break;
+
           case 'BDO':
             targetPage = bdo_dashbord();
+
             break;
+
           case 'COO':
             targetPage = ceo_dashboard();
+
             break;
+
           case 'CEO':
             targetPage = ceo_dashboard();
+
             break;
+
           case 'SD':
             targetPage = SdDashboard();
+
             break;
+
           case 'ADMIN':
             targetPage = admin_dashboard();
+
             break;
+
           case 'BDM':
             targetPage = bdm_dashbord();
+
             break;
+
           case 'Warehouse Admin':
             targetPage = WarehouseAdmin();
+
             break;
+
           case 'Marketing':
             targetPage = marketing_dashboard();
+
             break;
+
           case 'ASD':
             targetPage = asd_dashbord();
+
             break;
+
           case 'HR':
             targetPage = HrDashboard();
+
             break;
+
           default:
             targetPage = dashboard();
         }
@@ -196,25 +306,49 @@ class _loginState extends State<login> {
 
       if (response.statusCode == 200) {
         var responseData = jsonDecode(response.body);
+
         var status = responseData['status'];
 
         if (status == 'success') {
           var token = responseData['token'];
+
           var active = responseData['active'];
+
           var name = responseData['name'];
+
           var warehouse = responseData['warehouse_id'] ?? 0;
 
           try {
             final jwt = JWT.decode(token);
+
             var id = jwt.payload['id'];
 
             SharedPreferences prefs = await SharedPreferences.getInstance();
+
             await prefs.setInt('user_id', id);
+
             await prefs.setString('token', token);
+
             await prefs.setString('username', name);
+
             await prefs.setInt('warehouse_id', warehouse);
+
             await storeUserData(token, active, name, warehouse);
           } catch (e) {}
+
+          final prefsForAudit = await SharedPreferences.getInstance();
+          await _logSuccessfulLogin(
+            method: 'password',
+            authenticatedToken: token.toString(),
+            userDetails: <String, dynamic>{
+              'user_id': prefsForAudit.getInt('user_id'),
+              'username': email,
+              'name': name,
+              'department': active,
+              'warehouse_id': warehouse,
+            },
+          );
+          if (!mounted) return;
 
           Widget targetPage;
 
@@ -222,40 +356,64 @@ class _loginState extends State<login> {
             case 'Information Technology':
             case 'Accounts / Accounting':
               targetPage = dashboard();
+
               break;
+
             case 'warehouse':
               targetPage = WarehouseDashboard();
+
               break;
+
             case 'BDO':
               targetPage = bdo_dashbord();
+
               break;
+
             case 'SD':
               targetPage = SdDashboard();
+
               break;
+
             case 'COO':
               targetPage = ceo_dashboard();
+
               break;
+
             case 'CEO':
               targetPage = ceo_dashboard();
+
               break;
+
             case 'ADMIN':
               targetPage = admin_dashboard();
+
               break;
+
             case 'BDM':
               targetPage = bdm_dashbord();
+
               break;
+
             case 'Warehouse Admin':
               targetPage = WarehouseAdmin();
+
               break;
+
             case 'CSO':
               targetPage = cso_dashboard();
+
               break;
+
             case 'Marketing':
               targetPage = marketing_dashboard();
+
               break;
+
             case 'HR':
               targetPage = HrDashboard();
+
               break;
+
             default:
               targetPage = dashboard();
           }
@@ -273,14 +431,17 @@ class _loginState extends State<login> {
           );
         } else {
           String errorMessage = responseData['message'] ?? 'Login failed.';
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(backgroundColor: Colors.red, content: Text(errorMessage)),
           );
         }
       } else {
         String errorMessage = 'An error occurred. Please try again.';
+
         try {
           var responseData = jsonDecode(response.body);
+
           if (responseData['message'] != null) {
             errorMessage = responseData['message'];
           }
@@ -558,6 +719,7 @@ class _loginState extends State<login> {
 
 class DividerWithText extends StatelessWidget {
   final String text;
+
   const DividerWithText({super.key, required this.text});
 
   @override

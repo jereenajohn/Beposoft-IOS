@@ -1,23 +1,44 @@
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_bank.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_company.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_department.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_family.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_services.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/customer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/order_request.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/performa_order_request.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Performa_Cart extends StatefulWidget {
@@ -29,89 +50,75 @@ class Performa_Cart extends StatefulWidget {
 
 class _Performa_CartState extends State<Performa_Cart> {
   List<Map<String, dynamic>> cartdata = [];
+
   drower d = drower();
 
   @override
   void initState() {
     super.initState();
+
     fetchCartData();
   }
 
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
+  // ============================================================
+
+  // PROFORMA CART ACTION LOG
+
+  // API: POST /api/datalog/create/
+
+  //
+
+  // DataLog.order is nullable on the backend, so cart actions can
+
+  // be logged before the Proforma/Order has been created.
 
   // ============================================================
-  // PROFORMA CART ACTION LOG
-  // API: POST /api/datalog/create/
-  //
-  // DataLog.order is nullable on the backend, so cart actions can
-  // be logged before the Proforma/Order has been created.
-  // ============================================================
+
   Future<bool> createCartActionLog({
     required String action,
     required Map<String, dynamic> beforeData,
     required Map<String, dynamic> afterData,
     Map<String, dynamic>? metadata,
   }) async {
-    final String? token = await getTokenFromPrefs();
-
-    if (token == null || token.trim().isEmpty) {
-      debugPrint('CART ACTION LOG SKIPPED [$action]: token not found');
+    try {
+      return await AuditLogService.log(
+        action: action,
+        beforeData: <String, dynamic>{
+          'source': 'proforma_cart',
+          ...beforeData,
+        },
+        afterData: <String, dynamic>{
+          'source': 'proforma_cart',
+          ...afterData,
+          if (metadata != null) 'metadata': metadata,
+          'logged_at': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+    } catch (error) {
+      debugPrint('Cart audit error: ${error.runtimeType}');
       return false;
     }
+  }
 
-    final Map<String, dynamic> normalizedBefore = <String, dynamic>{
-      'action': action,
-      'source': 'proforma_cart',
-      ...beforeData,
-    };
-
-    final Map<String, dynamic> normalizedAfter = <String, dynamic>{
-      'action': action,
-      'source': 'proforma_cart',
-      ...afterData,
-      if (metadata != null) 'metadata': metadata,
-      'logged_at': DateTime.now().toIso8601String(),
-    };
-
+  dynamic _auditResponse(http.Response response) {
+    if (response.body.trim().isEmpty) return null;
     try {
-      final http.Response response = await http.post(
-        Uri.parse('$api/api/datalog/create/'),
-        headers: <String, String>{
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(<String, dynamic>{
-          'before_data': normalizedBefore,
-          'after_data': normalizedAfter,
-          'order': null,
-        }),
-      );
-
-      final bool success =
-          response.statusCode == 200 || response.statusCode == 201;
-
-      if (!success) {
-        debugPrint(
-          'CART ACTION LOG FAILED [$action]: '
-          '${response.statusCode} ${response.body}',
-        );
-      }
-
-      return success;
-    } catch (error, stackTrace) {
-      debugPrint('CART ACTION LOG ERROR [$action]: $error');
-      debugPrintStack(stackTrace: stackTrace);
-      return false;
+      return jsonDecode(response.body);
+    } catch (_) {
+      return response.body;
     }
   }
 
   Future<void> fetchCartData() async {
     try {
       final token = await getTokenFromPrefs();
+
       final response = await http.get(
         Uri.parse("$api/api/cart/products/"),
         headers: {
@@ -120,15 +127,16 @@ class _Performa_CartState extends State<Performa_Cart> {
         },
       );
 
-      
-
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
+
         final List<dynamic> cartsData = parsed['data'];
+
         List<Map<String, dynamic>> cartList = [];
 
         for (var cartData in cartsData) {
           cartList.add({
+            '_audit_original': jsonDecode(jsonEncode(cartData)),
             'id': cartData['id'],
             'name': cartData['name'],
             'image': cartData['image'],
@@ -141,28 +149,35 @@ class _Performa_CartState extends State<Performa_Cart> {
             'tax': cartData['tax']
           });
         }
+
         setState(() {
           cartdata = cartList;
-          
         });
       } else {
         throw Exception('Failed to load cart data');
       }
-    } catch (error) {
-      
-    }
+    } catch (error) {}
   }
 
   double calculateTotalPrice() {
     double total = 0;
+
     for (var item in cartdata) {
       final discountPerQuantity = item['discount'] ?? 0.0;
-      final quantity = int.tryParse(item['quantity'].toString()) ?? 0; // Ensure it's an integer
-final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a double
+
+      final quantity = int.tryParse(item['quantity'].toString()) ??
+          0; // Ensure it's an integer
+
+      final price = double.tryParse(item['price'].toString()) ??
+          0.0; // Ensure it's a double
+
       final totalItemPrice = quantity * price;
+
       final totalDiscount = quantity * discountPerQuantity;
+
       total += totalItemPrice - totalDiscount;
     }
+
     return total;
   }
 
@@ -186,6 +201,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
             backgroundColor: Colors.red,
           ),
         );
+
         return;
       }
 
@@ -208,6 +224,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
           action: 'proforma_cart_item_updated',
           beforeData: <String, dynamic>{
             'cart_item_id': id,
+            'product_details': previousItem['_audit_original'] ?? previousItem,
             'product_name': previousItem['name'],
             'slug': previousItem['slug'],
             'size': previousItem['size'],
@@ -219,6 +236,13 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
             'status': 'before_update',
           },
           afterData: <String, dynamic>{
+            'response_data': _auditResponse(response),
+            'submitted_data': <String, dynamic>{
+              'quantity': quantity,
+              'note': description,
+              'discount': discount,
+              'price': price
+            },
             'cart_item_id': id,
             'product_name': previousItem['name'],
             'slug': previousItem['slug'],
@@ -229,6 +253,11 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
             'note': description,
             'tax': previousItem['tax'],
             'status': 'after_update',
+          },
+          metadata: <String, dynamic>{
+            'method': 'PUT',
+            'endpoint': '/api/cart/update/$id/',
+            'http_status': response.statusCode,
           },
         );
 
@@ -251,6 +280,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
       }
     } catch (error, stackTrace) {
       debugPrint('CART UPDATE ERROR: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
       if (!mounted) return;
@@ -279,6 +309,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
           backgroundColor: Colors.red,
         ),
       );
+
       return;
     }
 
@@ -296,6 +327,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
           action: 'proforma_cart_item_deleted',
           beforeData: <String, dynamic>{
             'cart_item_id': id,
+            'product_details': item['_audit_original'] ?? item,
             'product_name': item['name'],
             'slug': item['slug'],
             'size': item['size'],
@@ -307,9 +339,15 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
             'status': 'present',
           },
           afterData: <String, dynamic>{
+            'response_data': _auditResponse(response),
             'cart_item_id': id,
             'product_name': item['name'],
             'status': 'deleted',
+          },
+          metadata: <String, dynamic>{
+            'method': 'DELETE',
+            'endpoint': '/api/cart/update/$id/',
+            'http_status': response.statusCode,
           },
         );
 
@@ -334,6 +372,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
       }
     } catch (error, stackTrace) {
       debugPrint('CART DELETE ERROR: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
       if (!mounted) return;
@@ -350,10 +389,13 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
   void showPopupDialog(BuildContext context, Map<String, dynamic> item) {
     TextEditingController descriptionController =
         TextEditingController(text: item['note'] ?? '');
+
     TextEditingController quantityController =
         TextEditingController(text: item['quantity']?.toString() ?? '');
+
     TextEditingController discountController =
         TextEditingController(text: item['discount']?.toString() ?? '');
+
     TextEditingController pricee =
         TextEditingController(text: item['price']?.toString() ?? '');
 
@@ -378,13 +420,14 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
                 keyboardType: TextInputType.number,
               ),
               TextField(
-                    controller: pricee,
-                    decoration: InputDecoration(labelText: 'Edit Price'),
-                    keyboardType: TextInputType.number,
-                  ),
+                controller: pricee,
+                decoration: InputDecoration(labelText: 'Edit Price'),
+                keyboardType: TextInputType.number,
+              ),
               TextField(
                 controller: discountController,
-                decoration: InputDecoration(labelText: 'Discount (in Rs for each product)'),
+                decoration: InputDecoration(
+                    labelText: 'Discount (in Rs for each product)'),
                 keyboardType: TextInputType.number,
               ),
             ],
@@ -406,15 +449,15 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
               ),
               onPressed: () async {
                 final description = descriptionController.text;
-                final quantity =
-                    int.tryParse(quantityController.text) ??
-                        (int.tryParse(item['quantity'].toString()) ?? 0);
-                final discount =
-                    double.tryParse(discountController.text) ??
-                        (double.tryParse(item['discount'].toString()) ?? 0.0);
-                final upprice =
-                    double.tryParse(pricee.text) ??
-                        (double.tryParse(item['price'].toString()) ?? 0.0);
+
+                final quantity = int.tryParse(quantityController.text) ??
+                    (int.tryParse(item['quantity'].toString()) ?? 0);
+
+                final discount = double.tryParse(discountController.text) ??
+                    (double.tryParse(item['discount'].toString()) ?? 0.0);
+
+                final upprice = double.tryParse(pricee.text) ??
+                    (double.tryParse(item['price'].toString()) ?? 0.0);
 
                 await updatecartdetails(
                   item['id'],
@@ -426,6 +469,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
                 );
 
                 if (!context.mounted) return;
+
                 Navigator.of(context).pop();
               },
               child: Text('Save'),
@@ -435,6 +479,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
       },
     );
   }
+
   Widget _buildDropdownTile(
       BuildContext context, String title, List<String> options) {
     return ExpansionTile(
@@ -444,6 +489,7 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
+
             d.navigateToSelectedPage(
                 context, option); // Navigate to selected page
           },
@@ -452,32 +498,37 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
     );
   }
 
-void logout() async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  await prefs.remove('userId');
-  await prefs.remove('token');
+  void logout() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
 
-  // Use a post-frame callback to show the SnackBar after the current frame
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (ScaffoldMessenger.of(context).mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Logged out successfully'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  });
+    await prefs.remove('userId');
 
-  // Wait for the SnackBar to disappear before navigating
-  await Future.delayed(Duration(seconds: 2));
+    await prefs.remove('token');
 
-  // Navigate to the HomePage after the snackbar is shown
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(builder: (context) => login()),
-  );
-}
+    // Use a post-frame callback to show the SnackBar after the current frame
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ScaffoldMessenger.of(context).mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Logged out successfully'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    });
+
+    // Wait for the SnackBar to disappear before navigating
+
+    await Future.delayed(Duration(seconds: 2));
+
+    // Navigate to the HomePage after the snackbar is shown
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => login()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -489,13 +540,12 @@ void logout() async {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back), // Custom back arrow
-          onPressed: () async{
-                Navigator.pop(context);
-           
+
+          onPressed: () async {
+            Navigator.pop(context);
           },
         ),
       ),
-         
       body: Stack(
         children: [
           Padding(
@@ -505,42 +555,52 @@ void logout() async {
                 children: [
                   cartdata.isEmpty
                       ? SizedBox(
-                height: MediaQuery.of(context).size.height * 0.6, // Take up space to center content
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.remove_shopping_cart,
-                          size: 80, color: Colors.grey[400]),
-                      SizedBox(height: 10),
-                      Text(
-                        "Cart is empty",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
+                          height: MediaQuery.of(context).size.height *
+                              0.6, // Take up space to center content
+
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.remove_shopping_cart,
+                                    size: 80, color: Colors.grey[400]),
+                                SizedBox(height: 10),
+                                Text(
+                                  "Cart is empty",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
                       : ListView.builder(
                           physics: NeverScrollableScrollPhysics(),
                           shrinkWrap: true,
                           itemCount: cartdata.length,
                           itemBuilder: (context, index) {
-                             final item = cartdata[index];
-                             final discountPerQuantity = item['discount'] ?? 0.0;
-                            final quantity = int.tryParse(item['quantity'].toString()) ?? 0; // Ensure it's an integer
-final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a double
-                              
-                              
-                             final totalItemPrice = quantity * price;
-                           
-                             
-                           final totalDiscount = quantity * discountPerQuantity;
-                             final discountedTotalPrice = totalItemPrice - totalDiscount;
+                            final item = cartdata[index];
+
+                            final discountPerQuantity = item['discount'] ?? 0.0;
+
+                            final quantity =
+                                int.tryParse(item['quantity'].toString()) ??
+                                    0; // Ensure it's an integer
+
+                            final price =
+                                double.tryParse(item['price'].toString()) ??
+                                    0.0; // Ensure it's a double
+
+                            final totalItemPrice = quantity * price;
+
+                            final totalDiscount =
+                                quantity * discountPerQuantity;
+
+                            final discountedTotalPrice =
+                                totalItemPrice - totalDiscount;
 
                             return InkWell(
                               onTap: () => showPopupDialog(context, item),
@@ -555,21 +615,21 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
                                       child: Row(
                                         children: [
                                           Image.network(
-                                                    "${item['image']}",
-                                                    width: 80,
-                                                    height: 80,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (context,
-                                                        error, stackTrace) {
-                                                      return Icon(Icons
-                                                          .image_not_supported); // Fallback image or icon
-                                                    },
-                                                  ),
-
+                                            "${item['image']}",
+                                            width: 80,
+                                            height: 80,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                              return Icon(Icons
+                                                  .image_not_supported); // Fallback image or icon
+                                            },
+                                          ),
                                           SizedBox(width: 10),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   item['name'],
@@ -578,24 +638,38 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
+
                                                 // Text("Tax: ${item['tax']} %"),
-                                                if (item['note'] != null && item['note'].isNotEmpty)
+
+                                                if (item['note'] != null &&
+                                                    item['note'].isNotEmpty)
                                                   Text(
                                                     "Description: ${item['note']}",
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: TextStyle(fontSize: 14),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style:
+                                                        TextStyle(fontSize: 14),
                                                   ),
+
                                                 if (quantity > 0)
                                                   Text("Quantity: $quantity"),
+
                                                 if (discountPerQuantity > 0)
-                                                  Text("Discount per item: ₹$discountPerQuantity"),
+                                                  Text(
+                                                      "Discount per item: ₹$discountPerQuantity"),
+
                                                 Text("Price per item: ₹$price"),
-                                                Text("Total price: ₹${totalItemPrice.toStringAsFixed(2)}"),
+
+                                                Text(
+                                                    "Total price: ₹${totalItemPrice.toStringAsFixed(2)}"),
+
                                                 Text(
                                                   "Total discount: -₹${totalDiscount.toStringAsFixed(2)}",
-                                                  style: TextStyle(color: Colors.red),
+                                                  style: TextStyle(
+                                                      color: Colors.red),
                                                 ),
+
                                                 Text(
                                                   "Final price after discount: ₹${discountedTotalPrice.toStringAsFixed(2)}",
                                                   style: TextStyle(
@@ -614,7 +688,8 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
                                     bottom: 4,
                                     right: 4,
                                     child: IconButton(
-                                      icon: Icon(Icons.delete, color: Colors.red),
+                                      icon:
+                                          Icon(Icons.delete, color: Colors.red),
                                       onPressed: () async {
                                         await deletecartitem(item['id'], item);
                                       },
@@ -633,7 +708,8 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
             alignment: Alignment.bottomCenter,
             child: Container(
               color: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -647,7 +723,10 @@ final price = double.tryParse(item['price'].toString()) ?? 0.0; // Ensure it's a
                   ),
                   ElevatedButton(
                     onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context)=>Performa_order_request()));
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => Performa_order_request()));
                     },
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.white,

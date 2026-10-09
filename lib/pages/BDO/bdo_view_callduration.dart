@@ -329,8 +329,9 @@ Future<void> loadPage(int page) async {
 
   Future<void> _clearDateFilter() async {
     setState(() {
-      startDate = null;
-      endDate = null;
+      final today = DateTime.now();
+      startDate = DateTime(today.year, today.month, today.day);
+      endDate = startDate;
       currentPage = 1;
       hasMore = true;
     });
@@ -340,6 +341,9 @@ Future<void> loadPage(int page) async {
   @override
   void initState() {
     super.initState();
+    final today = DateTime.now();
+    startDate = DateTime(today.year, today.month, today.day);
+    endDate = startDate;
     loadReports();
   }
 

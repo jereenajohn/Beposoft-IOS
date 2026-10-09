@@ -43,6 +43,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+import 'package:beposoft/pages/BDO/add_district.dart' as bdo_district;
 
 class bdm_dashbord extends StatefulWidget {
   @override
@@ -2481,6 +2482,12 @@ void dispose() {
       //   'keywords': 'orders orders list',
       // },
       {
+        'title': 'ADD DSR',
+        'icon': Icons.analytics_outlined,
+        'groupType': 'dsr',
+        'keywords': 'add dsr bdo add dsr view dsr list call duration add district',
+      },
+      {
         'title': 'Approve BDO DSR',
         'icon': Icons.analytics_outlined,
         'groupType': 'bdoDsr',
@@ -2566,6 +2573,15 @@ void dispose() {
       //       'icon': Icons.list_alt_rounded,
       //     },
       //   ];
+
+      case 'dsr':
+        return [
+          {'title': 'BDO ADD DSR', 'icon': Icons.add_chart_rounded},
+          {'title': 'VIEW DSR LIST', 'icon': Icons.view_list_rounded},
+          {'title': 'BDO ADD CALL DURATION', 'icon': Icons.add_ic_call_outlined},
+          {'title': 'VIEW CALL DURATION LIST', 'icon': Icons.call_outlined},
+          {'title': 'Add District', 'icon': Icons.location_city_outlined},
+        ];
 
       case 'bdoDsr':
         return [
@@ -2679,6 +2695,20 @@ void dispose() {
           MaterialPageRoute(
             builder: (context) => LocalPurchaseOrderScreen(),
           ),
+        );
+        return;
+
+      case 'BDO ADD DSR':
+      case 'VIEW DSR LIST':
+      case 'BDO ADD CALL DURATION':
+      case 'VIEW CALL DURATION LIST':
+        d.navigateToSelectedPage2(context, item);
+        return;
+
+      case 'Add District':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => bdo_district.AddDistricts()),
         );
         return;
 

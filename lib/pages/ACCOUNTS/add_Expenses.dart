@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:beposoft/audit/audit_new_service.dart';
+
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
@@ -89,43 +91,55 @@ class _add_expenceState extends State<add_expence> {
   final List<String> exp = ['assets', 'expenses'];
   final List<String> expensecategory = ['miscellaneous','permanent','emi','cargo','purchase', 'Other'];
 
-Future<void> AddStatusTime(BuildContext scaffoldContext) async {
-  final token = await gettokenFromPrefs();
-  try {
-    final response = await http.post(
-      Uri.parse('$api/api/datalog/create/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-         'before_data': {"Action": "Expense added "},
-        'after_data':  {"Data": "$responseData"},
-        'order': "",
-      }),
+  String? _auditName(List<Map<String, dynamic>> items, Object? id,
+      {String nameKey = 'name'}) {
+    if (id == null) return null;
+    final item = items.firstWhere(
+      (item) => item['id']?.toString() == id.toString(),
+      orElse: () => <String, dynamic>{},
     );
-
-
-    if (response.statusCode == 201) {
-      
-
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text('time added Successfully.'),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Adding time failed.'),
-        ),
-      );
-    }
-  } catch (e) {
+    return item[nameKey]?.toString();
   }
-}
+
+  Map<String, dynamic> _expenseAuditData(Map<String, dynamic> requestData) {
+    final data = Map<String, dynamic>.from(requestData);
+    // Preserve the submitted IDs separately and show readable names in the log.
+    data['company_id'] = requestData['company'];
+    data['company'] = _auditName(company, requestData['company']);
+    data['payed_by_id'] = requestData['payed_by'];
+    data['payed_by'] = _auditName(sta, requestData['payed_by']);
+    data['bank_id'] = requestData['bank'];
+    data['bank'] = _auditName(bank, requestData['bank']);
+    data['purpose_of_payment_id'] = requestData['purpose_of_payment'];
+    data['purpose_of_payment'] =
+        _auditName(purposesofpay, requestData['purpose_of_payment']);
+    if (requestData.containsKey('loan')) {
+      data['loan_id'] = requestData['loan'];
+      data['loan'] = _auditName(emiList, requestData['loan'], nameKey: 'emi_name');
+    }
+    if (requestData.containsKey('category')) {
+      data['category_id'] = requestData['category'];
+      data['category'] = _auditName(category, requestData['category']);
+    }
+    return data;
+  }
+
+  Future<void> _logExpenseCreated(Map<String, dynamic> afterData) async {
+    // Use the same shared device/location audit service as Add Bank.
+    // A log failure must not turn a successful expense save into a save error.
+    try {
+      final bool auditCreated = await AuditLogService.logCreate(
+        action: 'expense_created',
+        afterData: afterData,
+      );
+      if (!auditCreated) {
+        debugPrint('Expense created successfully, but audit log creation failed.');
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Expense created successfully, but audit log creation failed: $error');
+      debugPrint(stackTrace.toString());
+    }
+  }
 
   List<Map<String, dynamic>> category = [];
   Future<void> getEmiReport(var id) async {
@@ -565,7 +579,6 @@ Future<void> AddStatusTime(BuildContext scaffoldContext) async {
   String formatDate(DateTime date) {
     return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
-var responseData;
   void addexpense() async {
     final token = await gettokenFromPrefs();
 
@@ -596,12 +609,7 @@ var responseData;
         }
       }
 
-      var response = await http.post(
-        Uri.parse('$api/api/expense/add/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-        body: {
+      final requestData = <String, dynamic>{
           "company": selectedCompanyId.toString(),
           "payed_by": selectedstaffId.toString(),
           "bank": selectedbankId.toString(),
@@ -616,13 +624,20 @@ var responseData;
           "name": proname.text,
           "quantity": quantity.text,
           "expense_type": selectedtype1
+        };
+      final auditData = _expenseAuditData(requestData);
+
+      var response = await http.post(
+        Uri.parse('$api/api/expense/add/'),
+        headers: {
+          'Authorization': 'Bearer $token',
         },
+        body: requestData,
       );
 
       if (response.statusCode == 200) {
-       var Data = jsonDecode(response.body);
-        responseData = Data['data'];
-        AddStatusTime(context);
+        await _logExpenseCreated(auditData);
+        if (!mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => add_expence()),
@@ -660,12 +675,7 @@ var responseData;
       if (username == null) {
         return;
       }
-      var response = await http.post(
-        Uri.parse('$api/api/expense/addexpectemi/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-        body: {
+      final requestData = <String, dynamic>{
           "company": selectedCompanyId.toString(),
           "payed_by": selectedstaffId.toString(),
           "bank": selectedbankId.toString(),
@@ -681,12 +691,19 @@ var responseData;
           "expense_type":selectedtype1
           // "name": proname.text,
           // "quantity": quantity.text,
+        };
+      final auditData = _expenseAuditData(requestData);
+
+      var response = await http.post(
+        Uri.parse('$api/api/expense/addexpectemi/'),
+        headers: {
+          'Authorization': 'Bearer $token',
         },
+        body: requestData,
       );
       if (response.statusCode == 200) {
-        var Data = jsonDecode(response.body);
-        responseData = Data['data'];
-        AddStatusTime(context);
+        await _logExpenseCreated(auditData);
+        if (!mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => add_expence()),
@@ -726,12 +743,7 @@ var responseData;
       if (username == null) {
         return;
       }
-      var response = await http.post(
-        Uri.parse('$api/api/assest/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-        body: {
+      final requestData = <String, dynamic>{
           "company": selectedCompanyId.toString(),
           "payed_by": selectedstaffId.toString(),
           "bank": selectedbankId.toString(),
@@ -747,15 +759,22 @@ var responseData;
           "name": proname.text,
           "quantity": quantity.text,
           "expense_type": selectedtype1
+        };
+      final auditData = _expenseAuditData(requestData);
+
+      var response = await http.post(
+        Uri.parse('$api/api/assest/'),
+        headers: {
+          'Authorization': 'Bearer $token',
         },
+        body: requestData,
       );
 
       ;
 
       if (response.statusCode == 200) {
-         var Data = jsonDecode(response.body);
-        responseData = Data['data'];
-        AddStatusTime(context);
+        await _logExpenseCreated(auditData);
+        if (!mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => add_expence()),

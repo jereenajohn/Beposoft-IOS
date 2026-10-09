@@ -79,15 +79,15 @@ class _WarehouseAdminState extends State<WarehouseAdmin>
 
   String? dgmSummaryError;
 
-static const List<String> warehouseDashboardStatuses = [
-  'To Print',
-  'Packing under progress',
-  'Pending For Packing',
-  'Packed',
-  'Ready to ship',
-  'Return From Delivery',
-  'Shipped',
-];
+  static const List<String> warehouseDashboardStatuses = [
+    'To Print',
+    'Packing under progress',
+    'Pending For Packing',
+    'Packed',
+    'Ready to ship',
+    'Return From Delivery',
+    'Shipped',
+  ];
 
   int inboxMailCount = 0;
 
@@ -424,386 +424,365 @@ static const List<String> warehouseDashboardStatuses = [
   // FETCH TODAY STATUS COUNTS
   // ============================================================
 
-Future<void> fetchTodayStatusCounts() async {
-  if (!mounted) return;
+  Future<void> fetchTodayStatusCounts() async {
+    if (!mounted) return;
 
-  setState(() {
-    isLoadingTodayStatusCounts = true;
-    todayStatusError = null;
-  });
+    setState(() {
+      isLoadingTodayStatusCounts = true;
+      todayStatusError = null;
+    });
 
-  try {
-    final String? token = await getTokenFromPrefs();
+    try {
+      final String? token = await getTokenFromPrefs();
 
-    if (token == null || token.trim().isEmpty) {
+      if (token == null || token.trim().isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          todayStatusCounts = [];
+          isLoadingTodayStatusCounts = false;
+          todayStatusError = 'Authentication token not found';
+        });
+
+        return;
+      }
+
+      // ============================================================
+      // DATE VALUES
+      // ============================================================
+
+      final DateTime now = DateTime.now();
+
+      final String today = DateFormat(
+        'yyyy-MM-dd',
+      ).format(now);
+
+      final String currentMonthStart = DateFormat(
+        'yyyy-MM-dd',
+      ).format(
+        DateTime(
+          now.year,
+          now.month,
+          1,
+        ),
+      );
+
+      // ============================================================
+      // COMMON API REQUEST
+      // ============================================================
+
+      Future<Map<String, int>> fetchStatusSummary({
+        String? date,
+        String? startDate,
+        String? endDate,
+        required String requestType,
+      }) async {
+        final Map<String, String> params = {};
+
+        // TODAY
+        if (date != null && date.trim().isNotEmpty) {
+          params['date'] = date;
+        }
+
+        // CURRENT MONTH / DATE RANGE
+        if (startDate != null && startDate.trim().isNotEmpty) {
+          params['start_date'] = startDate;
+        }
+
+        if (endDate != null && endDate.trim().isNotEmpty) {
+          params['end_date'] = endDate;
+        }
+
+        final Uri uri = Uri.parse(
+          '$api/api/shipping/status/history/summary/',
+        ).replace(
+          queryParameters: params,
+        );
+
+        debugPrint(
+          '=============================================',
+        );
+
+        debugPrint(
+          'STATUS REQUEST TYPE: $requestType',
+        );
+
+        debugPrint(
+          'STATUS REQUEST URL: $uri',
+        );
+
+        final http.Response response = await http.get(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            // Avoid stale intermediary response where applicable.
+            'Cache-Control': 'no-cache',
+          },
+        );
+
+        debugPrint(
+          'STATUS RESPONSE CODE [$requestType]: '
+          '${response.statusCode}',
+        );
+
+        debugPrint(
+          'STATUS RESPONSE BODY [$requestType]: '
+          '${response.body}',
+        );
+
+        debugPrint(
+          '=============================================',
+        );
+
+        if (response.statusCode != 200) {
+          throw Exception(
+            'Failed to load $requestType status summary '
+            '(${response.statusCode})',
+          );
+        }
+
+        final dynamic decoded = jsonDecode(
+          response.body,
+        );
+
+        if (decoded is! Map<String, dynamic>) {
+          throw Exception(
+            'Invalid response from server',
+          );
+        }
+
+        final String responseStatus =
+            decoded['status']?.toString().trim().toLowerCase() ?? '';
+
+        if (responseStatus.isNotEmpty && responseStatus != 'success') {
+          throw Exception(
+            decoded['message']?.toString() ?? 'Failed to load status summary',
+          );
+        }
+
+        // ============================================================
+        // DEBUG BACKEND FILTERS
+        // ============================================================
+
+        final dynamic filters = decoded['filters'];
+
+        if (filters is Map) {
+          debugPrint(
+            'BACKEND FILTERS [$requestType]',
+          );
+
+          debugPrint(
+            'date       : ${filters['date']}',
+          );
+
+          debugPrint(
+            'start_date : ${filters['start_date']}',
+          );
+
+          debugPrint(
+            'end_date   : ${filters['end_date']}',
+          );
+        }
+
+        // ============================================================
+        // DATA
+        // ============================================================
+
+        final dynamic data = decoded['data'];
+
+        if (data is! Map) {
+          throw Exception(
+            'Invalid status summary data',
+          );
+        }
+
+        debugPrint(
+          'TOTAL COUNT [$requestType]: '
+          '${data['total_count']}',
+        );
+
+        final dynamic rawStatusCounts = data['status_counts'];
+
+        if (rawStatusCounts == null) {
+          return <String, int>{};
+        }
+
+        if (rawStatusCounts is! Map) {
+          throw Exception(
+            'Invalid status_counts data',
+          );
+        }
+
+        final Map<String, int> statusMap = <String, int>{};
+
+        rawStatusCounts.forEach(
+          (
+            dynamic key,
+            dynamic value,
+          ) {
+            final String status = key?.toString().trim() ?? '';
+
+            if (status.isEmpty) {
+              return;
+            }
+
+            int count = 0;
+
+            if (value is int) {
+              count = value;
+            } else if (value is num) {
+              count = value.toInt();
+            } else {
+              count = int.tryParse(
+                    value?.toString() ?? '0',
+                  ) ??
+                  0;
+            }
+
+            statusMap[status] = count;
+          },
+        );
+
+        debugPrint(
+          'PARSED STATUS MAP [$requestType]: '
+          '$statusMap',
+        );
+
+        return statusMap;
+      }
+
+      // ============================================================
+      // FETCH BOTH REQUESTS
+      // ============================================================
+
+      final List<Map<String, int>> responses =
+          await Future.wait<Map<String, int>>(
+        [
+          // ========================================================
+          // TODAY
+          //
+          // Example:
+          // ?date=2026-08-31
+          // ========================================================
+
+          fetchStatusSummary(
+            date: today,
+            requestType: 'TODAY',
+          ),
+
+          // ========================================================
+          // TILL TODAY = CURRENT MONTH
+          //
+          // Example:
+          // ?start_date=2026-08-01
+          // &end_date=2026-08-31
+          // ========================================================
+
+          fetchStatusSummary(
+            startDate: currentMonthStart,
+            endDate: today,
+            requestType: 'CURRENT MONTH',
+          ),
+        ],
+      );
+
+      // ============================================================
+      // RESPONSE 1 = TODAY
+      // ============================================================
+
+      final Map<String, int> todayStatusMap = responses[0];
+
+      // ============================================================
+      // RESPONSE 2 = CURRENT MONTH TILL TODAY
+      // ============================================================
+
+      final Map<String, int> tillTodayStatusMap = responses[1];
+
+      debugPrint(
+        '=============================================',
+      );
+
+      debugPrint(
+        'FINAL TODAY MAP:',
+      );
+
+      debugPrint(
+        todayStatusMap.toString(),
+      );
+
+      debugPrint(
+        'FINAL CURRENT MONTH MAP:',
+      );
+
+      debugPrint(
+        tillTodayStatusMap.toString(),
+      );
+
+      debugPrint(
+        '=============================================',
+      );
+
+      // ============================================================
+      // EXISTING DASHBOARD STATUS MAPPING
+      // ============================================================
+
+      final List<Map<String, dynamic>> filteredStatusList =
+          warehouseDashboardStatuses.map(
+        (
+          String status,
+        ) {
+          final int todayCount = todayStatusMap[status] ?? 0;
+
+          final int tillTodayCount = tillTodayStatusMap[status] ?? 0;
+
+          debugPrint(
+            '$status => '
+            'Today: $todayCount | '
+            'Till Today: $tillTodayCount',
+          );
+
+          return <String, dynamic>{
+            'status': status,
+
+            // Today only
+            'today_count': todayCount,
+
+            // First day of current month -> today
+            'all_count': tillTodayCount,
+          };
+        },
+      ).toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        todayStatusCounts = filteredStatusList;
+
+        isLoadingTodayStatusCounts = false;
+
+        todayStatusError = null;
+      });
+    } catch (error, stackTrace) {
+      debugPrint(
+        'STATUS HISTORY SUMMARY ERROR: $error',
+      );
+
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
       if (!mounted) return;
 
       setState(() {
         todayStatusCounts = [];
+
         isLoadingTodayStatusCounts = false;
-        todayStatusError = 'Authentication token not found';
+
+        todayStatusError = 'Unable to load order status summary';
       });
-
-      return;
     }
-
-    // ============================================================
-    // DATE VALUES
-    // ============================================================
-
-    final DateTime now = DateTime.now();
-
-    final String today = DateFormat(
-      'yyyy-MM-dd',
-    ).format(now);
-
-    final String currentMonthStart = DateFormat(
-      'yyyy-MM-dd',
-    ).format(
-      DateTime(
-        now.year,
-        now.month,
-        1,
-      ),
-    );
-
-    // ============================================================
-    // COMMON API REQUEST
-    // ============================================================
-
-    Future<Map<String, int>> fetchStatusSummary({
-      String? date,
-      String? startDate,
-      String? endDate,
-      required String requestType,
-    }) async {
-      final Map<String, String> params = {};
-
-      // TODAY
-      if (date != null && date.trim().isNotEmpty) {
-        params['date'] = date;
-      }
-
-      // CURRENT MONTH / DATE RANGE
-      if (startDate != null &&
-          startDate.trim().isNotEmpty) {
-        params['start_date'] = startDate;
-      }
-
-      if (endDate != null &&
-          endDate.trim().isNotEmpty) {
-        params['end_date'] = endDate;
-      }
-
-      final Uri uri = Uri.parse(
-        '$api/api/shipping/status/history/summary/',
-      ).replace(
-        queryParameters: params,
-      );
-
-      debugPrint(
-        '=============================================',
-      );
-
-      debugPrint(
-        'STATUS REQUEST TYPE: $requestType',
-      );
-
-      debugPrint(
-        'STATUS REQUEST URL: $uri',
-      );
-
-      final http.Response response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          // Avoid stale intermediary response where applicable.
-          'Cache-Control': 'no-cache',
-        },
-      );
-
-      debugPrint(
-        'STATUS RESPONSE CODE [$requestType]: '
-        '${response.statusCode}',
-      );
-
-      debugPrint(
-        'STATUS RESPONSE BODY [$requestType]: '
-        '${response.body}',
-      );
-
-      debugPrint(
-        '=============================================',
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load $requestType status summary '
-          '(${response.statusCode})',
-        );
-      }
-
-      final dynamic decoded = jsonDecode(
-        response.body,
-      );
-
-      if (decoded is! Map<String, dynamic>) {
-        throw Exception(
-          'Invalid response from server',
-        );
-      }
-
-      final String responseStatus =
-          decoded['status']
-                  ?.toString()
-                  .trim()
-                  .toLowerCase() ??
-              '';
-
-      if (responseStatus.isNotEmpty &&
-          responseStatus != 'success') {
-        throw Exception(
-          decoded['message']?.toString() ??
-              'Failed to load status summary',
-        );
-      }
-
-      // ============================================================
-      // DEBUG BACKEND FILTERS
-      // ============================================================
-
-      final dynamic filters = decoded['filters'];
-
-      if (filters is Map) {
-        debugPrint(
-          'BACKEND FILTERS [$requestType]',
-        );
-
-        debugPrint(
-          'date       : ${filters['date']}',
-        );
-
-        debugPrint(
-          'start_date : ${filters['start_date']}',
-        );
-
-        debugPrint(
-          'end_date   : ${filters['end_date']}',
-        );
-      }
-
-      // ============================================================
-      // DATA
-      // ============================================================
-
-      final dynamic data = decoded['data'];
-
-      if (data is! Map) {
-        throw Exception(
-          'Invalid status summary data',
-        );
-      }
-
-      debugPrint(
-        'TOTAL COUNT [$requestType]: '
-        '${data['total_count']}',
-      );
-
-      final dynamic rawStatusCounts =
-          data['status_counts'];
-
-      if (rawStatusCounts == null) {
-        return <String, int>{};
-      }
-
-      if (rawStatusCounts is! Map) {
-        throw Exception(
-          'Invalid status_counts data',
-        );
-      }
-
-      final Map<String, int> statusMap =
-          <String, int>{};
-
-      rawStatusCounts.forEach(
-        (
-          dynamic key,
-          dynamic value,
-        ) {
-          final String status =
-              key?.toString().trim() ?? '';
-
-          if (status.isEmpty) {
-            return;
-          }
-
-          int count = 0;
-
-          if (value is int) {
-            count = value;
-          } else if (value is num) {
-            count = value.toInt();
-          } else {
-            count =
-                int.tryParse(
-                  value?.toString() ?? '0',
-                ) ??
-                0;
-          }
-
-          statusMap[status] = count;
-        },
-      );
-
-      debugPrint(
-        'PARSED STATUS MAP [$requestType]: '
-        '$statusMap',
-      );
-
-      return statusMap;
-    }
-
-    // ============================================================
-    // FETCH BOTH REQUESTS
-    // ============================================================
-
-    final List<Map<String, int>> responses =
-        await Future.wait<Map<String, int>>(
-      [
-        // ========================================================
-        // TODAY
-        //
-        // Example:
-        // ?date=2026-08-31
-        // ========================================================
-
-        fetchStatusSummary(
-          date: today,
-          requestType: 'TODAY',
-        ),
-
-        // ========================================================
-        // TILL TODAY = CURRENT MONTH
-        //
-        // Example:
-        // ?start_date=2026-08-01
-        // &end_date=2026-08-31
-        // ========================================================
-
-        fetchStatusSummary(
-          startDate: currentMonthStart,
-          endDate: today,
-          requestType: 'CURRENT MONTH',
-        ),
-      ],
-    );
-
-    // ============================================================
-    // RESPONSE 1 = TODAY
-    // ============================================================
-
-    final Map<String, int> todayStatusMap =
-        responses[0];
-
-    // ============================================================
-    // RESPONSE 2 = CURRENT MONTH TILL TODAY
-    // ============================================================
-
-    final Map<String, int> tillTodayStatusMap =
-        responses[1];
-
-    debugPrint(
-      '=============================================',
-    );
-
-    debugPrint(
-      'FINAL TODAY MAP:',
-    );
-
-    debugPrint(
-      todayStatusMap.toString(),
-    );
-
-    debugPrint(
-      'FINAL CURRENT MONTH MAP:',
-    );
-
-    debugPrint(
-      tillTodayStatusMap.toString(),
-    );
-
-    debugPrint(
-      '=============================================',
-    );
-
-    // ============================================================
-    // EXISTING DASHBOARD STATUS MAPPING
-    // ============================================================
-
-    final List<Map<String, dynamic>>
-        filteredStatusList =
-        warehouseDashboardStatuses.map(
-      (
-        String status,
-      ) {
-        final int todayCount =
-            todayStatusMap[status] ?? 0;
-
-        final int tillTodayCount =
-            tillTodayStatusMap[status] ?? 0;
-
-        debugPrint(
-          '$status => '
-          'Today: $todayCount | '
-          'Till Today: $tillTodayCount',
-        );
-
-        return <String, dynamic>{
-          'status': status,
-
-          // Today only
-          'today_count': todayCount,
-
-          // First day of current month -> today
-          'all_count': tillTodayCount,
-        };
-      },
-    ).toList();
-
-    if (!mounted) return;
-
-    setState(() {
-      todayStatusCounts =
-          filteredStatusList;
-
-      isLoadingTodayStatusCounts =
-          false;
-
-      todayStatusError = null;
-    });
-  } catch (error, stackTrace) {
-    debugPrint(
-      'STATUS HISTORY SUMMARY ERROR: $error',
-    );
-
-    debugPrintStack(
-      stackTrace: stackTrace,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      todayStatusCounts = [];
-
-      isLoadingTodayStatusCounts =
-          false;
-
-      todayStatusError =
-          'Unable to load order status summary';
-    });
   }
-}
   // ============================================================
   // FETCH TODAY DGM PARCEL SERVICE SUMMARY
   // ============================================================
@@ -1288,18 +1267,14 @@ Future<void> fetchTodayStatusCounts() async {
         // ADDED INTO THE SAME GRID SO THERE IS NO EMPTY CELL
         // ============================================================
 
-        final List<Map<String, dynamic>> frontMenuItems =
-            _getFrontMenuItems();
+        final List<Map<String, dynamic>> frontMenuItems = _getFrontMenuItems();
 
         for (final Map<String, dynamic> item in frontMenuItems) {
-          final String itemTitle =
-              item['title']?.toString() ?? '';
+          final String itemTitle = item['title']?.toString() ?? '';
 
-          final IconData itemIcon =
-              item['icon'] as IconData;
+          final IconData itemIcon = item['icon'] as IconData;
 
-          final String? groupType =
-              item['groupType']?.toString();
+          final String? groupType = item['groupType']?.toString();
 
           if (groupType != null && groupType.isNotEmpty) {
             if (groupType == 'reports') {
@@ -1352,726 +1327,696 @@ Future<void> fetchTodayStatusCounts() async {
   // TODAY STATUS CARD
   // ============================================================
 
- Widget _buildTodayStatusCard({
-  required String status,
-  required int todayCount,
-  required int allCount,
-  required bool isVerySmallPhone,
-}) {
-  final IconData statusIcon = _getStatusIcon(status);
+  Widget _buildTodayStatusCard({
+    required String status,
+    required int todayCount,
+    required int allCount,
+    required bool isVerySmallPhone,
+  }) {
+    final IconData statusIcon = _getStatusIcon(status);
 
-  final String displayName = _getStatusDisplayName(status);
-
-  return Material(
-    color: Colors.transparent,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (
-              BuildContext context,
-            ) {
-              return WarehouseOrderView(
-                status: status,
-              );
-            },
-          ),
-        );
-      },
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF56AFFF),
-              Color(0xFF2C74FF),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(
-                0xFF2C74FF,
-              ).withOpacity(
-                0.28,
-              ),
-              blurRadius: 12,
-              spreadRadius: 1,
-              offset: const Offset(
-                0,
-                6,
-              ),
+    final String displayName = _getStatusDisplayName(status);
+    final String currentMonthLabel =
+        DateFormat('MMM yy', 'en_US').format(DateTime.now()).toUpperCase();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (
+                BuildContext context,
+              ) {
+                return WarehouseOrderView(
+                  status: status,
+                );
+              },
             ),
-          ],
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(
-            isVerySmallPhone ? 10 : 12,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      displayName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isVerySmallPhone ? 11.5 : 13,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 8,
-                  ),
-                  Container(
-                    height: isVerySmallPhone ? 32 : 34,
-                    width: isVerySmallPhone ? 32 : 34,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(
-                        0.14,
-                      ),
-                      borderRadius: BorderRadius.circular(
-                        11,
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(
-                          0.22,
-                        ),
-                      ),
-                    ),
-                    child: Icon(
-                      statusIcon,
-                      color: Colors.white,
-                      size: isVerySmallPhone ? 18 : 19,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(
-                height: 10,
-              ),
-
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isVerySmallPhone ? 10 : 12,
-                        vertical: isVerySmallPhone ? 8 : 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(
-                          0.11,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          12,
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(
-                            0.24,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Today',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isVerySmallPhone ? 10.5 : 11.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const Spacer(),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                todayCount.toString(),
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: isVerySmallPhone ? 17 : 20,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 8,
-                    ),
-
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isVerySmallPhone ? 10 : 12,
-                        vertical: isVerySmallPhone ? 8 : 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(
-                          0.11,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          12,
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(
-                            0.24,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Till Today',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isVerySmallPhone ? 10.5 : 11.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const Spacer(),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                allCount.toString(),
-                                maxLines: 1,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: isVerySmallPhone ? 17 : 20,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          );
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF56AFFF),
+                Color(0xFF2C74FF),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(
+                  0xFF2C74FF,
+                ).withOpacity(
+                  0.28,
+                ),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(
+                  0,
+                  6,
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    ),
-  );
-}
-
-  // ============================================================
-  // DGM CARD WITH PARCEL SERVICE + TOTAL BOXES
-  // ============================================================
-
-Widget _buildDgmCard({
-  required bool isVerySmallPhone,
-  required VoidCallback onTap,
-}) {
-  final int totalBoxes = dgmParcelServiceBoxCounts.values.fold<int>(
-    0,
-    (int sum, int count) => sum + count,
-  );
-
-  return Material(
-    color: Colors.transparent,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF56AFFF),
-              Color(0xFF2C74FF),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(
-                0xFF2C74FF,
-              ).withOpacity(
-                0.28,
-              ),
-              blurRadius: 12,
-              spreadRadius: 1,
-              offset: const Offset(
-                0,
-                6,
-              ),
+          child: Padding(
+            padding: EdgeInsets.all(
+              isVerySmallPhone ? 10 : 12,
             ),
-          ],
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(
-            isVerySmallPhone ? 10 : 12,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ==================================================
-              // TITLE + ICON
-              // ==================================================
-
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Daily Goods Movement(DGM)',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isVerySmallPhone ? 11.5 : 13,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 8,
-                  ),
-                  Container(
-                    height: isVerySmallPhone ? 32 : 34,
-                    width: isVerySmallPhone ? 32 : 34,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(
-                        0.14,
-                      ),
-                      borderRadius: BorderRadius.circular(
-                        11,
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(
-                          0.22,
-                        ),
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.move_down_rounded,
-                      color: Colors.white,
-                      size: isVerySmallPhone ? 18 : 19,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(
-                height: 8,
-              ),
-
-              // ==================================================
-              // CONTENT
-              // ==================================================
-
-              Expanded(
-                child: isLoadingDgmSummary
-                    ? const Center(
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        ),
-                      )
-                    : dgmSummaryError != null
-                        ? Center(
-                            child: Text(
-                              'Unable to load summary',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(
-                                  0.90,
-                                ),
-                                fontSize: isVerySmallPhone ? 10 : 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          )
-                        : dgmParcelServiceBoxCounts.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'No parcel data today',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(
-                                      0.90,
-                                    ),
-                                    fontSize: isVerySmallPhone ? 10 : 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              )
-                            : Column(
-                                children: [
-                                  // ==========================================
-                                  // SCROLLABLE PARCEL SERVICE LIST
-                                  // NO SCROLLBAR
-                                  // ==========================================
-
-                                  Expanded(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        12,
-                                      ),
-                                      child: ListView.separated(
-                                        padding: const EdgeInsets.only(
-                                          right: 2,
-                                        ),
-                                        physics:
-                                            const BouncingScrollPhysics(),
-                                        itemCount:
-                                            dgmParcelServiceBoxCounts.length,
-                                        separatorBuilder: (
-                                          BuildContext context,
-                                          int index,
-                                        ) {
-                                          return const SizedBox(
-                                            height: 7,
-                                          );
-                                        },
-                                        itemBuilder: (
-                                          BuildContext context,
-                                          int index,
-                                        ) {
-                                          final MapEntry<String, int> entry =
-                                              dgmParcelServiceBoxCounts.entries
-                                                  .elementAt(
-                                            index,
-                                          );
-
-                                          return Container(
-                                            width: double.infinity,
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal:
-                                                  isVerySmallPhone ? 9 : 11,
-                                              vertical:
-                                                  isVerySmallPhone ? 7 : 8,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(
-                                                0.10,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                12,
-                                              ),
-                                              border: Border.all(
-                                                color: Colors.white.withOpacity(
-                                                  0.28,
-                                                ),
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    entry.key,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize:
-                                                          isVerySmallPhone
-                                                              ? 9.5
-                                                              : 10.5,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(
-                                                  width: 8,
-                                                ),
-                                                Text(
-                                                  entry.value.toString(),
-                                                  textAlign: TextAlign.right,
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize:
-                                                        isVerySmallPhone
-                                                            ? 10.5
-                                                            : 11.5,
-                                                    fontWeight:
-                                                        FontWeight.w800,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(
-                                    height: 7,
-                                  ),
-
-                                  // ==========================================
-                                  // TOTAL TAB
-                                  // ==========================================
-
-                                  Container(
-                                    width: double.infinity,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal:
-                                          isVerySmallPhone ? 10 : 12,
-                                      vertical:
-                                          isVerySmallPhone ? 7 : 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(
-                                        0xFF16A34A,
-                                      ),
-                                      borderRadius: BorderRadius.circular(
-                                        12,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(
-                                            0xFF16A34A,
-                                          ).withOpacity(
-                                            0.25,
-                                          ),
-                                          blurRadius: 6,
-                                          offset: const Offset(
-                                            0,
-                                            3,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Expanded(
-                                          child: Text(
-                                            'TOTAL',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          totalBoxes.toString(),
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize:
-                                                isVerySmallPhone ? 11 : 12.5,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-  // ============================================================
-  // STATIC ACTION CARD
-  // ============================================================
-
- Widget _buildActionCard({
-  required String title,
-  required String shortCode,
-  required IconData icon,
-  required Color color,
-  required bool isVerySmallPhone,
-  required VoidCallback? onTap,
-}) {
-  return Material(
-    color: Colors.transparent,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF56AFFF),
-              Color(0xFF2C74FF),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(
-                0xFF2C74FF,
-              ).withOpacity(
-                0.28,
-              ),
-              blurRadius: 12,
-              spreadRadius: 1,
-              offset: const Offset(
-                0,
-                6,
-              ),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(
-            isVerySmallPhone ? 10 : 12,
-          ),
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 2,
-                      overflow:
-                          TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize:
-                            isVerySmallPhone
-                                ? 11.5
-                                : 13,
-                        height: 1.25,
-                        fontWeight:
-                            FontWeight.w700,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 8,
-                  ),
-
-                  Container(
-                    height:
-                        isVerySmallPhone
-                            ? 32
-                            : 34,
-                    width:
-                        isVerySmallPhone
-                            ? 32
-                            : 34,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(
-                        0.14,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(
-                        11,
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(
-                          0.22,
-                        ),
-                      ),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: Colors.white,
-                      size:
-                          isVerySmallPhone
-                              ? 18
-                              : 19,
-                    ),
-                  ),
-                ],
-              ),
-
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize:
-                        MainAxisSize.min,
-                    children: [
-                      Text(
-                        shortCode,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize:
-                              isVerySmallPhone
-                                  ? 25
-                                  : 30,
-                          fontWeight:
-                              FontWeight.w900,
-                          height: 1,
+                          fontSize: isVerySmallPhone ? 11.5 : 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-
+                    ),
+                    const SizedBox(
+                      width: 8,
+                    ),
+                    Container(
+                      height: isVerySmallPhone ? 32 : 34,
+                      width: isVerySmallPhone ? 32 : 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(
+                          0.14,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          11,
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(
+                            0.22,
+                          ),
+                        ),
+                      ),
+                      child: Icon(
+                        statusIcon,
+                        color: Colors.white,
+                        size: isVerySmallPhone ? 18 : 19,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isVerySmallPhone ? 10 : 12,
+                          vertical: isVerySmallPhone ? 8 : 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(
+                            0.11,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            12,
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(
+                              0.24,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              'Today',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isVerySmallPhone ? 10.5 : 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  todayCount.toString(),
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isVerySmallPhone ? 17 : 20,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(
                         height: 8,
                       ),
-
-                      Text(
-                        onTap != null
-                            ? 'Open'
-                            : 'Pending',
-                        style: TextStyle(
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isVerySmallPhone ? 10 : 12,
+                          vertical: isVerySmallPhone ? 8 : 10,
+                        ),
+                        decoration: BoxDecoration(
                           color: Colors.white.withOpacity(
-                            0.88,
+                            0.11,
                           ),
-                          fontSize:
-                              isVerySmallPhone
-                                  ? 11
-                                  : 12,
-                          fontWeight:
-                              FontWeight.w600,
+                          borderRadius: BorderRadius.circular(
+                            12,
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(
+                              0.24,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  currentMonthLabel,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isVerySmallPhone ? 10.5 : 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  allCount.toString(),
+                                  maxLines: 1,
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isVerySmallPhone ? 17 : 20,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
+  // ============================================================
+  // DGM CARD WITH PARCEL SERVICE + TOTAL BOXES
+  // ============================================================
+
+  Widget _buildDgmCard({
+    required bool isVerySmallPhone,
+    required VoidCallback onTap,
+  }) {
+    final int totalBoxes = dgmParcelServiceBoxCounts.values.fold<int>(
+      0,
+      (int sum, int count) => sum + count,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF56AFFF),
+                Color(0xFF2C74FF),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(
+                  0xFF2C74FF,
+                ).withOpacity(
+                  0.28,
+                ),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(
+                  0,
+                  6,
+                ),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(
+              isVerySmallPhone ? 10 : 12,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ==================================================
+                // TITLE + ICON
+                // ==================================================
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Daily Goods Movement(DGM)',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isVerySmallPhone ? 11.5 : 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 8,
+                    ),
+                    Container(
+                      height: isVerySmallPhone ? 32 : 34,
+                      width: isVerySmallPhone ? 32 : 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(
+                          0.14,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          11,
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(
+                            0.22,
+                          ),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.move_down_rounded,
+                        color: Colors.white,
+                        size: isVerySmallPhone ? 18 : 19,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(
+                  height: 8,
+                ),
+
+                // ==================================================
+                // CONTENT
+                // ==================================================
+
+                Expanded(
+                  child: isLoadingDgmSummary
+                      ? const Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          ),
+                        )
+                      : dgmSummaryError != null
+                          ? Center(
+                              child: Text(
+                                'Unable to load summary',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(
+                                    0.90,
+                                  ),
+                                  fontSize: isVerySmallPhone ? 10 : 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          : dgmParcelServiceBoxCounts.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'No parcel data today',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(
+                                        0.90,
+                                      ),
+                                      fontSize: isVerySmallPhone ? 10 : 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )
+                              : Column(
+                                  children: [
+                                    // ==========================================
+                                    // SCROLLABLE PARCEL SERVICE LIST
+                                    // NO SCROLLBAR
+                                    // ==========================================
+
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                          12,
+                                        ),
+                                        child: ListView.separated(
+                                          padding: const EdgeInsets.only(
+                                            right: 2,
+                                          ),
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          itemCount:
+                                              dgmParcelServiceBoxCounts.length,
+                                          separatorBuilder: (
+                                            BuildContext context,
+                                            int index,
+                                          ) {
+                                            return const SizedBox(
+                                              height: 7,
+                                            );
+                                          },
+                                          itemBuilder: (
+                                            BuildContext context,
+                                            int index,
+                                          ) {
+                                            final MapEntry<String, int> entry =
+                                                dgmParcelServiceBoxCounts
+                                                    .entries
+                                                    .elementAt(
+                                              index,
+                                            );
+
+                                            return Container(
+                                              width: double.infinity,
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal:
+                                                    isVerySmallPhone ? 9 : 11,
+                                                vertical:
+                                                    isVerySmallPhone ? 7 : 8,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withOpacity(
+                                                  0.10,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  12,
+                                                ),
+                                                border: Border.all(
+                                                  color:
+                                                      Colors.white.withOpacity(
+                                                    0.28,
+                                                  ),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      entry.key,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize:
+                                                            isVerySmallPhone
+                                                                ? 9.5
+                                                                : 10.5,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(
+                                                    width: 8,
+                                                  ),
+                                                  Text(
+                                                    entry.value.toString(),
+                                                    textAlign: TextAlign.right,
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: isVerySmallPhone
+                                                          ? 10.5
+                                                          : 11.5,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                      height: 7,
+                                    ),
+
+                                    // ==========================================
+                                    // TOTAL TAB
+                                    // ==========================================
+
+                                    Container(
+                                      width: double.infinity,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isVerySmallPhone ? 10 : 12,
+                                        vertical: isVerySmallPhone ? 7 : 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF16A34A,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          12,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(
+                                              0xFF16A34A,
+                                            ).withOpacity(
+                                              0.25,
+                                            ),
+                                            blurRadius: 6,
+                                            offset: const Offset(
+                                              0,
+                                              3,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Expanded(
+                                            child: Text(
+                                              'TOTAL',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            totalBoxes.toString(),
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize:
+                                                  isVerySmallPhone ? 11 : 12.5,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  // ============================================================
+  // STATIC ACTION CARD
+  // ============================================================
+
+  Widget _buildActionCard({
+    required String title,
+    required String shortCode,
+    required IconData icon,
+    required Color color,
+    required bool isVerySmallPhone,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF56AFFF),
+                Color(0xFF2C74FF),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(
+                  0xFF2C74FF,
+                ).withOpacity(
+                  0.28,
+                ),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(
+                  0,
+                  6,
+                ),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(
+              isVerySmallPhone ? 10 : 12,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isVerySmallPhone ? 11.5 : 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 8,
+                    ),
+                    Container(
+                      height: isVerySmallPhone ? 32 : 34,
+                      width: isVerySmallPhone ? 32 : 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(
+                          0.14,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          11,
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(
+                            0.22,
+                          ),
+                        ),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: isVerySmallPhone ? 18 : 19,
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          shortCode,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isVerySmallPhone ? 25 : 30,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(
+                          height: 8,
+                        ),
+                        Text(
+                          onTap != null ? 'Open' : 'Pending',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(
+                              0.88,
+                            ),
+                            fontSize: isVerySmallPhone ? 11 : 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   // ============================================================
   // FRONT MENU NAVIGATION
@@ -2474,239 +2419,228 @@ Widget _buildDgmCard({
 // SAME SIZE AS OTHER DASHBOARD CARDS
 // ============================================================
 
-Widget _buildGroupedMenuCard({
-  required String title,
-  required IconData icon,
-  required List<Map<String, dynamic>> items,
-  required bool isVerySmallPhone,
-}) {
-  return Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(
-        20,
-      ),
-      gradient: const LinearGradient(
-        colors: [
-          Color(0xFF56AFFF),
-          Color(0xFF2C74FF),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(
-            0xFF2C74FF,
-          ).withOpacity(
-            0.28,
-          ),
-          blurRadius: 12,
-          spreadRadius: 1,
-          offset: const Offset(
-            0,
-            6,
-          ),
+  Widget _buildGroupedMenuCard({
+    required String title,
+    required IconData icon,
+    required List<Map<String, dynamic>> items,
+    required bool isVerySmallPhone,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(
+          20,
         ),
-      ],
-    ),
-    child: Padding(
-      padding: EdgeInsets.all(
-        isVerySmallPhone ? 10 : 12,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isVerySmallPhone ? 11.5 : 13,
-                    height: 1.25,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(
-                width: 8,
-              ),
-              Container(
-                width: isVerySmallPhone ? 32 : 34,
-                height: isVerySmallPhone ? 32 : 34,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(
-                    0.14,
-                  ),
-                  borderRadius: BorderRadius.circular(
-                    11,
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(
-                      0.22,
-                    ),
-                  ),
-                ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: isVerySmallPhone ? 18 : 19,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(
-            height: 7,
-          ),
-          Expanded(
-            child: ListView.separated(
-              padding: EdgeInsets.zero,
-              physics: const BouncingScrollPhysics(),
-              itemCount: items.length,
-              separatorBuilder: (
-                BuildContext context,
-                int index,
-              ) {
-                return const SizedBox(
-                  height: 4,
-                );
-              },
-              itemBuilder: (
-                BuildContext context,
-                int index,
-              ) {
-                final Map<String, dynamic> menuItem =
-                    items[index];
-
-                final String itemTitle =
-                    menuItem['title']?.toString() ?? '';
-
-                final IconData itemIcon =
-                    menuItem['icon'] as IconData;
-
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(
-                      9,
-                    ),
-                    onTap: () {
-                      _navigateFromFrontCard(
-                        itemTitle,
-                      );
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            isVerySmallPhone ? 6 : 7,
-                        vertical:
-                            isVerySmallPhone ? 5 : 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(
-                          0.11,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          9,
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(
-                            0.20,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            itemIcon,
-                            color: Colors.white,
-                            size:
-                                isVerySmallPhone ? 13 : 14,
-                          ),
-                          const SizedBox(
-                            width: 6,
-                          ),
-                          Expanded(
-                            child: Text(
-                              itemTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize:
-                                    isVerySmallPhone
-                                        ? 8.5
-                                        : 9.5,
-                                fontWeight:
-                                    FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(
-                            width: 3,
-                          ),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color:
-                                Colors.white.withOpacity(
-                              0.90,
-                            ),
-                            size: 15,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF56AFFF),
+            Color(0xFF2C74FF),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(
+              0xFF2C74FF,
+            ).withOpacity(
+              0.28,
+            ),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(
+              0,
+              6,
             ),
           ),
         ],
       ),
-    ),
-  );
-}
+      child: Padding(
+        padding: EdgeInsets.all(
+          isVerySmallPhone ? 10 : 12,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isVerySmallPhone ? 11.5 : 13,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 8,
+                ),
+                Container(
+                  width: isVerySmallPhone ? 32 : 34,
+                  height: isVerySmallPhone ? 32 : 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(
+                      0.14,
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      11,
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(
+                        0.22,
+                      ),
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: Colors.white,
+                    size: isVerySmallPhone ? 18 : 19,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(
+              height: 7,
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                physics: const BouncingScrollPhysics(),
+                itemCount: items.length,
+                separatorBuilder: (
+                  BuildContext context,
+                  int index,
+                ) {
+                  return const SizedBox(
+                    height: 4,
+                  );
+                },
+                itemBuilder: (
+                  BuildContext context,
+                  int index,
+                ) {
+                  final Map<String, dynamic> menuItem = items[index];
+
+                  final String itemTitle = menuItem['title']?.toString() ?? '';
+
+                  final IconData itemIcon = menuItem['icon'] as IconData;
+
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(
+                        9,
+                      ),
+                      onTap: () {
+                        _navigateFromFrontCard(
+                          itemTitle,
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isVerySmallPhone ? 6 : 7,
+                          vertical: isVerySmallPhone ? 5 : 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(
+                            0.11,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            9,
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(
+                              0.20,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              itemIcon,
+                              color: Colors.white,
+                              size: isVerySmallPhone ? 13 : 14,
+                            ),
+                            const SizedBox(
+                              width: 6,
+                            ),
+                            Expanded(
+                              child: Text(
+                                itemTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isVerySmallPhone ? 8.5 : 9.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(
+                              width: 3,
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: Colors.white.withOpacity(
+                                0.90,
+                              ),
+                              size: 15,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
 // ============================================================
 // REPORTS CARD
 // ============================================================
 
-Widget _buildReportsCard({
-  required bool isVerySmallPhone,
-}) {
-  return _buildGroupedMenuCard(
-    title: 'Reports',
-    icon: Icons.analytics_outlined,
-    isVerySmallPhone: isVerySmallPhone,
-    items: [
-      {
-        'title': 'Product Stock Report',
-        'icon': Icons.inventory_outlined,
-      },
-      {
-        'title': 'Product Sale Report',
-        'icon': Icons.point_of_sale_outlined,
-      },
-      {
-        'title': 'Stock Report',
-        'icon': Icons.assessment_outlined,
-      },
-      {
-        'title': 'Damaged Stock',
-        'icon': Icons.warning_amber_rounded,
-      },
-      {
-        'title': 'Product Usability Report',
-        'icon': Icons.analytics_outlined,
-      },
-    ],
-  );
-}
+  Widget _buildReportsCard({
+    required bool isVerySmallPhone,
+  }) {
+    return _buildGroupedMenuCard(
+      title: 'Reports',
+      icon: Icons.analytics_outlined,
+      isVerySmallPhone: isVerySmallPhone,
+      items: [
+        {
+          'title': 'Product Stock Report',
+          'icon': Icons.inventory_outlined,
+        },
+        {
+          'title': 'Product Sale Report',
+          'icon': Icons.point_of_sale_outlined,
+        },
+        {
+          'title': 'Stock Report',
+          'icon': Icons.assessment_outlined,
+        },
+        {
+          'title': 'Damaged Stock',
+          'icon': Icons.warning_amber_rounded,
+        },
+        {
+          'title': 'Product Usability Report',
+          'icon': Icons.analytics_outlined,
+        },
+      ],
+    );
+  }
 
 // FRONT MENU GROUP
   // ============================================================
@@ -2739,8 +2673,7 @@ Widget _buildReportsCard({
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: items.length,
-          gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
@@ -2752,11 +2685,9 @@ Widget _buildReportsCard({
           ) {
             final Map<String, dynamic> item = items[index];
 
-            final String itemTitle =
-                item['title']?.toString() ?? '';
+            final String itemTitle = item['title']?.toString() ?? '';
 
-            final IconData itemIcon =
-                item['icon'] as IconData;
+            final IconData itemIcon = item['icon'] as IconData;
 
             return _buildFrontMenuCard(
               title: itemTitle,
@@ -2913,33 +2844,26 @@ Widget _buildReportsCard({
   }
 
   Widget _buildFrontMenuSection() {
-    final List<Map<String, dynamic>> items =
-        _getFrontMenuItems();
+    final List<Map<String, dynamic>> items = _getFrontMenuItems();
 
     return LayoutBuilder(
       builder: (
         BuildContext context,
         BoxConstraints constraints,
       ) {
-        final bool isVerySmallPhone =
-            constraints.maxWidth < 340;
+        final bool isVerySmallPhone = constraints.maxWidth < 340;
 
-        final double horizontalSpacing =
-            isVerySmallPhone ? 8 : 12;
+        final double horizontalSpacing = isVerySmallPhone ? 8 : 12;
 
-        final double verticalSpacing =
-            isVerySmallPhone ? 8 : 12;
+        final double verticalSpacing = isVerySmallPhone ? 8 : 12;
 
-        final double cardHeight =
-            isVerySmallPhone ? 185 : 200;
+        final double cardHeight = isVerySmallPhone ? 185 : 200;
 
         return GridView.builder(
           shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           itemCount: items.length,
-          gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: horizontalSpacing,
             mainAxisSpacing: verticalSpacing,
@@ -2949,24 +2873,18 @@ Widget _buildReportsCard({
             BuildContext context,
             int index,
           ) {
-            final Map<String, dynamic> item =
-                items[index];
+            final Map<String, dynamic> item = items[index];
 
-            final String itemTitle =
-                item['title']?.toString() ?? '';
+            final String itemTitle = item['title']?.toString() ?? '';
 
-            final IconData itemIcon =
-                item['icon'] as IconData;
+            final IconData itemIcon = item['icon'] as IconData;
 
-            final String? groupType =
-                item['groupType']?.toString();
+            final String? groupType = item['groupType']?.toString();
 
-            if (groupType != null &&
-                groupType.isNotEmpty) {
+            if (groupType != null && groupType.isNotEmpty) {
               if (groupType == 'reports') {
                 return _buildReportsCard(
-                  isVerySmallPhone:
-                      isVerySmallPhone,
+                  isVerySmallPhone: isVerySmallPhone,
                 );
               }
 
@@ -2976,8 +2894,7 @@ Widget _buildReportsCard({
                 items: _getGroupItems(
                   groupType,
                 ),
-                isVerySmallPhone:
-                    isVerySmallPhone,
+                isVerySmallPhone: isVerySmallPhone,
               );
             }
 
@@ -3001,23 +2918,18 @@ Widget _buildReportsCard({
   // ============================================================
 
   Widget _buildDashboardSearchResults() {
-    final String query =
-        dashboardSearchQuery.trim().toLowerCase();
+    final String query = dashboardSearchQuery.trim().toLowerCase();
 
     final List<Map<String, dynamic>> searchableItems = [
       ..._getFrontMenuItems(),
     ];
 
-    final List<Map<String, dynamic>> matchedItems =
-        searchableItems.where(
+    final List<Map<String, dynamic>> matchedItems = searchableItems.where(
       (Map<String, dynamic> item) {
-        final String title =
-            item['title']?.toString().toLowerCase() ??
-                '';
+        final String title = item['title']?.toString().toLowerCase() ?? '';
 
         final String keywords =
-            item['keywords']?.toString().toLowerCase() ??
-                '';
+            item['keywords']?.toString().toLowerCase() ?? '';
 
         return title.contains(
               query,
@@ -3090,25 +3002,19 @@ Widget _buildReportsCard({
         BuildContext context,
         BoxConstraints constraints,
       ) {
-        final bool isVerySmallPhone =
-            constraints.maxWidth < 340;
+        final bool isVerySmallPhone = constraints.maxWidth < 340;
 
-        final double horizontalSpacing =
-            isVerySmallPhone ? 8 : 12;
+        final double horizontalSpacing = isVerySmallPhone ? 8 : 12;
 
-        final double verticalSpacing =
-            isVerySmallPhone ? 8 : 12;
+        final double verticalSpacing = isVerySmallPhone ? 8 : 12;
 
-        final double cardHeight =
-            isVerySmallPhone ? 185 : 200;
+        final double cardHeight = isVerySmallPhone ? 185 : 200;
 
         return GridView.builder(
           shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           itemCount: matchedItems.length,
-          gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: horizontalSpacing,
             mainAxisSpacing: verticalSpacing,
@@ -3118,24 +3024,18 @@ Widget _buildReportsCard({
             BuildContext context,
             int index,
           ) {
-            final Map<String, dynamic> item =
-                matchedItems[index];
+            final Map<String, dynamic> item = matchedItems[index];
 
-            final String itemTitle =
-                item['title']?.toString() ?? '';
+            final String itemTitle = item['title']?.toString() ?? '';
 
-            final IconData itemIcon =
-                item['icon'] as IconData;
+            final IconData itemIcon = item['icon'] as IconData;
 
-            final String? groupType =
-                item['groupType']?.toString();
+            final String? groupType = item['groupType']?.toString();
 
-            if (groupType != null &&
-                groupType.isNotEmpty) {
+            if (groupType != null && groupType.isNotEmpty) {
               if (groupType == 'reports') {
                 return _buildReportsCard(
-                  isVerySmallPhone:
-                      isVerySmallPhone,
+                  isVerySmallPhone: isVerySmallPhone,
                 );
               }
 
@@ -3145,8 +3045,7 @@ Widget _buildReportsCard({
                 items: _getGroupItems(
                   groupType,
                 ),
-                isVerySmallPhone:
-                    isVerySmallPhone,
+                isVerySmallPhone: isVerySmallPhone,
               );
             }
 
@@ -3339,7 +3238,6 @@ Widget _buildReportsCard({
                 ],
               ),
             ),
-
             AnimatedSwitcher(
               duration: const Duration(
                 milliseconds: 220,
@@ -3443,7 +3341,6 @@ Widget _buildReportsCard({
     );
   }
 
-
   Widget _buildBottomNavigationItem({
     required IconData icon,
     required String label,
@@ -3522,9 +3419,7 @@ Widget _buildReportsCard({
                           ),
                         ),
                         child: Text(
-                          badgeCount > 99
-                              ? '99+'
-                              : badgeCount.toString(),
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
@@ -3547,9 +3442,7 @@ Widget _buildReportsCard({
                 style: TextStyle(
                   color: foregroundColor,
                   fontSize: 10.5,
-                  fontWeight: isSelected
-                      ? FontWeight.w700
-                      : FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                 ),
               ),
             ],
@@ -4934,280 +4827,268 @@ Widget _buildReportsCard({
                         // PROFILE
                         // NOW PART OF THE MAIN SCROLLABLE PAGE
                         // ===========================================
-Row(
-  crossAxisAlignment: CrossAxisAlignment.center,
-  children: [
-    // =========================================
-    // PROFILE - LEFT SIDE
-    // =========================================
-    Expanded(
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (
-                    BuildContext context,
-                  ) {
-                    return EditProfileScreen();
-                  },
-                ),
-              );
-            },
-            child: CircleAvatar(
-              radius: 25,
-              backgroundColor: const Color(
-                0xFFE5E7EB,
-              ),
-              backgroundImage:
-                  getProfileImageUrl().isNotEmpty
-                      ? NetworkImage(
-                          getProfileImageUrl(),
-                        )
-                      : const AssetImage(
-                          'lib/assets/female.jpeg',
-                        ) as ImageProvider,
-            ),
-          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // =========================================
+                            // PROFILE - LEFT SIDE
+                            // =========================================
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (
+                                            BuildContext context,
+                                          ) {
+                                            return EditProfileScreen();
+                                          },
+                                        ),
+                                      );
+                                    },
+                                    child: CircleAvatar(
+                                      radius: 25,
+                                      backgroundColor: const Color(
+                                        0xFFE5E7EB,
+                                      ),
+                                      backgroundImage:
+                                          getProfileImageUrl().isNotEmpty
+                                              ? NetworkImage(
+                                                  getProfileImageUrl(),
+                                                )
+                                              : const AssetImage(
+                                                  'lib/assets/female.jpeg',
+                                                ) as ImageProvider,
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: 16,
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      '$username',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-          const SizedBox(
-            width: 16,
-          ),
+                            const SizedBox(
+                              width: 12,
+                            ),
 
-          Expanded(
-            child: Text(
-              '$username',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
+                            // =========================================
+                            // SHIPPING & LOGISTICS LOGO
+                            // =========================================
+                            Container(
+                              width: 105,
+                              height: 92,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFEAF5FF),
+                                    Color(0xFFF4F8FF),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  22,
+                                ),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF2C74FF,
+                                  ).withOpacity(
+                                    0.12,
+                                  ),
+                                ),
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // PACKAGE
+                                  Positioned(
+                                    top: 17,
+                                    left: 20,
+                                    child: Transform.rotate(
+                                      angle: -0.08,
+                                      child: const Icon(
+                                        Icons.inventory_2_rounded,
+                                        size: 31,
+                                        color: Color(
+                                          0xFF56AFFF,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
 
-    const SizedBox(
-      width: 12,
-    ),
+                                  // TRUCK
+                                  Positioned(
+                                    right: 15,
+                                    bottom: 22,
+                                    child: const Icon(
+                                      Icons.local_shipping_rounded,
+                                      size: 43,
+                                      color: Color(
+                                        0xFF2C74FF,
+                                      ),
+                                    ),
+                                  ),
 
-    // =========================================
-    // SHIPPING & LOGISTICS LOGO
-    // =========================================
-    Container(
-      width: 105,
-      height: 92,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFFEAF5FF),
-            Color(0xFFF4F8FF),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(
-          22,
-        ),
-        border: Border.all(
-          color: const Color(
-            0xFF2C74FF,
-          ).withOpacity(
-            0.12,
-          ),
-        ),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // PACKAGE
-          Positioned(
-            top: 17,
-            left: 20,
-            child: Transform.rotate(
-              angle: -0.08,
-              child: const Icon(
-                Icons.inventory_2_rounded,
-                size: 31,
-                color: Color(
-                  0xFF56AFFF,
-                ),
-              ),
-            ),
-          ),
-
-          // TRUCK
-          Positioned(
-            right: 15,
-            bottom: 22,
-            child: const Icon(
-              Icons.local_shipping_rounded,
-              size: 43,
-              color: Color(
-                0xFF2C74FF,
-              ),
-            ),
-          ),
-
-          // MOVEMENT LINES
-          Positioned(
-            left: 13,
-            bottom: 27,
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 24,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: const Color(
-                      0xFF56AFFF,
-                    ).withOpacity(
-                      0.65,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(
-                      10,
-                    ),
-                  ),
-                ),
-                const SizedBox(
-                  height: 5,
-                ),
-                Container(
-                  width: 17,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: const Color(
-                      0xFF56AFFF,
-                    ).withOpacity(
-                      0.40,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(
-                      10,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  ],
-),
+                                  // MOVEMENT LINES
+                                  Positioned(
+                                    left: 13,
+                                    bottom: 27,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          width: 24,
+                                          height: 3,
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF56AFFF,
+                                            ).withOpacity(
+                                              0.65,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(
+                                          height: 5,
+                                        ),
+                                        Container(
+                                          width: 17,
+                                          height: 3,
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF56AFFF,
+                                            ).withOpacity(
+                                              0.40,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(
                           height: 20,
                         ),
 
                         if (isBottomSearchOpen &&
-                            dashboardSearchQuery.trim().isNotEmpty)
-                          ...[
-                            _buildDashboardSearchResults(),
+                            dashboardSearchQuery.trim().isNotEmpty) ...[
+                          _buildDashboardSearchResults(),
+                          const SizedBox(
+                            height: 12,
+                          ),
+                        ] else ...[
+                          // ===================================
+                          // DATE + REFRESH
+                          // ===================================
 
-                            const SizedBox(
-                              height: 12,
-                            ),
-                          ]
-                        else
-                          ...[
-                            // ===================================
-                            // DATE + REFRESH
-                            // ===================================
-
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Shipping & Logistics (S & L)',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(
-                                        0xFF111827,
-                                      ),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Shipping & Logistics (S & L)',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(
+                                      0xFF111827,
                                     ),
                                   ),
                                 ),
-
-                                const SizedBox(
-                                  width: 10,
+                              ),
+                              const SizedBox(
+                                width: 10,
+                              ),
+                              const SizedBox(
+                                width: 4,
+                              ),
+                              IconButton(
+                                tooltip: 'Refresh',
+                                onPressed: isLoadingTodayStatusCounts ||
+                                        isLoadingDgmSummary
+                                    ? null
+                                    : () async {
+                                        await Future.wait(
+                                          [
+                                            fetchTodayStatusCounts(),
+                                            fetchTodayDgmSummary(),
+                                          ],
+                                        );
+                                      },
+                                icon: const Icon(
+                                  Icons.refresh_rounded,
                                 ),
+                              ),
+                            ],
+                          ),
 
-                                const SizedBox(
-                                  width: 4,
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 16,
+                                color: Color(
+                                  0xFF6B7280,
                                 ),
-
-                                IconButton(
-                                  tooltip: 'Refresh',
-                                  onPressed:
-                                      isLoadingTodayStatusCounts ||
-                                              isLoadingDgmSummary
-                                          ? null
-                                          : () async {
-                                              await Future.wait(
-                                                [
-                                                  fetchTodayStatusCounts(),
-                                                  fetchTodayDgmSummary(),
-                                                ],
-                                              );
-                                            },
-                                  icon: const Icon(
-                                    Icons.refresh_rounded,
+                              ),
+                              const SizedBox(
+                                width: 4,
+                              ),
+                              Text(
+                                DateFormat(
+                                  'dd MMMM yyyy',
+                                ).format(
+                                  DateTime.now(),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color.fromARGB(
+                                    255,
+                                    69,
+                                    72,
+                                    78,
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
+                          ),
 
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.calendar_today_rounded,
-                                  size: 16,
-                                  color: Color(
-                                    0xFF6B7280,
-                                  ),
-                                ),
-                                const SizedBox(
-                                  width: 4,
-                                ),
-                                Text(
-                                  DateFormat(
-                                    'dd MMMM yyyy',
-                                  ).format(
-                                    DateTime.now(),
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Color.fromARGB(
-                                      255,
-                                      69,
-                                      72,
-                                      78,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          const SizedBox(
+                            height: 14,
+                          ),
 
-                            const SizedBox(
-                              height: 14,
-                            ),
+                          _buildTodayStatusSection(),
 
-                            _buildTodayStatusSection(),
-
-                            // Front menu cards are now appended directly
-                            // inside _buildTodayStatusSection() so all cards
-                            // remain continuous with no empty grid cell.
-                          ],
+                          // Front menu cards are now appended directly
+                          // inside _buildTodayStatusSection() so all cards
+                          // remain continuous with no empty grid cell.
+                        ],
 
                         const SizedBox(
                           height: 12,
