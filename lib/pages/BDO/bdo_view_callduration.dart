@@ -48,6 +48,130 @@ Map<String, dynamic> apiSummary = {};
   final TextEditingController searchController = TextEditingController();
   String searchQuery = "";
 
+  String loggedInUserName = "Not available";
+  String loggedInDepartment = "Not available";
+  List<String> allocatedStateNames = [];
+
+  Future<void> _loadLoggedInProfile() async {
+    final dep = await getdepFromPrefs();
+    if (mounted) setState(() => loggedInDepartment = dep ?? "Not available");
+    try {
+      final token = await gettokenFromPrefs();
+      if (token == null || token.isEmpty) return;
+      final response = await http.get(
+        Uri.parse('$api/api/profile/'),
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) return;
+      final payload = jsonDecode(response.body);
+      if (payload is! Map || payload['data'] is! Map) return;
+      final profile = Map<String, dynamic>.from(payload['data']);
+      String value(dynamic v) => v == null ? '' : v.toString().trim();
+      final firstName = value(profile['first_name']);
+      final lastName = value(profile['last_name']);
+      final name = [firstName, lastName].where((e) => e.isNotEmpty).join(' ');
+      final resolvedName = [profile['name'], profile['full_name'], profile['username']]
+          .map(value).firstWhere((e) => e.isNotEmpty, orElse: () => name);
+      final rawAllocated = profile['allocated_states'];
+      final List<dynamic> entries = rawAllocated is List ? rawAllocated :
+          (rawAllocated == null ? [] : [rawAllocated]);
+      final directNames = <String>[];
+      final ids = <String>{};
+      for (final entry in entries) {
+        if (entry is Map) {
+          final stateName = value(entry['name'] ?? entry['state_name']);
+          if (stateName.isNotEmpty) directNames.add(stateName);
+          else if (entry['id'] != null) ids.add(value(entry['id']));
+        } else if (entry != null) {
+          final item = value(entry);
+          if (int.tryParse(item) != null) ids.add(item);
+          else if (item.isNotEmpty) directNames.add(item);
+        }
+      }
+      if (ids.isNotEmpty) {
+        try {
+          final statesResponse = await http.get(
+            Uri.parse('$api/api/states/'),
+            headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+          ).timeout(const Duration(seconds: 20));
+          if (statesResponse.statusCode == 200) {
+            final statesPayload = jsonDecode(statesResponse.body);
+            final states = statesPayload is Map ? statesPayload['data'] : null;
+            if (states is List) {
+              for (final state in states) {
+                if (state is Map && ids.contains(value(state['id']))) {
+                  final stateName = value(state['name']);
+                  if (stateName.isNotEmpty) directNames.add(stateName);
+                }
+              }
+            }
+          }
+        } catch (_) { /* Keep profile data when state lookup fails. */ }
+      }
+      if (!mounted) return;
+      setState(() {
+        loggedInUserName = resolvedName.isEmpty ? 'Not available' : resolvedName;
+        loggedInDepartment = value(profile['department']).isNotEmpty
+            ? value(profile['department']) : (dep ?? 'Not available');
+        allocatedStateNames = directNames.toSet().toList();
+      });
+    } catch (error) {
+      debugPrint('Unable to load DSR profile: $error');
+    }
+  }
+
+  Widget _buildProfileInfo() {
+    Widget detail(IconData icon, String label, String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: const Color(0xff2789DC)),
+        const SizedBox(width: 10),
+        SizedBox(width: 92, child: Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+              color: Color(0xff526477)))),
+        Expanded(child: Text(value,
+          softWrap: true,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+              color: Color(0xff1D3550)))),
+      ]),
+    );
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xffF2F8FF),
+        border: Border.all(color: const Color(0xffD4E8FC)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.person_outline, size: 18, color: Color(0xff2789DC)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$loggedInUserName ($loggedInDepartment)',
+                  softWrap: true,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xff1D3550),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        detail(Icons.location_on_outlined, 'States',
+            allocatedStateNames.isEmpty ? 'Not allocated' : allocatedStateNames.join(', ')),
+      ]),
+    );
+  }
+
+
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('department');
@@ -345,6 +469,7 @@ Future<void> loadPage(int page) async {
     startDate = DateTime(today.year, today.month, today.day);
     endDate = startDate;
     loadReports();
+    _loadLoggedInProfile();
   }
 
   @override
@@ -1893,7 +2018,7 @@ Future<void> loadPage(int page) async {
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? borderColor.withOpacity(0.18) : cardBg,
           borderRadius: BorderRadius.circular(16),
@@ -1905,13 +2030,13 @@ Future<void> loadPage(int page) async {
         child: Row(
           children: [
             Container(
-              width: 28,
-              height: 28,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: iconBg,
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: Icon(icon, color: textColor, size: 15),
+              child: Icon(icon, color: textColor, size: 20),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1924,8 +2049,8 @@ Future<void> loadPage(int page) async {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 10.5,
-                      height: 1.1,
+                      fontSize: 14,
+                      height: 1.2,
                       color: Colors.grey.shade800,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1936,8 +2061,8 @@ Future<void> loadPage(int page) async {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.0,
+                      fontSize: 17,
+                      height: 1.2,
                       color: textColor,
                       fontWeight: FontWeight.bold,
                     ),
@@ -2064,58 +2189,73 @@ Widget _buildSummarySection() {
                       "DSR Summary",
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 12.5,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 1),
+                    if (selectedSummaryFilter != "all") ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        "Filtered summary: ${selectedSummaryFilter.toUpperCase()}",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 3),
                     Text(
-                      selectedSummaryFilter == "all"
-                          ? "Overview of sales analysis records"
-                          : "Filtered summary: ${selectedSummaryFilter.toUpperCase()}",
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      DateFormat('dd-MM-yyyy').format(DateTime.now()),
                       style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  "Total ${sourceList.length}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              // Container(
+              //   padding:
+              //       const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              //   decoration: BoxDecoration(
+              //     color: Colors.white.withOpacity(0.12),
+              //     borderRadius: BorderRadius.circular(12),
+              //   ),
+              //   child: Text(
+              //     "Total ${sourceList.length}",
+              //     style: const TextStyle(
+              //       color: Colors.white,
+              //       fontSize: 15,
+              //       fontWeight: FontWeight.bold,
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         ),
+        _buildProfileInfo(),
         Padding(
           padding: const EdgeInsets.all(12),
-          child: GridView.count(
-            crossAxisCount: 2,
+          child: LayoutBuilder(builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 680 ? 3 :
+                (constraints.maxWidth < 310 ? 1 : 2);
+            final cardWidth = (constraints.maxWidth - (columns - 1) * 10) / columns;
+            return GridView.count(
+            padding: EdgeInsets.zero,
+            crossAxisCount: columns,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.75,
+            mainAxisExtent: cardWidth < 170 ? 112 : 104,
             children: [
               _buildMetricBox(
                 icon: Icons.wifi_calling_3_outlined,
-                title: "Active",
+                title: "Active Calls",
                 value: "$activeCount",
                 iconBg: const Color(0xffFFF1D9),
                 borderColor: const Color(0xffF4DEC0),
@@ -2125,7 +2265,7 @@ Widget _buildSummarySection() {
               ),
               _buildMetricBox(
                 icon: Icons.trending_up,
-                title: "Productive",
+                title: "Pro Calls",
                 value: "$productiveCount",
                 iconBg: const Color(0xffE7F6E8),
                 borderColor: const Color(0xffCFE6D1),
@@ -2184,7 +2324,7 @@ Widget _buildSummarySection() {
               ),
               _buildMetricBox(
                 icon: Icons.currency_rupee,
-                title: "Total Amount",
+                title: "Today Volume",
                 value: "₹${totalAmount.toStringAsFixed(2)}",
                 iconBg: const Color(0xffDDF4EC),
                 borderColor: const Color(0xffC7E3D9),
@@ -2193,7 +2333,7 @@ Widget _buildSummarySection() {
               ),
               _buildMetricBox(
                 icon: Icons.av_timer_outlined,
-                title: "Avg Duration (8h)",
+                title: "Daily Avg(8h)",
                 value: avgDuration,
                 iconBg: const Color(0xffECEAF8),
                 borderColor: const Color(0xffD9D5EE),
@@ -2202,7 +2342,7 @@ Widget _buildSummarySection() {
               ),
               _buildMetricBox(
                 icon: Icons.pie_chart_outline,
-                title: "Duration % (8h)",
+                title: "Daily Avg % (8h)",
                 value: "$durationPercent%",
                 iconBg: const Color(0xffDFF5F2),
                 borderColor: const Color(0xffC6E5E0),
@@ -2210,7 +2350,8 @@ Widget _buildSummarySection() {
                 cardBg: const Color(0xffF4FCFB),
               ),
             ],
-          ),
+          );
+          }),
         ),
       ],
     ),

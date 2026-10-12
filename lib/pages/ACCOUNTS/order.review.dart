@@ -1914,7 +1914,7 @@ class _OrderReviewState extends State<OrderReview> {
         });
 
         await fetchOrderItems(); // ⛔ WAIT, don’t fire-and-forget
-
+await updatingamount(); 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Status updated successfully'),
@@ -3729,7 +3729,7 @@ class _OrderReviewState extends State<OrderReview> {
         });
         // print('Order items fetched successfully$items');
 // fetchCustomerLedgerDetails();
-        updatingamount();
+        // updatingamount();
       } else {}
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4001,49 +4001,52 @@ class _OrderReviewState extends State<OrderReview> {
     );
   }
 
-  Future<void> updatingamount() async {
-    try {
-      final token = await getTokenFromPrefs();
+Future<void> updatingamount() async {
+  if (!mounted) return;
 
-      Map<String, dynamic> body = {
-        'total_amount': updateamount,
-      };
+  final double previousAmount = actualamount;
+  final double newAmount = updateamount;
 
-      var response = await _auditMutation('PUT', 'order_total_recalculated', 
-        Uri.parse('$api/api/shipping/${widget.id}/order/'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
+  // Total unchanged → no API call, no log
+  if ((previousAmount - newAmount).abs() <= 0.009) return;
 
-      if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Total updated successfully'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Colors.green, // Add green background color
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update status'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Colors.red, // Add red background color
-          ),
-        );
-      }
-    } catch (error) {
+  try {
+    final token = await getTokenFromPrefs();
+    if (token == null || token.isEmpty) return;
+
+    final response = await _auditMutation(
+      'PUT',
+      'order_total_recalculated',
+      Uri.parse('$api/api/shipping/${widget.id}/order/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'total_amount': newAmount}),
+    );
+
+    if (!mounted) return;
+
+    if (response.statusCode == 200) {
+      await fetchOrderItems(); // refresh saved total; amounts now match, so no loop
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error updating profile'),
-          duration: Duration(seconds: 2),
+        const SnackBar(
+          content: Text('Failed to update total amount'),
+          backgroundColor: Colors.red,
         ),
       );
     }
+  } catch (_) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Error updating total amount'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
 
   Future<void> updatemsg(var orderId) async {
     try {
@@ -4123,6 +4126,7 @@ class _OrderReviewState extends State<OrderReview> {
         
 
         await fetchOrderItems();
+        await updatingamount();  
         await fetchCustomerLedgerDetails();
 
         if (!mounted) return;
@@ -4704,6 +4708,7 @@ class _OrderReviewState extends State<OrderReview> {
           ),
         );
         await fetchOrderItems();
+          await updatingamount(); 
         // Navigator.push(context, MaterialPageRoute(builder: (context)=>OrderReview(id: widget.id)));
       } else {
         throw Exception('Failed to update cart item');

@@ -1,19 +1,38 @@
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:beposoft/loginpage.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dgm.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+
 import 'package:beposoft/pages/ACCOUNTS/profilepage.dart';
+
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+
 import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
+
 import 'package:beposoft/pages/api.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:intl/intl.dart';
 
 class daily_goods_movement extends StatefulWidget {
@@ -23,39 +42,67 @@ class daily_goods_movement extends StatefulWidget {
 
 class _dailygoodspageState extends State<daily_goods_movement> {
   List<Map<String, dynamic>> goods = [];
+
   List<Map<String, dynamic>> filteredOrders = [];
+
   List<Map<String, dynamic>> overallTopProducts = [];
+
   bool showAllTopProducts = false;
 
+  bool isExporting = false;
+
   int currentPage = 1;
+
   int totalCount = 0;
+
   String? nextPageUrl;
+
   String? previousPageUrl;
+
   bool isPaginationLoading = false;
 
   bool isLoading = true;
+
   String? errorMessage;
 
   DateTime? selectedDate; // For single date filter
+
   DateTime? startDate; // For date range filter
+
   DateTime? endDate; // For date range filter
+
 // //dateselection
+
 //    DateTime selectedDate = DateTime.now();
 
 //   Future<void> _selectDate(BuildContext context) async {
+
 //
+
 //     final DateTime? picked = await showDatePicker(
+
 //       context: context,
+
 //       initialDate: selectedDate,
+
 //       firstDate: DateTime(2000),
+
 //       lastDate: DateTime(2101),
+
 //     );
+
 //     if (picked != null && picked != selectedDate) {
+
 //       setState(() {
+
 //         selectedDate = picked;
+
 //
+
 //       });
+
 //     }
+
 //   }
 
   Future<void> getgoodsdetails({
@@ -65,7 +112,9 @@ class _dailygoodspageState extends State<daily_goods_movement> {
   }) async {
     setState(() {
       isLoading = true;
+
       isPaginationLoading = true;
+
       errorMessage = null;
     });
 
@@ -75,9 +124,12 @@ class _dailygoodspageState extends State<daily_goods_movement> {
       if (token == null || token.isEmpty) {
         setState(() {
           isLoading = false;
+
           isPaginationLoading = false;
+
           errorMessage = "Token not found. Please login again.";
         });
+
         return;
       }
 
@@ -87,6 +139,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
 
       if (fromDate != null && toDate != null) {
         queryParams['from_date'] = DateFormat('yyyy-MM-dd').format(fromDate);
+
         queryParams['to_date'] = DateFormat('yyyy-MM-dd').format(toDate);
       }
 
@@ -108,12 +161,18 @@ class _dailygoodspageState extends State<daily_goods_movement> {
         if (productsData is! Map<String, dynamic>) {
           setState(() {
             goods = [];
+
             filteredOrders = [];
+
             overallTopProducts = [];
+
             isLoading = false;
+
             isPaginationLoading = false;
+
             errorMessage = "Invalid API response format.";
           });
+
           return;
         }
 
@@ -122,31 +181,45 @@ class _dailygoodspageState extends State<daily_goods_movement> {
         if (results is! Map<String, dynamic>) {
           setState(() {
             goods = [];
+
             filteredOrders = [];
+
             overallTopProducts = [];
+
             isLoading = false;
+
             isPaginationLoading = false;
+
             errorMessage = "Invalid results format.";
           });
+
           return;
         }
 
         final summary = results['summary'];
+
         final data = results['data'];
 
         if (data is! List) {
           setState(() {
             goods = [];
+
             filteredOrders = [];
+
             overallTopProducts = [];
+
             isLoading = false;
+
             isPaginationLoading = false;
+
             errorMessage = "Invalid data format.";
           });
+
           return;
         }
 
         final List<Map<String, dynamic>> goodsList = [];
+
         final List<Map<String, dynamic>> topProductsList = [];
 
         if (summary is Map<String, dynamic>) {
@@ -174,11 +247,13 @@ class _dailygoodspageState extends State<daily_goods_movement> {
           }
 
           final totalWeightRaw = productData['total_weight'] ?? 0;
+
           final totalWeight = double.tryParse(totalWeightRaw.toString()) ?? 0.0;
 
           final List<Map<String, dynamic>> dateWiseTopProducts = [];
 
           final topProducts = productData['top_5_products'];
+
           if (topProducts is List) {
             for (var product in topProducts) {
               if (product is Map<String, dynamic>) {
@@ -212,25 +287,37 @@ class _dailygoodspageState extends State<daily_goods_movement> {
 
         setState(() {
           currentPage = page;
+
           totalCount = productsData['count'] ?? 0;
+
           nextPageUrl = productsData['next'];
+
           previousPageUrl = productsData['previous'];
 
           goods = goodsList;
+
           filteredOrders = goodsList;
+
           overallTopProducts = topProductsList;
+
           showAllTopProducts = false;
 
           isLoading = false;
+
           isPaginationLoading = false;
         });
       } else {
         setState(() {
           goods = [];
+
           filteredOrders = [];
+
           overallTopProducts = [];
+
           isLoading = false;
+
           isPaginationLoading = false;
+
           errorMessage =
               "Failed to fetch data. Status code: ${response.statusCode}";
         });
@@ -238,21 +325,390 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     } catch (error) {
       setState(() {
         goods = [];
+
         filteredOrders = [];
+
         overallTopProducts = [];
+
         isLoading = false;
+
         isPaginationLoading = false;
+
         errorMessage = "Something went wrong: $error";
       });
     }
   }
 
+  Future<List<Map<String, dynamic>>> _fetchAllGoodsForExcel() async {
+    final token = await getTokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Token not found. Please login again.');
+    }
+
+    final List<Map<String, dynamic>> exportRows = [];
+    int page = 1;
+    bool hasNextPage = true;
+
+    while (hasNextPage) {
+      final Map<String, String> queryParams = {
+        'page': page.toString(),
+      };
+
+      if (startDate != null && endDate != null) {
+        queryParams['from_date'] = DateFormat('yyyy-MM-dd').format(startDate!);
+        queryParams['to_date'] = DateFormat('yyyy-MM-dd').format(endDate!);
+      }
+
+      final uri = Uri.parse(
+        '$api/api/pagenated/warehouse/box/detail/',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to fetch export data. Status code: ${response.statusCode}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Invalid export response format.');
+      }
+
+      final results = decoded['results'];
+      if (results is! Map<String, dynamic>) {
+        throw Exception('Invalid export results format.');
+      }
+
+      final data = results['data'];
+      if (data is! List) {
+        throw Exception('Invalid export data format.');
+      }
+
+      for (var productData in data) {
+        if (productData is! Map<String, dynamic>) {
+          continue;
+        }
+
+        final totalWeightRaw = productData['total_weight'] ?? 0;
+        final totalWeight = double.tryParse(totalWeightRaw.toString()) ?? 0.0;
+
+        exportRows.add({
+          'shipped_date': productData['shipped_date'] ?? '',
+          'total_boxes': productData['total_boxes'] ?? 0,
+          'total_weight': totalWeight / 1000,
+          'total_volume_weight': productData['total_volume_weight'] ?? 0,
+          'total_shipping_charge': productData['total_shipping_charge'] ?? 0,
+          'total_actual_weight': productData['total_actual_weight'] ?? 0,
+          'total_parcel_amount': productData['total_parcel_amount'] ?? 0,
+          'total_invoice_count': productData['total_invoice_count'] ?? 0,
+          'total_order_amount': productData['total_order_amount'] ?? 0,
+        });
+      }
+
+      final next = decoded['next'];
+      hasNextPage = next != null && next.toString().trim().isNotEmpty;
+      page++;
+
+      if (page > 1000) {
+        throw Exception(
+            'Export stopped because pagination exceeded 1000 pages.');
+      }
+    }
+
+    return exportRows;
+  }
+
+  String _xmlEscape(dynamic value) {
+    return value
+        .toString()
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
+  }
+
+  String _excelColumnName(int columnNumber) {
+    int number = columnNumber;
+    String result = '';
+
+    while (number > 0) {
+      number--;
+      result = String.fromCharCode(65 + (number % 26)) + result;
+      number ~/= 26;
+    }
+
+    return result;
+  }
+
+  double _toDouble(dynamic value) {
+    return double.tryParse(value?.toString() ?? '0') ?? 0.0;
+  }
+
+  Uint8List _buildExcelBytes(List<Map<String, dynamic>> rows) {
+    final headers = <String>[
+      'Shipped Date',
+      'Total Boxes',
+      'Total A/W (kg)',
+      'Volume Weight',
+      'Shipping Charge',
+      'Total Actual Weight',
+      'Total Parcel Amount',
+      'Total Invoices',
+      'Total Order Amount',
+    ];
+
+    final columnWidths = <double>[
+      16,
+      14,
+      16,
+      18,
+      18,
+      21,
+      20,
+      16,
+      21,
+    ];
+
+    final sheetRows = StringBuffer();
+
+    sheetRows.write('<row r="1">');
+    for (int i = 0; i < headers.length; i++) {
+      final cellRef = '${_excelColumnName(i + 1)}1';
+      sheetRows.write(
+        '<c r="$cellRef" t="inlineStr" s="1"><is><t>${_xmlEscape(headers[i])}</t></is></c>',
+      );
+    }
+    sheetRows.write('</row>');
+
+    for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      final item = rows[rowIndex];
+      final excelRow = rowIndex + 2;
+
+      final values = <dynamic>[
+        item['shipped_date'] ?? '',
+        _toDouble(item['total_boxes']),
+        _toDouble(item['total_weight']),
+        _toDouble(item['total_volume_weight']),
+        _toDouble(item['total_shipping_charge']),
+        _toDouble(item['total_actual_weight']),
+        _toDouble(item['total_parcel_amount']),
+        _toDouble(item['total_invoice_count']),
+        _toDouble(item['total_order_amount']),
+      ];
+
+      sheetRows.write('<row r="$excelRow">');
+
+      for (int columnIndex = 0; columnIndex < values.length; columnIndex++) {
+        final cellRef = '${_excelColumnName(columnIndex + 1)}$excelRow';
+        final value = values[columnIndex];
+
+        if (columnIndex == 0) {
+          sheetRows.write(
+            '<c r="$cellRef" t="inlineStr" s="2"><is><t>${_xmlEscape(value)}</t></is></c>',
+          );
+        } else {
+          sheetRows.write(
+            '<c r="$cellRef" s="2"><v>${_toDouble(value)}</v></c>',
+          );
+        }
+      }
+
+      sheetRows.write('</row>');
+    }
+
+    final cols = StringBuffer();
+    cols.write('<cols>');
+    for (int i = 0; i < columnWidths.length; i++) {
+      final column = i + 1;
+      cols.write(
+        '<col min="$column" max="$column" width="${columnWidths[i]}" customWidth="1"/>',
+      );
+    }
+    cols.write('</cols>');
+
+    final lastRow = rows.length + 1;
+
+    final worksheetXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetViews>
+    <sheetView workbookViewId="0">
+      <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
+    </sheetView>
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  ${cols.toString()}
+  <sheetData>${sheetRows.toString()}</sheetData>
+  <autoFilter ref="A1:I$lastRow"/>
+</worksheet>''';
+
+    const contentTypesXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>''';
+
+    const relationshipsXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>''';
+
+    const workbookXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Daily Goods Movement" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>''';
+
+    const workbookRelationshipsXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>''';
+
+    const stylesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF1976D2"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FFD9E2F3"/></left>
+      <right style="thin"><color rgb="FFD9E2F3"/></right>
+      <top style="thin"><color rgb="FFD9E2F3"/></top>
+      <bottom style="thin"><color rgb="FFD9E2F3"/></bottom>
+      <diagonal/>
+    </border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="3">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>''';
+
+    final archive = Archive();
+
+    void addTextFile(String name, String content) {
+      final bytes = utf8.encode(content);
+      archive.addFile(ArchiveFile(name, bytes.length, bytes));
+    }
+
+    addTextFile('[Content_Types].xml', contentTypesXml);
+    addTextFile('_rels/.rels', relationshipsXml);
+    addTextFile('xl/workbook.xml', workbookXml);
+    addTextFile('xl/_rels/workbook.xml.rels', workbookRelationshipsXml);
+    addTextFile('xl/styles.xml', stylesXml);
+    addTextFile('xl/worksheets/sheet1.xml', worksheetXml);
+
+    final encoded = ZipEncoder().encode(archive);
+    if (encoded == null) {
+      throw Exception('Failed to generate Excel file.');
+    }
+
+    return Uint8List.fromList(encoded);
+  }
+
+ Future<void> _exportToExcel() async {
+  if (isExporting) {
+    return;
+  }
+
+  setState(() {
+    isExporting = true;
+  });
+
+  try {
+    final exportRows = await _fetchAllGoodsForExcel();
+
+    if (exportRows.isEmpty) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No data available to export.'),
+        ),
+      );
+      return;
+    }
+
+    final Uint8List excelBytes = _buildExcelBytes(exportRows);
+
+    final String fileName =
+        'Daily_Goods_Movement_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+
+    if (!mounted) return;
+
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [
+          XFile.fromData(
+            excelBytes,
+            mimeType:
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          ),
+        ],
+        fileNameOverrides: [fileName],
+        title: 'Daily Goods Movement',
+        subject: 'Daily Goods Movement Excel Report',
+        sharePositionOrigin: box != null && box.hasSize
+            ? box.localToGlobal(Offset.zero) & box.size
+            : const Rect.fromLTWH(0, 0, 1, 1),
+      ),
+    );
+  } catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Excel export failed: $error'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        isExporting = false;
+      });
+    }
+  }
+}
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('token');
   }
 
   drower d = drower();
+
   Widget _buildDropdownTile(
       BuildContext context, String title, List<String> options) {
     return ExpansionTile(
@@ -262,6 +718,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
           title: Text(option),
           onTap: () {
             Navigator.pop(context);
+
             d.navigateToSelectedPage(
                 context, option); // Navigate to selected page
           },
@@ -273,9 +730,13 @@ class _dailygoodspageState extends State<daily_goods_movement> {
   Future<void> _clearDateFilter() async {
     setState(() {
       startDate = null;
+
       endDate = null;
+
       currentPage = 1;
+
       nextPageUrl = null;
+
       previousPageUrl = null;
     });
 
@@ -284,19 +745,24 @@ class _dailygoodspageState extends State<daily_goods_movement> {
 
   void logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('userId');
+
     await prefs.remove('token');
 
     // Show a snackbar with the logout success message
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Logout successfully'),
+
         duration: Duration(
             seconds: 2), // Optional: Set how long the snackbar will be visible
       ),
     );
 
     // Navigate to the HomePage
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => login()),
@@ -316,8 +782,10 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     if (picked != null) {
       setState(() {
         startDate = picked.start;
+
         endDate = picked.end;
       });
+
       await getgoodsdetails(
         fromDate: picked.start,
         toDate: picked.end,
@@ -329,19 +797,23 @@ class _dailygoodspageState extends State<daily_goods_movement> {
   @override
   void initState() {
     super.initState();
+
     getgoodsdetails();
   }
 
   Future<String?> getdepFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     return prefs.getString('department');
   }
 
   Future<void> _navigateBack() async {
     final dep = await getdepFromPrefs();
+
     if (dep == "BDO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
@@ -349,6 +821,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     } else if (dep == "BDM") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
@@ -358,15 +831,15 @@ class _dailygoodspageState extends State<daily_goods_movement> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
-    }
-    else if (dep == "CSO") {
+    } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    }else if (dep == "warehouse") {
+    } else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 WarehouseDashboard()), // Replace AnotherPage with your target page
@@ -374,6 +847,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 ceo_dashboard()), // Replace AnotherPage with your target page
@@ -381,6 +855,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     } else if (dep == "COO") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 ceo_dashboard()), // Replace AnotherPage with your target page
@@ -388,6 +863,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     } else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
+
         MaterialPageRoute(
             builder: (context) =>
                 WarehouseAdmin()), // Replace AnotherPage with your target page
@@ -492,6 +968,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     }
 
     String title = "Top 10 Products";
+
     if (startDate != null && endDate != null) {
       title =
           "Top 10 Products (${DateFormat('dd-MM-yyyy').format(startDate!)} to ${DateFormat('dd-MM-yyyy').format(endDate!)})";
@@ -716,7 +1193,9 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     return WillPopScope(
       onWillPop: () async {
         // Prevent the swipe-back gesture (and back button)
+
         _navigateBack();
+
         return false;
       },
       child: Scaffold(
@@ -727,11 +1206,14 @@ class _dailygoodspageState extends State<daily_goods_movement> {
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back), // Custom back arrow
+
             onPressed: () async {
               final dep = await getdepFromPrefs();
+
               if (dep == "BDO") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
@@ -739,6 +1221,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
               } else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
@@ -746,24 +1229,25 @@ class _dailygoodspageState extends State<daily_goods_movement> {
               } else if (dep == "warehouse") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           WarehouseDashboard()), // Replace AnotherPage with your target page
                 );
               } else if (dep == "COO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => ceo_dashboard()),
-      );
-    }
-    else if (dep == "CSO") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => cso_dashboard()),
-      );
-    }else if (dep == "CEO") {
                 Navigator.pushReplacement(
                   context,
+                  MaterialPageRoute(builder: (context) => ceo_dashboard()),
+                );
+              } else if (dep == "CSO") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => cso_dashboard()),
+                );
+              } else if (dep == "CEO") {
+                Navigator.pushReplacement(
+                  context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           ceo_dashboard()), // Replace AnotherPage with your target page
@@ -771,6 +1255,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
               } else if (dep == "COO") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           ceo_dashboard()), // Replace AnotherPage with your target page
@@ -778,6 +1263,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
               } else if (dep == "Warehouse Admin") {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           WarehouseAdmin()), // Replace AnotherPage with your target page
@@ -785,6 +1271,7 @@ class _dailygoodspageState extends State<daily_goods_movement> {
               } else {
                 Navigator.pushReplacement(
                   context,
+
                   MaterialPageRoute(
                       builder: (context) =>
                           dashboard()), // Replace AnotherPage with your target page
@@ -793,6 +1280,23 @@ class _dailygoodspageState extends State<daily_goods_movement> {
             },
           ),
           actions: [
+            isExporting
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: 'Export Excel',
+                    onPressed: _exportToExcel,
+                    icon: const Icon(
+                      Icons.download,
+                      color: Colors.green,
+                    ),
+                  ),
             IconButton(
               icon: Image.asset('lib/assets/profile.png'),
               onPressed: () {
@@ -807,41 +1311,73 @@ class _dailygoodspageState extends State<daily_goods_movement> {
         body: Column(
           children: [
             // Padding(
+
             //   padding: const EdgeInsets.all(10),
+
             //   child: Container(
+
             //           height: 46,
+
             //           decoration: BoxDecoration(
+
             //             border: Border.all(
+
             //   color: Colors.blue,
+
             //   width: 1.0,
+
             //             ),
+
             //             borderRadius: BorderRadius.circular(8.0),
+
             //           ),
+
             //           child: Row(
+
             //             children: [
+
             //   SizedBox(width: 25,),
+
             //   Text(
+
             //     '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+
             //     style: TextStyle(fontSize:12,color:Color.fromARGB(255, 116, 116, 116)),
+
             //   ),
+
             //   SizedBox(width: 162,),
+
             //   GestureDetector(
+
             //     onTap: () {
+
             //     _selectDate(context);
+
             //
+
             //     },
+
             //     child: Container(
+
             //       padding: const EdgeInsets.only(left: 55),
+
             //       child: Icon(Icons.date_range)),
+
             //   ),
+
             //             ],
+
             //           ),
+
             //         ),
+
             // ),
 
             SizedBox(
               height: 10,
             ),
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
@@ -1085,6 +1621,46 @@ class _dailygoodspageState extends State<daily_goods_movement> {
                                             Expanded(
                                               child: Text(
                                                 "Shipping Charge: ₹${item['total_shipping_charge']}",
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.blue.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.receipt_long,
+                                              color: Colors.blue.shade700,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                "Total Invoices: ${item['total_invoice_count']}",
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.blue.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.currency_rupee,
+                                              color: Colors.blue.shade700,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                "Total Order Amount: ₹${item['total_order_amount']}",
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
