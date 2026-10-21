@@ -17,6 +17,7 @@ import 'package:beposoft/pages/ACCOUNTS/dailyproductcategorywisecyclingskating.d
 import 'package:beposoft/pages/ACCOUNTS/ordercomparison_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/other_receipts.dart';
 import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
+import 'package:beposoft/pages/ACCOUNTS/proforma_list_payment_slips.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_all_team_members.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
@@ -668,7 +669,12 @@ class drower {
                   )),
         );
         break;
-
+        case 'Proforma Invoice List (Payment-Slips)':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ProformaPaymentSlipInvoiceList()),
+        );
+        break;
       case 'View Orders List':
         Navigator.push(
           context,
@@ -1307,6 +1313,13 @@ class drower {
           MaterialPageRoute(builder: (context) => ProformaInvoiceList()),
         );
         break;
+              case 'Proforma Invoice List (Payment-Slips)':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ProformaPaymentSlipInvoiceList()),
+        );
+        break;
+       
       case 'Customers':
         Navigator.push(
           context,

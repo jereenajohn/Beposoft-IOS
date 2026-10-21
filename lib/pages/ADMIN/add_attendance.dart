@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'package:beposoft/pages/api.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,50 @@ class StaffMarkAttendanceScreen extends StatefulWidget {
 }
 
 class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
+  Future<void> _recordAttendanceAudit({
+    required String action,
+    required Map<String, dynamic> beforeData,
+    required Map<String, dynamic> submittedData,
+    required http.Response response,
+    required String endpoint,
+    int? attendanceId,
+    required Map<String, dynamic> staffContext,
+    required String method,
+  }) async {
+    try {
+      dynamic savedData;
+      try {
+        savedData = jsonDecode(response.body);
+      } catch (_) {
+        savedData = response.body;
+      }
+      final logged = await AuditLogService.log(
+        action: action,
+        staffId: int.tryParse(submittedData['staff']?.toString() ?? ''),
+        beforeData: beforeData,
+        afterData: <String, dynamic>{
+          ...submittedData,
+          if (attendanceId != null) 'attendance_id': attendanceId,
+          'staff_name':
+              staffContext['staff_name'] ?? staffContext['member_name'],
+          'team_name': staffContext['team_name'],
+          'team_leader_name': staffContext['team_leader_name'],
+          'response_data': savedData,
+          'metadata': <String, dynamic>{
+            'source': 'StaffMarkAttendanceScreen',
+            'method': method,
+            'endpoint': endpoint,
+            'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        },
+      );
+      if (!logged) debugPrint('Attendance audit failed: $action');
+    } catch (error) {
+      debugPrint('Attendance audit error: ${error.runtimeType}');
+    }
+  }
+
   List<Map<String, dynamic>> teamMembers = [];
   List<Map<String, dynamic>> selectedDateAttendance = [];
 
@@ -201,8 +246,7 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
                   'team_name': team['team_name'] ?? '',
                   'team_leader_name': team['team_leader_name'] ?? '',
                   'attendance_time': attendance['attendance_time'],
-                  'approval_status':
-                      attendance['approval_status'] ?? 'pending',
+                  'approval_status': attendance['approval_status'] ?? 'pending',
                   'approved_by': attendance['approved_by'],
                   'approved_by_name': attendance['approved_by_name'],
                   'approved_at': attendance['approved_at'],
@@ -234,11 +278,11 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
       return;
     }
 
- if (selectedStatus != 'absent' &&
-    attendanceTimeController.text.trim().isEmpty) {
-  showMsg("Choose reporting time");
-  return;
-}
+    if (selectedStatus != 'absent' &&
+        attendanceTimeController.text.trim().isEmpty) {
+      showMsg("Choose reporting time");
+      return;
+    }
 
     final alreadyMarked = selectedDateAttendance.any(
       (attendance) =>
@@ -258,14 +302,18 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
 
       final token = await gettokenFromPrefs();
 
-  final body = {
-  "staff": selectedMember!['member'],
-  "attendance_date": todayDate,
-  "attendance_time": selectedStatus == 'absent'
-      ? null
-      : attendanceTimeController.text.trim(),
-  "status": selectedStatus,
-};
+      final body = {
+        "staff": selectedMember!['member'],
+        "attendance_date": todayDate,
+        "attendance_time": selectedStatus == 'absent'
+            ? null
+            : attendanceTimeController.text.trim(),
+        "status": selectedStatus,
+      };
+
+      final auditStaffContext = Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(selectedMember)) as Map,
+      );
 
       final response = await http.post(
         Uri.parse('$api/api/staff/attendance/'),
@@ -280,6 +328,15 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
       debugPrint("MARK ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        await _recordAttendanceAudit(
+          action: 'attendance_created',
+          beforeData: <String, dynamic>{},
+          submittedData: Map<String, dynamic>.from(body),
+          response: response,
+          endpoint: '/api/staff/attendance/',
+          staffContext: auditStaffContext,
+          method: 'POST',
+        );
         showMsg("Attendance marked successfully");
 
         setState(() {
@@ -322,26 +379,39 @@ class _StaffMarkAttendanceScreenState extends State<StaffMarkAttendanceScreen> {
       showMsg("Select member");
       return;
     }
-if (selectedStatus != 'absent' &&
-    attendanceTimeController.text.trim().isEmpty) {
-  showMsg("Choose reporting time");
-  return;
-}
+    if (selectedStatus != 'absent' &&
+        attendanceTimeController.text.trim().isEmpty) {
+      showMsg("Choose reporting time");
+      return;
+    }
 
     try {
       setState(() => isSaving = true);
 
       final token = await gettokenFromPrefs();
 
-   final body = {
-  "staff": selectedMember!['member'],
-  "attendance_date": todayDate,
-  "attendance_time": selectedStatus == 'absent'
-      ? null
-      : attendanceTimeController.text.trim(),
-  "status": selectedStatus,
-};
+      final body = {
+        "staff": selectedMember!['member'],
+        "attendance_date": todayDate,
+        "attendance_time": selectedStatus == 'absent'
+            ? null
+            : attendanceTimeController.text.trim(),
+        "status": selectedStatus,
+      };
 
+      final auditAttendanceId = editingAttendanceId;
+      final auditStaffContext = Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(selectedMember)) as Map,
+      );
+      final beforeData = <String, dynamic>{'attendance_id': auditAttendanceId};
+      for (final attendance in selectedDateAttendance) {
+        if (attendance['id'].toString() == auditAttendanceId.toString()) {
+          beforeData.addAll(Map<String, dynamic>.from(
+            jsonDecode(jsonEncode(attendance)) as Map,
+          ));
+          break;
+        }
+      }
       final response = await http.put(
         Uri.parse('$api/api/staff/attendance/edit/$editingAttendanceId/'),
         headers: {
@@ -355,6 +425,16 @@ if (selectedStatus != 'absent' &&
       debugPrint("UPDATE ATTENDANCE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
+        await _recordAttendanceAudit(
+          action: 'attendance_updated',
+          beforeData: beforeData,
+          submittedData: Map<String, dynamic>.from(body),
+          response: response,
+          attendanceId: auditAttendanceId,
+          endpoint: '/api/staff/attendance/edit/$auditAttendanceId/',
+          staffContext: auditStaffContext,
+          method: 'PUT',
+        );
         showMsg("Attendance updated successfully");
 
         setState(() {
@@ -408,6 +488,10 @@ if (selectedStatus != 'absent' &&
         "approved_at": DateTime.now().toIso8601String(),
       };
 
+      final auditAttendanceId = int.tryParse(item['id'].toString());
+      final beforeData = Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(item)) as Map,
+      );
       final response = await http.put(
         Uri.parse('$api/api/staff/attendance/edit/${item['id']}/'),
         headers: {
@@ -421,6 +505,16 @@ if (selectedStatus != 'absent' &&
       debugPrint("APPROVAL UPDATE RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
+        await _recordAttendanceAudit(
+          action: 'attendance_approval_updated',
+          beforeData: beforeData,
+          submittedData: Map<String, dynamic>.from(body),
+          response: response,
+          attendanceId: auditAttendanceId,
+          endpoint: '/api/staff/attendance/edit/${beforeData['id']}/',
+          staffContext: beforeData,
+          method: 'PUT',
+        );
         showMsg("Attendance $approvalStatus successfully");
         await refreshAll();
       } else {
@@ -691,8 +785,7 @@ if (selectedStatus != 'absent' &&
                               .toLowerCase();
                           final search = filter.toLowerCase();
 
-                          return name.contains(search) ||
-                              team.contains(search);
+                          return name.contains(search) || team.contains(search);
                         },
                         itemAsString: (member) {
                           if (member.isEmpty) return "";
@@ -900,15 +993,15 @@ if (selectedStatus != 'absent' &&
     final bool isSelected = selectedStatus == value;
 
     return InkWell(
-   onTap: () {
-  setState(() {
-    selectedStatus = value;
+      onTap: () {
+        setState(() {
+          selectedStatus = value;
 
-    if (value == 'absent') {
-      attendanceTimeController.clear();
-    }
-  });
-},
+          if (value == 'absent') {
+            attendanceTimeController.clear();
+          }
+        });
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 11),
@@ -1083,81 +1176,95 @@ if (selectedStatus != 'absent' &&
                                         ),
                                       ),
                                       const SizedBox(width: 10),
-                                    PopupMenuButton<String>(
-  enabled: !isSaving,
-  onSelected: (value) {
-    updateApprovalStatus(item, value);
-  },
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(14),
-  ),
-  itemBuilder: (_) => const [
-    PopupMenuItem(
-      value: "approved",
-      child: Row(
-        children: [
-          Icon(Icons.check_circle, color: Colors.green),
-          SizedBox(width: 10),
-          Text("Approve"),
-        ],
-      ),
-    ),
-    PopupMenuItem(
-      value: "rejected",
-      child: Row(
-        children: [
-          Icon(Icons.cancel, color: Colors.red),
-          SizedBox(width: 10),
-          Text("Reject"),
-        ],
-      ),
-    ),
-    PopupMenuItem(
-      value: "pending",
-      child: Row(
-        children: [
-          Icon(Icons.hourglass_empty, color: Colors.orange),
-          SizedBox(width: 10),
-          Text("Pending"),
-        ],
-      ),
-    ),
-  ],
-  child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    decoration: BoxDecoration(
-      color: getApprovalColor(approvalStatus).withOpacity(0.10),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(
-        color: getApprovalColor(approvalStatus).withOpacity(0.45),
-      ),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.admin_panel_settings_rounded,
-          size: 16,
-          color: getApprovalColor(approvalStatus),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          "Approval",
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            color: getApprovalColor(approvalStatus),
-          ),
-        ),
-        Icon(
-          Icons.arrow_drop_down,
-          size: 16,
-          color: getApprovalColor(approvalStatus),
-        ),
-      ],
-    ),
-  ),
-),
+                                      PopupMenuButton<String>(
+                                        enabled: !isSaving,
+                                        onSelected: (value) {
+                                          updateApprovalStatus(item, value);
+                                        },
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                        itemBuilder: (_) => const [
+                                          PopupMenuItem(
+                                            value: "approved",
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.check_circle,
+                                                    color: Colors.green),
+                                                SizedBox(width: 10),
+                                                Text("Approve"),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: "rejected",
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.cancel,
+                                                    color: Colors.red),
+                                                SizedBox(width: 10),
+                                                Text("Reject"),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: "pending",
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.hourglass_empty,
+                                                    color: Colors.orange),
+                                                SizedBox(width: 10),
+                                                Text("Pending"),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                getApprovalColor(approvalStatus)
+                                                    .withOpacity(0.10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: getApprovalColor(
+                                                      approvalStatus)
+                                                  .withOpacity(0.45),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons
+                                                    .admin_panel_settings_rounded,
+                                                size: 16,
+                                                color: getApprovalColor(
+                                                    approvalStatus),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                "Approval",
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: getApprovalColor(
+                                                      approvalStatus),
+                                                ),
+                                              ),
+                                              Icon(
+                                                Icons.arrow_drop_down,
+                                                size: 16,
+                                                color: getApprovalColor(
+                                                    approvalStatus),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:beposoft/audit/audit_new_service.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
@@ -20,6 +21,74 @@ class AllAttendanceAddPage extends StatefulWidget {
 }
 
 class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
+  Future<void> _recordAttendanceAudit({
+    required String action,
+    required Map<String, dynamic> beforeData,
+    required Map<String, dynamic> submittedData,
+    required http.Response response,
+    required String endpoint,
+    int? attendanceId,
+    required Map<String, dynamic> staffContext,
+    required String method,
+  }) async {
+    try {
+      dynamic savedData;
+      try {
+        savedData = jsonDecode(response.body);
+      } catch (_) {
+        savedData = response.body;
+      }
+      final logged = await AuditLogService.log(
+        action: action,
+        staffId: int.tryParse(submittedData['staff']?.toString() ?? ''),
+        beforeData: beforeData,
+        afterData: <String, dynamic>{
+          ...submittedData,
+          if (attendanceId != null) 'attendance_id': attendanceId,
+          'staff_name': staffContext['staff_name'] ?? staffContext['member_name'],
+          'team_name': staffContext['team_name'],
+          'team_leader_name': staffContext['team_leader_name'],
+          'response_data': savedData,
+          'metadata': <String, dynamic>{
+            'source': 'AllAttendanceAddPage',
+            'method': method,
+            'endpoint': endpoint,
+            'http_status': response.statusCode,
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        },
+      );
+      if (!logged) debugPrint('Attendance audit failed: $action');
+    } catch (error) {
+      debugPrint('Attendance audit error: ${error.runtimeType}');
+    }
+  }
+
+  Map<String, dynamic> _editingAttendanceSnapshot = {};
+
+  Map<String, dynamic> _attendanceAuditContext(dynamic staffId) {
+    for (final team in attendanceData) {
+      for (final row in buildTeamRows(team)) {
+        if (row['staff']?.toString() == staffId?.toString()) {
+          return <String, dynamic>{
+            ...Map<String, dynamic>.from(row as Map),
+            'team_name': team['team_name'],
+            'team_leader_name': team['team_leader_name'],
+          };
+        }
+      }
+    }
+    for (final staff in staffs) {
+      if (staff['id']?.toString() == staffId?.toString()) {
+        return <String, dynamic>{
+          ...Map<String, dynamic>.from(staff as Map),
+          'staff_name': staff['name'],
+        };
+      }
+    }
+    return <String, dynamic>{'staff': staffId};
+  }
+
   final String baseUrl = "$api/api/";
 
   bool loading = false;
@@ -113,6 +182,9 @@ class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
         "approved_at": DateTime.now().toIso8601String(),
       };
 
+      final auditAttendanceId = int.tryParse(item['id'].toString());
+      final beforeData = Map<String, dynamic>.from(jsonDecode(jsonEncode(item)) as Map);
+      final auditContext = _attendanceAuditContext(payload['staff']);
       final response = await http.put(
         Uri.parse("${baseUrl}staff/attendance/edit/${item["id"]}/"),
         headers: authHeaders(token),
@@ -120,6 +192,16 @@ class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        await _recordAttendanceAudit(
+          action: 'attendance_approval_updated',
+          beforeData: beforeData,
+          submittedData: Map<String, dynamic>.from(payload),
+          response: response,
+          endpoint: '/api/staff/attendance/edit/$auditAttendanceId/',
+          attendanceId: auditAttendanceId,
+          staffContext: auditContext,
+          method: 'PUT',
+        );
         showSuccess("Attendance $approvalStatus");
         await fetchAttendance();
       } else {
@@ -307,15 +389,30 @@ class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
         "status": addStatus,
       };
 
+      final auditContext = _attendanceAuditContext(payload['staff']);
       final response = await http.post(
         Uri.parse("${baseUrl}staff/attendance/"),
         headers: authHeaders(token),
         body: jsonEncode(payload),
       );
 
-      final body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+      dynamic body = <String, dynamic>{};
+      try {
+        body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+      } catch (_) {
+        body = <String, dynamic>{};
+      }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        await _recordAttendanceAudit(
+          action: 'attendance_created',
+          beforeData: <String, dynamic>{},
+          submittedData: Map<String, dynamic>.from(payload),
+          response: response,
+          endpoint: '/api/staff/attendance/',
+          staffContext: auditContext,
+          method: 'POST',
+        );
         showSuccess("Attendance added successfully");
 
         if (!mounted) return;
@@ -360,6 +457,9 @@ class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final body = jsonDecode(response.body);
         final data = body["data"];
+        _editingAttendanceSnapshot = Map<String, dynamic>.from(
+          jsonDecode(jsonEncode(data)) as Map,
+        );
 
         final staffId = data["staff"]?.toString();
 
@@ -431,15 +531,36 @@ class _AllAttendanceAddPageState extends State<AllAttendanceAddPage> {
         "status": editStatus,
       };
 
+      final auditAttendanceId = selectedAttendanceId;
+      final beforeData = Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(_editingAttendanceSnapshot)) as Map,
+      );
+      beforeData['attendance_id'] = auditAttendanceId;
+      final auditContext = _attendanceAuditContext(payload['staff']);
       final response = await http.put(
         Uri.parse("${baseUrl}staff/attendance/edit/$selectedAttendanceId/"),
         headers: authHeaders(token),
         body: jsonEncode(payload),
       );
 
-      final body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+      dynamic body = <String, dynamic>{};
+      try {
+        body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+      } catch (_) {
+        body = <String, dynamic>{};
+      }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        await _recordAttendanceAudit(
+          action: 'attendance_updated',
+          beforeData: beforeData,
+          submittedData: Map<String, dynamic>.from(payload),
+          response: response,
+          endpoint: '/api/staff/attendance/edit/$auditAttendanceId/',
+          attendanceId: auditAttendanceId,
+          staffContext: auditContext,
+          method: 'PUT',
+        );
         showSuccess("Attendance updated");
 
         if (!mounted) return;

@@ -65,6 +65,10 @@ class _Performa_order_requestState extends State<Performa_order_request> {
     );
   }
 
+  bool _isCreatingProforma = false;
+  bool _isTotalDialogOpen = false;
+  final ValueNotifier<bool> _proformaBusy = ValueNotifier<bool>(false);
+
   int? selectedCompanyId;
 
   List<Map<String, dynamic>> products = [];
@@ -235,9 +239,16 @@ class _Performa_order_requestState extends State<Performa_order_request> {
     }
   }
 
-  void performaordercreate(
+  Future<void> performaordercreate(
     BuildContext scaffoldContext,
   ) async {
+    if (!mounted || _isCreatingProforma) return;
+    // Acquire the lock before any asynchronous work.
+    setState(() {
+      _isCreatingProforma = true;
+    });
+    _proformaBusy.value = true;
+    bool proformaCreated = false;
     try {
       warehouse = await getwarehouseFromPrefs();
       final token = await gettokenFromPrefs();
@@ -264,6 +275,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
         body: jsonEncode(submittedData),
       );
       if (response.statusCode == 201) {
+        proformaCreated = true;
         dynamic createdProformaData;
         dynamic createdProformaId;
 
@@ -297,6 +309,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
         Navigator.push(
             context, MaterialPageRoute(builder: (context) => order_products()));
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(scaffoldContext).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
@@ -305,11 +318,20 @@ class _Performa_order_requestState extends State<Performa_order_request> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         SnackBar(
           content: Text('Enter valid information'),
         ),
       );
+    } finally {
+      // Unlock for retry only if the API did not confirm creation.
+      if (mounted && !proformaCreated) {
+        setState(() {
+          _isCreatingProforma = false;
+        });
+        _proformaBusy.value = false;
+      }
     }
   }
 
@@ -450,6 +472,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
 
   var tot;
   void showTotalDialog(BuildContext context) {
+    if (!mounted || _isCreatingProforma || _isTotalDialogOpen) return;
     double total = 0.0;
     double totalDiscount = 0.0;
     double totalItemPrice = 0.0;
@@ -470,10 +493,17 @@ class _Performa_order_requestState extends State<Performa_order_request> {
       tot = total;
     });
 
-    showDialog(
+    _isTotalDialogOpen = true;
+    showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
+        return ValueListenableBuilder<bool>(
+          valueListenable: _proformaBusy,
+          builder: (dialogContext, busy, child) {
+            return PopScope(
+              canPop: !busy,
+              child: AlertDialog(
           title: Text("Cart Total"),
           content: SizedBox(
             width: 300, // Set the desired width
@@ -537,16 +567,21 @@ class _Performa_order_requestState extends State<Performa_order_request> {
                   foregroundColor: Colors.white,
                   backgroundColor: Colors.blue, // Set the text color to white
                 ),
-                onPressed: () {
-                  performaordercreate(context);
-                },
-                child: Text("OK"),
+                onPressed: busy
+                    ? null
+                    : () => performaordercreate(context),
+                child: Text(busy ? "Creating..." : "OK"),
               ),
             ),
           ],
+              ),
+            );
+          },
         );
       },
-    );
+    ).whenComplete(() {
+      _isTotalDialogOpen = false;
+    });
   }
 
   Future<void> fetchProductList() async {
@@ -1372,6 +1407,7 @@ class _Performa_order_requestState extends State<Performa_order_request> {
 
   @override
   void dispose() {
+    _proformaBusy.dispose();
     textEditingController.dispose();
     searchController.dispose();
     _debounce?.cancel();
@@ -2181,9 +2217,9 @@ class _Performa_order_requestState extends State<Performa_order_request> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      showTotalDialog(context);
-                    },
+                    onPressed: _isCreatingProforma
+                        ? null
+                        : () => showTotalDialog(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryColor,
                       foregroundColor: Colors.white,

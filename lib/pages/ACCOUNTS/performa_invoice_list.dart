@@ -401,6 +401,12 @@ static const Set<String> _allInvoiceDepartments = {
       'shipping_charge': productData['shipping_charge'],
       'code_charge': productData['code_charge'],
       'note': productData['note'],
+      'payment_slips': productData['payment_slips'] is List
+          ? (productData['payment_slips'] as List)
+              .whereType<Map>()
+              .map((slip) => Map<String, dynamic>.from(slip))
+              .toList()
+          : <Map<String, dynamic>>[],
     };
   }
 
@@ -2098,6 +2104,149 @@ static const Set<String> _allInvoiceDepartments = {
     );
   }
 
+  String? _paymentSlipUrl(dynamic file) {
+    if (file is! String || file.trim().isEmpty) return null;
+    final Uri? base = Uri.tryParse('$api/');
+    final Uri? value = Uri.tryParse(file.trim());
+    if (base == null || value == null) return null;
+    final Uri resolved = base.resolveUri(value);
+    if ((resolved.scheme != 'https' && resolved.scheme != 'http') ||
+        resolved.host.isEmpty) return null;
+    return resolved.toString();
+  }
+
+  Widget _paymentSlipImage(String url, {bool thumbnail = false}) {
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      cacheWidth: thumbnail ? 320 : null,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined, color: Color(0xFF98A2B3)),
+              SizedBox(height: 6),
+              Text('Unable to load image',
+                  style: TextStyle(fontSize: 10, color: Color(0xFF667085))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _previewPaymentSlip(String url, int index) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: MediaQuery.of(dialogContext).size.width,
+          height: MediaQuery.of(dialogContext).size.height * 0.8,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Payment Slip ${index + 1}',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ClipRect(
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 5,
+                    child: SizedBox.expand(child: _paymentSlipImage(url)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentSlips(Map<String, dynamic> order) {
+    final dynamic rawSlips = order['payment_slips'];
+    final List<String> urls = <String>[];
+    if (rawSlips is List) {
+      for (final dynamic slip in rawSlips) {
+        if (slip is! Map) continue;
+        final String? url = _paymentSlipUrl(slip['file']);
+        if (url != null) urls.add(url);
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          'Payment Slips (${urls.length})',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF344054),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (urls.isEmpty)
+          const Text(
+            'No payment slip images available',
+            style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+          )
+        else
+          SizedBox(
+            height: 112,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: urls.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) => Semantics(
+                button: true,
+                label: 'View payment slip ${index + 1}',
+                child: InkWell(
+                  onTap: () => _previewPaymentSlip(urls[index], index),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 112,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE4E7EC)),
+                    ),
+                    child: _paymentSlipImage(urls[index], thumbnail: true),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildInvoiceCard(Map<String, dynamic> order) {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
@@ -2272,6 +2421,7 @@ static const Set<String> _allInvoiceDepartments = {
                       ],
                     ),
                   ),
+                  _buildPaymentSlips(order),
                 ],
               ),
             ),

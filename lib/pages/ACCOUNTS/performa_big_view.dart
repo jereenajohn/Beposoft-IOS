@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:beposoft/audit/audit_new_service.dart';
 import 'dart:async';
 import 'dart:io';
@@ -43,22 +45,27 @@ class _PerformaInvoice_BigView_ListState
     extends State<PerformaInvoice_BigView_List> {
   dynamic _auditCopy(dynamic value) {
     // Detach the snapshot before any asynchronous request or UI refresh.
-    return jsonDecode(jsonEncode(value, toEncodable: (value) => value.toString()));
+    return jsonDecode(
+        jsonEncode(value, toEncodable: (value) => value.toString()));
   }
 
   Map<String, dynamic> _loadedProforma = <String, dynamic>{};
 
   Map<String, dynamic> _auditSnapshot(int orderId, int? itemId) {
-    final matchingOrders = orders.where(
-      (order) => order['id']?.toString() == orderId.toString(),
-    ).toList();
+    final matchingOrders = orders
+        .where(
+          (order) => order['id']?.toString() == orderId.toString(),
+        )
+        .toList();
     final rawItems = _loadedProforma['perfoma_items'];
     final previousItems = rawItems is List
-        ? rawItems.where((item) => item is Map &&
-            item['id']?.toString() == itemId?.toString()).toList()
+        ? rawItems
+            .where((item) =>
+                item is Map && item['id']?.toString() == itemId?.toString())
+            .toList()
         : <dynamic>[];
     return Map<String, dynamic>.from(_auditCopy(<String, dynamic>{
-      'order_id': orderId,
+      'proforma_id': orderId,
       'invoice': widget.invoice,
       if (itemId != null) 'item_id': itemId,
       'loaded_proforma_response': _loadedProforma,
@@ -90,17 +97,20 @@ class _PerformaInvoice_BigView_ListState
     // Keep logging errors separate from the completed business operation.
     try {
       final successful = response != null &&
-          response.statusCode >= 200 && response.statusCode < 300;
+          response.statusCode >= 200 &&
+          response.statusCode < 300;
       final logged = await AuditLogService.log(
         action: successful ? action : '${action}_failed',
-        orderId: orderId,
+        // A proforma ID is not an Order foreign key.
+        orderId: null,
         beforeData: before,
         afterData: <String, dynamic>{
-          'order_id': orderId,
+          'proforma_id': orderId,
           'invoice': widget.invoice,
           if (itemId != null) 'item_id': itemId,
           'submitted_data': submitted,
-          'response_data': response == null ? null : _auditResponseData(response),
+          'response_data':
+              response == null ? null : _auditResponseData(response),
           'outcome': successful ? 'success' : 'failed',
           if (method == 'DELETE' && successful) 'deleted': true,
           if (error != null) 'error_type': error.runtimeType.toString(),
@@ -135,34 +145,54 @@ class _PerformaInvoice_BigView_ListState
     final before = _auditSnapshot(orderId, itemId);
     dynamic submitted = body;
     if (body is String) {
-      try { submitted = jsonDecode(body); } catch (_) {}
+      try {
+        submitted = jsonDecode(body);
+      } catch (_) {}
     }
     submitted = _auditCopy(submitted);
     late final http.Response response;
     try {
       switch (method) {
         case 'POST':
-          response = await http.post(uri, headers: headers, body: body, encoding: encoding);
+          response = await http.post(uri,
+              headers: headers, body: body, encoding: encoding);
           break;
         case 'PUT':
-          response = await http.put(uri, headers: headers, body: body, encoding: encoding);
+          response = await http.put(uri,
+              headers: headers, body: body, encoding: encoding);
           break;
         case 'PATCH':
-          response = await http.patch(uri, headers: headers, body: body, encoding: encoding);
+          response = await http.patch(uri,
+              headers: headers, body: body, encoding: encoding);
           break;
         case 'DELETE':
-          response = await http.delete(uri, headers: headers, body: body, encoding: encoding);
+          response = await http.delete(uri,
+              headers: headers, body: body, encoding: encoding);
           break;
         default:
           throw ArgumentError.value(method, 'method');
       }
     } catch (error) {
-      await _recordMutation(orderId: orderId, itemId: itemId, action: action, method: method, uri: uri,
-          before: before, submitted: submitted, error: error);
+      await _recordMutation(
+          orderId: orderId,
+          itemId: itemId,
+          action: action,
+          method: method,
+          uri: uri,
+          before: before,
+          submitted: submitted,
+          error: error);
       rethrow;
     }
-    await _recordMutation(orderId: orderId, itemId: itemId, action: action, method: method, uri: uri,
-        before: before, submitted: submitted, response: response);
+    await _recordMutation(
+        orderId: orderId,
+        itemId: itemId,
+        action: action,
+        method: method,
+        uri: uri,
+        before: before,
+        submitted: submitted,
+        response: response);
     return response;
   }
 
@@ -172,6 +202,16 @@ class _PerformaInvoice_BigView_ListState
   List<Map<String, dynamic>> company = [];
   dynamic allocatedstates = [];
   String? department;
+
+  bool get _canGenerateInvoice => const <String>{
+        'information technology',
+        'admin',
+        'accounts',
+        'accounting',
+        'accounts / accounting',
+        'ceo',
+        'coo',
+      }.contains(department?.trim().toLowerCase());
   bool isLoading = true;
   String? loadError;
   bool isDownloading = false;
@@ -632,12 +672,10 @@ class _PerformaInvoice_BigView_ListState
       final token = await getTokenFromPrefs();
       department ??= await getdepFromPrefs();
 
-      final bool staffCustomer =
-          department == "BDO" || department == "BDM";
+      final bool staffCustomer = department == "BDO" || department == "BDM";
 
-      final String endpoint = staffCustomer
-          ? '$api/api/staff/customers/'
-          : '$api/api/customers/';
+      final String endpoint =
+          staffCustomer ? '$api/api/staff/customers/' : '$api/api/customers/';
 
       final Map<String, String> queryParameters = {};
 
@@ -730,6 +768,68 @@ class _PerformaInvoice_BigView_ListState
     }
   }
 
+  Future<Map<String, String>> _saveProformaNotes(
+    int proformaId,
+    String note,
+    String courierNote,
+  ) async {
+    final token = await getTokenFromPrefs();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Session expired. Please log in again.');
+    }
+    if (proformaId <= 0) throw Exception('Invalid proforma ID.');
+    final response = await _auditMutation(
+      proformaId,
+      null,
+      'PUT',
+      'proforma_notes_updated',
+      Uri.parse('$api/api/perfoma/order/$proformaId/update/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({'note': note, 'parcel_note': courierNote}),
+    );
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {}
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final detail = decoded is Map
+          ? (decoded['errors'] ??
+              decoded['detail'] ??
+              decoded['message'] ??
+              decoded['error'] ??
+              decoded)
+          : null;
+      throw Exception(detail?.toString() ??
+          'Unable to save notes (${response.statusCode}).');
+    }
+    dynamic record = decoded;
+    if (record is Map && record['data'] is Map) record = record['data'];
+    final saved = <String, String>{
+      'note': record is Map && record.containsKey('note')
+          ? (record['note']?.toString() ?? '')
+          : note,
+      'parcel_note': record is Map && record.containsKey('parcel_note')
+          ? (record['parcel_note']?.toString() ?? '')
+          : courierNote,
+    };
+    if (mounted) {
+      setState(() {
+        if (_loadedProforma['id']?.toString() == proformaId.toString()) {
+          _loadedProforma.addAll(saved);
+        }
+        for (final order in orders) {
+          if (order['id']?.toString() == proformaId.toString())
+            order.addAll(saved);
+        }
+      });
+    }
+    return saved;
+  }
+
   Future<bool> updateProformaOrderDetails({
     required int orderId,
     required int companyId,
@@ -752,7 +852,11 @@ class _PerformaInvoice_BigView_ListState
         return false;
       }
 
-      final response = await _auditMutation(orderId, null, 'PUT', 'proforma_details_updated', 
+      final response = await _auditMutation(
+        orderId,
+        null,
+        'PUT',
+        'proforma_details_updated',
         Uri.parse(
           '$api/api/perfoma/order/$orderId/update/',
         ),
@@ -771,8 +875,7 @@ class _PerformaInvoice_BigView_ListState
 
       if (!mounted) return false;
 
-      if (response.statusCode == 200 ||
-          response.statusCode == 201) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         await fetchperformalistData();
 
         if (!mounted) return true;
@@ -789,8 +892,7 @@ class _PerformaInvoice_BigView_ListState
         return true;
       }
 
-      String errorMessage =
-          'Failed to update proforma details.';
+      String errorMessage = 'Failed to update proforma details.';
 
       try {
         final dynamic decoded = jsonDecode(response.body);
@@ -801,8 +903,7 @@ class _PerformaInvoice_BigView_ListState
           if (errors != null) {
             errorMessage = errors.toString();
           } else {
-            errorMessage =
-                decoded['message']?.toString() ??
+            errorMessage = decoded['message']?.toString() ??
                 decoded['detail']?.toString() ??
                 decoded['error']?.toString() ??
                 errorMessage;
@@ -837,8 +938,7 @@ class _PerformaInvoice_BigView_ListState
   Future<Map<String, dynamic>?> _openCustomerSelectorForEdit({
     required Map<String, dynamic>? selectedCustomer,
   }) async {
-    final TextEditingController searchController =
-        TextEditingController();
+    final TextEditingController searchController = TextEditingController();
     Timer? debounce;
 
     try {
@@ -859,8 +959,7 @@ class _PerformaInvoice_BigView_ListState
               Future<void> loadCustomers({
                 String search = '',
               }) async {
-                final result =
-                    await fetchCustomersForDropdown(
+                final result = await fetchCustomersForDropdown(
                   search: search,
                 );
 
@@ -879,13 +978,10 @@ class _PerformaInvoice_BigView_ListState
 
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(bottomSheetContext)
-                      .viewInsets
-                      .bottom,
+                  bottom: MediaQuery.of(bottomSheetContext).viewInsets.bottom,
                 ),
                 child: Container(
-                  height:
-                      MediaQuery.of(context).size.height * 0.75,
+                  height: MediaQuery.of(context).size.height * 0.75,
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.vertical(
@@ -905,8 +1001,7 @@ class _PerformaInvoice_BigView_ListState
                       ),
                       const SizedBox(height: 14),
                       Padding(
-                        padding:
-                            const EdgeInsets.symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                         ),
                         child: Row(
@@ -923,8 +1018,7 @@ class _PerformaInvoice_BigView_ListState
                             ),
                             IconButton(
                               onPressed: () {
-                                Navigator.of(bottomSheetContext)
-                                    .pop();
+                                Navigator.of(bottomSheetContext).pop();
                               },
                               icon: const Icon(Icons.close),
                             ),
@@ -942,13 +1036,10 @@ class _PerformaInvoice_BigView_ListState
                           controller: searchController,
                           autofocus: true,
                           decoration: InputDecoration(
-                            hintText:
-                                'Search customer by name or phone...',
-                            prefixIcon:
-                                const Icon(Icons.search),
+                            hintText: 'Search customer by name or phone...',
+                            prefixIcon: const Icon(Icons.search),
                             border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           onChanged: (value) {
@@ -974,8 +1065,7 @@ class _PerformaInvoice_BigView_ListState
                       if (initialLoading || searching)
                         const Expanded(
                           child: Center(
-                            child:
-                                CircularProgressIndicator(),
+                            child: CircularProgressIndicator(),
                           ),
                         )
                       else if (customers.isEmpty)
@@ -992,8 +1082,7 @@ class _PerformaInvoice_BigView_ListState
                       else
                         Expanded(
                           child: ListView.separated(
-                            padding:
-                                const EdgeInsets.fromLTRB(
+                            padding: const EdgeInsets.fromLTRB(
                               16,
                               4,
                               16,
@@ -1006,65 +1095,48 @@ class _PerformaInvoice_BigView_ListState
                               context,
                               index,
                             ) {
-                              final customer =
-                                  customers[index];
+                              final customer = customers[index];
 
                               final String name =
-                                  customer['name']
-                                          ?.toString() ??
-                                      '';
+                                  customer['name']?.toString() ?? '';
 
                               final String phone =
-                                  customer['phone']
-                                          ?.toString() ??
-                                      '';
+                                  customer['phone']?.toString() ?? '';
 
                               final String state =
-                                  customer['state']
-                                          ?.toString() ??
-                                      '';
+                                  customer['state']?.toString() ?? '';
 
                               return ListTile(
-                                contentPadding:
-                                    EdgeInsets.zero,
+                                contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
-                                  backgroundColor:
-                                      const Color(0xFFEFF6FF),
+                                  backgroundColor: const Color(0xFFEFF6FF),
                                   child: Text(
                                     name.isNotEmpty
                                         ? name[0].toUpperCase()
                                         : '?',
                                     style: const TextStyle(
-                                      color:
-                                          Color(0xFF2563EB),
-                                      fontWeight:
-                                          FontWeight.w700,
+                                      color: Color(0xFF2563EB),
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
                                 title: Text(
                                   name,
                                   maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontWeight:
-                                        FontWeight.w600,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 subtitle: Text(
                                   [
-                                    if (phone.isNotEmpty)
-                                      phone,
-                                    if (state.isNotEmpty)
-                                      state,
+                                    if (phone.isNotEmpty) phone,
+                                    if (state.isNotEmpty) state,
                                   ].join(' • '),
                                   maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                trailing:
-                                    const Icon(
+                                trailing: const Icon(
                                   Icons.chevron_right,
                                 ),
                                 onTap: () {
@@ -1363,8 +1435,7 @@ class _PerformaInvoice_BigView_ListState
                                 const SizedBox(height: 16),
                                 DropdownButtonFormField<int>(
                                   value: company.any(
-                                    (item) =>
-                                        item['id'] == selectedCompanyId,
+                                    (item) => item['id'] == selectedCompanyId,
                                   )
                                       ? selectedCompanyId
                                       : null,
@@ -1443,8 +1514,7 @@ class _PerformaInvoice_BigView_ListState
                                       : () async {
                                           final customer =
                                               await _openCustomerSelectorForEdit(
-                                            selectedCustomer:
-                                                selectedCustomer,
+                                            selectedCustomer: selectedCustomer,
                                           );
 
                                           if (customer == null ||
@@ -1452,8 +1522,7 @@ class _PerformaInvoice_BigView_ListState
                                             return;
                                           }
 
-                                          final int? customerId =
-                                              int.tryParse(
+                                          final int? customerId = int.tryParse(
                                             customer['id'].toString(),
                                           );
 
@@ -1508,8 +1577,7 @@ class _PerformaInvoice_BigView_ListState
                                 const SizedBox(height: 14),
                                 DropdownButtonFormField<int>(
                                   value: addresses.any(
-                                    (item) =>
-                                        item['id'] == selectedAddressId,
+                                    (item) => item['id'] == selectedAddressId,
                                   )
                                       ? selectedAddressId
                                       : null,
@@ -1593,8 +1661,7 @@ class _PerformaInvoice_BigView_ListState
                                               ),
                                               const SizedBox(height: 3),
                                               Text(
-                                                selectedAddress.first[
-                                                            'address']
+                                                selectedAddress.first['address']
                                                         ?.toString() ??
                                                     '',
                                                 style: const TextStyle(
@@ -1640,16 +1707,13 @@ class _PerformaInvoice_BigView_ListState
                                           Navigator.of(dialogContext).pop();
                                         },
                                   style: OutlinedButton.styleFrom(
-                                    minimumSize:
-                                        const Size.fromHeight(48),
-                                    foregroundColor:
-                                        const Color(0xFF344054),
+                                    minimumSize: const Size.fromHeight(48),
+                                    foregroundColor: const Color(0xFF344054),
                                     side: const BorderSide(
                                       color: Color(0xFFD0D5DD),
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                   child: const Text(
@@ -1713,8 +1777,7 @@ class _PerformaInvoice_BigView_ListState
                                       ? const SizedBox(
                                           width: 17,
                                           height: 17,
-                                          child:
-                                              CircularProgressIndicator(
+                                          child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             color: Colors.white,
                                           ),
@@ -1724,23 +1787,18 @@ class _PerformaInvoice_BigView_ListState
                                           size: 18,
                                         ),
                                   label: Text(
-                                    isSaving
-                                        ? 'Saving...'
-                                        : 'Save Changes',
+                                    isSaving ? 'Saving...' : 'Save Changes',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    minimumSize:
-                                        const Size.fromHeight(48),
+                                    minimumSize: const Size.fromHeight(48),
                                     elevation: 0,
-                                    backgroundColor:
-                                        const Color(0xFF2563EB),
+                                    backgroundColor: const Color(0xFF2563EB),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                 ),
@@ -1819,12 +1877,13 @@ class _PerformaInvoice_BigView_ListState
           'customer_name': parsed['customer']?['name'] ?? 'Unknown',
           'family': parsed['family'],
           'family_name': parsed['familyname'],
-          'state_id': parsed['state'] is Map
-              ? parsed['state']['id']
-              : parsed['state'],
+          'state_id':
+              parsed['state'] is Map ? parsed['state']['id'] : parsed['state'],
           'state': stateName, // Use state name instead of ID
           'billing_address_id': parsed['billing_address']?['id'],
           'address': parsed['billing_address']?['address'] ?? 'Unknown',
+          'note': parsed['note']?.toString() ?? '',
+          'parcel_note': parsed['parcel_note']?.toString() ?? '',
           'payment_status': parsed['payment_status'],
           'bank': parsed['bank']?['name'] ?? 'Unknown',
           'payment_method': parsed['payment_method'],
@@ -1849,8 +1908,7 @@ class _PerformaInvoice_BigView_ListState
   }
 
   Future<String?> getwarehouseFromPrefs() async {
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     final int? warehouseId = prefs.getInt('warehouse');
 
@@ -1868,13 +1926,12 @@ class _PerformaInvoice_BigView_ListState
             ) ??
             0;
 
-    final num rawAvailableStock =
-        availableStockValue is num
-            ? availableStockValue
-            : num.tryParse(
-                  availableStockValue?.toString() ?? '0',
-                ) ??
-                0;
+    final num rawAvailableStock = availableStockValue is num
+        ? availableStockValue
+        : num.tryParse(
+              availableStockValue?.toString() ?? '0',
+            ) ??
+            0;
 
     // Same normalization used in CreatePerformaProduct_List.
     if (stock <= 0 || rawAvailableStock <= 0) {
@@ -1922,8 +1979,7 @@ class _PerformaInvoice_BigView_ListState
   }) async {
     try {
       final String? token = await getTokenFromPrefs();
-      final String? warehouseId =
-          await getwarehouseFromPrefs();
+      final String? warehouseId = await getwarehouseFromPrefs();
 
       if (token == null ||
           token.trim().isEmpty ||
@@ -1941,8 +1997,7 @@ class _PerformaInvoice_BigView_ListState
         ).replace(
           queryParameters: {
             'page': page.toString(),
-            if (search.trim().isNotEmpty)
-              'search': search.trim(),
+            if (search.trim().isNotEmpty) 'search': search.trim(),
           },
         );
 
@@ -1965,13 +2020,11 @@ class _PerformaInvoice_BigView_ListState
         }
 
         final dynamic results = parsed['results'];
-        final List<dynamic> data =
-            results is Map && results['data'] is List
-                ? List<dynamic>.from(results['data'])
-                : const [];
+        final List<dynamic> data = results is Map && results['data'] is List
+            ? List<dynamic>.from(results['data'])
+            : const [];
 
-        final Map<String, dynamic>? found =
-            _findWarehouseProductById(
+        final Map<String, dynamic>? found = _findWarehouseProductById(
           data,
           productId,
         );
@@ -1989,18 +2042,15 @@ class _PerformaInvoice_BigView_ListState
       // while matching the search-enabled warehouse API used by
       // CreatePerformaProduct_List.
       if (productName.trim().isNotEmpty) {
-        final Map<String, dynamic>? searched =
-            await fetchPage(
+        final Map<String, dynamic>? searched = await fetchPage(
           1,
           search: productName.trim(),
         );
 
-        if (searched != null &&
-            !searched.containsKey('_next')) {
+        if (searched != null && !searched.containsKey('_next')) {
           return _normalizedAvailableStock(
             stockValue: searched['stock'],
-            availableStockValue:
-                searched['available_stock'],
+            availableStockValue: searched['available_stock'],
           );
         }
       }
@@ -2010,8 +2060,7 @@ class _PerformaInvoice_BigView_ListState
       // text does not match exactly.
       int page = 1;
       while (page <= 100) {
-        final Map<String, dynamic>? result =
-            await fetchPage(page);
+        final Map<String, dynamic>? result = await fetchPage(page);
 
         if (result == null) {
           return null;
@@ -2020,8 +2069,7 @@ class _PerformaInvoice_BigView_ListState
         if (!result.containsKey('_next')) {
           return _normalizedAvailableStock(
             stockValue: result['stock'],
-            availableStockValue:
-                result['available_stock'],
+            availableStockValue: result['available_stock'],
           );
         }
 
@@ -2122,12 +2170,10 @@ class _PerformaInvoice_BigView_ListState
                       },
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
-                        backgroundColor:
-                            const Color(0xFFB42318),
+                        backgroundColor: const Color(0xFFB42318),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: const Text(
@@ -2296,12 +2342,10 @@ class _PerformaInvoice_BigView_ListState
                       },
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
-                        backgroundColor:
-                            const Color(0xFFB42318),
+                        backgroundColor: const Color(0xFFB42318),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: const Text(
@@ -2345,12 +2389,15 @@ class _PerformaInvoice_BigView_ListState
         return false;
       }
 
-      final String finalDescription =
-          description.trim().isNotEmpty
-              ? description.trim()
-              : 'Updated product';
+      final String finalDescription = description.trim().isNotEmpty
+          ? description.trim()
+          : 'Updated product';
 
-      final http.Response response = await _auditMutation(orderId, itemId, 'PUT', 'proforma_item_updated', 
+      final http.Response response = await _auditMutation(
+        orderId,
+        itemId,
+        'PUT',
+        'proforma_item_updated',
         Uri.parse(
           '$api/api/perfoma/order/$orderId/item/$itemId/update/',
         ),
@@ -2370,8 +2417,7 @@ class _PerformaInvoice_BigView_ListState
 
       if (!mounted) return false;
 
-      if (response.statusCode == 200 ||
-          response.statusCode == 201) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF027A48),
@@ -2386,12 +2432,10 @@ class _PerformaInvoice_BigView_ListState
         return true;
       }
 
-      String errorMessage =
-          'Failed to update product details.';
+      String errorMessage = 'Failed to update product details.';
 
       try {
-        final dynamic decoded =
-            jsonDecode(response.body);
+        final dynamic decoded = jsonDecode(response.body);
 
         if (decoded is Map) {
           final dynamic errors = decoded['errors'];
@@ -2415,8 +2459,7 @@ class _PerformaInvoice_BigView_ListState
               errorMessage = messages.join('\n');
             }
           } else {
-            errorMessage =
-                decoded['message']?.toString() ??
+            errorMessage = decoded['message']?.toString() ??
                 decoded['detail']?.toString() ??
                 decoded['error']?.toString() ??
                 errorMessage;
@@ -2467,7 +2510,11 @@ class _PerformaInvoice_BigView_ListState
         return false;
       }
 
-      final http.Response response = await _auditMutation(orderId, itemId, 'DELETE', 'proforma_item_deleted', 
+      final http.Response response = await _auditMutation(
+        orderId,
+        itemId,
+        'DELETE',
+        'proforma_item_deleted',
         Uri.parse(
           '$api/api/perfoma/order/$orderId/item/$itemId/delete/',
         ),
@@ -2503,8 +2550,7 @@ class _PerformaInvoice_BigView_ListState
         final dynamic decoded = jsonDecode(response.body);
 
         if (decoded is Map) {
-          errorMessage =
-              decoded['message']?.toString() ??
+          errorMessage = decoded['message']?.toString() ??
               decoded['detail']?.toString() ??
               decoded['error']?.toString() ??
               errorMessage;
@@ -2599,28 +2645,23 @@ class _PerformaInvoice_BigView_ListState
     required int orderId,
     required Map<String, dynamic> item,
   }) async {
-    final TextEditingController quantityController =
-        TextEditingController(
+    final TextEditingController quantityController = TextEditingController(
       text: _asInt(item['quantity']).toString(),
     );
 
-    final TextEditingController rateController =
-        TextEditingController(
+    final TextEditingController rateController = TextEditingController(
       text: _asDouble(item['rate']).toString(),
     );
 
-    final TextEditingController discountController =
-        TextEditingController(
+    final TextEditingController discountController = TextEditingController(
       text: _asDouble(item['discount']).toString(),
     );
 
-    final TextEditingController taxController =
-        TextEditingController(
+    final TextEditingController taxController = TextEditingController(
       text: _asDouble(item['tax']).toString(),
     );
 
-    final TextEditingController descriptionController =
-        TextEditingController(
+    final TextEditingController descriptionController = TextEditingController(
       text: item['description']?.toString() ?? '',
     );
 
@@ -2685,19 +2726,16 @@ class _PerformaInvoice_BigView_ListState
             BuildContext context,
             StateSetter setDialogState,
           ) {
-            final int quantity =
-                int.tryParse(quantityController.text.trim()) ??
-                    _asInt(item['quantity']);
+            final int quantity = int.tryParse(quantityController.text.trim()) ??
+                _asInt(item['quantity']);
 
-            final double rate =
-                double.tryParse(rateController.text.trim()) ??
-                    _asDouble(item['rate']);
+            final double rate = double.tryParse(rateController.text.trim()) ??
+                _asDouble(item['rate']);
 
-            final double discount =
-                double.tryParse(
-                      discountController.text.trim(),
-                    ) ??
-                    _asDouble(item['discount']);
+            final double discount = double.tryParse(
+                  discountController.text.trim(),
+                ) ??
+                _asDouble(item['discount']);
 
             final double previewTotal =
                 (quantity * rate) - (quantity * discount);
@@ -2766,8 +2804,7 @@ class _PerformaInvoice_BigView_ListState
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
                                       'Edit Product',
@@ -2881,18 +2918,15 @@ class _PerformaInvoice_BigView_ListState
                                   children: [
                                     Expanded(
                                       child: TextField(
-                                        controller:
-                                            quantityController,
+                                        controller: quantityController,
                                         enabled: !isUpdating,
-                                        keyboardType:
-                                            TextInputType.number,
+                                        keyboardType: TextInputType.number,
                                         onChanged: (_) {
                                           setDialogState(() {});
                                         },
                                         decoration: fieldDecoration(
                                           label: 'Quantity',
-                                          icon: Icons
-                                              .shopping_bag_outlined,
+                                          icon: Icons.shopping_bag_outlined,
                                         ),
                                       ),
                                     ),
@@ -2901,9 +2935,8 @@ class _PerformaInvoice_BigView_ListState
                                       child: TextField(
                                         controller: rateController,
                                         enabled: !isUpdating,
-                                        keyboardType:
-                                            const TextInputType
-                                                .numberWithOptions(
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(
                                           decimal: true,
                                         ),
                                         onChanged: (_) {
@@ -2911,8 +2944,7 @@ class _PerformaInvoice_BigView_ListState
                                         },
                                         decoration: fieldDecoration(
                                           label: 'Rate',
-                                          icon: Icons
-                                              .currency_rupee_rounded,
+                                          icon: Icons.currency_rupee_rounded,
                                         ),
                                       ),
                                     ),
@@ -2923,12 +2955,10 @@ class _PerformaInvoice_BigView_ListState
                                   children: [
                                     Expanded(
                                       child: TextField(
-                                        controller:
-                                            discountController,
+                                        controller: discountController,
                                         enabled: !isUpdating,
-                                        keyboardType:
-                                            const TextInputType
-                                                .numberWithOptions(
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(
                                           decimal: true,
                                         ),
                                         onChanged: (_) {
@@ -2936,41 +2966,37 @@ class _PerformaInvoice_BigView_ListState
                                         },
                                         decoration: fieldDecoration(
                                           label: 'Discount',
-                                          icon: Icons
-                                              .discount_outlined,
+                                          icon: Icons.discount_outlined,
                                         ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
-                                 Expanded(
-  child: TextField(
-    controller: taxController,
-    enabled: false,
-    keyboardType:
-        const TextInputType.numberWithOptions(
-      decimal: true,
-    ),
-    decoration: fieldDecoration(
-      label: 'Tax',
-      icon: Icons.percent_rounded,
-    ),
-  ),
-),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: taxController,
+                                        enabled: false,
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                        decoration: fieldDecoration(
+                                          label: 'Tax',
+                                          icon: Icons.percent_rounded,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 14),
                                 TextField(
-                                  controller:
-                                      descriptionController,
+                                  controller: descriptionController,
                                   enabled: !isUpdating,
-                                  keyboardType:
-                                      TextInputType.multiline,
+                                  keyboardType: TextInputType.multiline,
                                   minLines: 4,
                                   maxLines: null,
                                   decoration: fieldDecoration(
                                     label: 'Description',
-                                    icon: Icons
-                                        .notes_rounded,
+                                    icon: Icons.notes_rounded,
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -3003,16 +3029,13 @@ class _PerformaInvoice_BigView_ListState
                                           Navigator.of(dialogContext).pop();
                                         },
                                   style: OutlinedButton.styleFrom(
-                                    minimumSize:
-                                        const Size.fromHeight(48),
-                                    foregroundColor:
-                                        const Color(0xFF344054),
+                                    minimumSize: const Size.fromHeight(48),
+                                    foregroundColor: const Color(0xFF344054),
                                     side: const BorderSide(
                                       color: Color(0xFFD0D5DD),
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                   child: const Text(
@@ -3030,13 +3053,11 @@ class _PerformaInvoice_BigView_ListState
                                   onPressed: isUpdating
                                       ? null
                                       : () async {
-                                          final int? quantity =
-                                              int.tryParse(
+                                          final int? quantity = int.tryParse(
                                             quantityController.text.trim(),
                                           );
 
-                                          final double? rate =
-                                              double.tryParse(
+                                          final double? rate = double.tryParse(
                                             rateController.text.trim(),
                                           );
 
@@ -3045,8 +3066,7 @@ class _PerformaInvoice_BigView_ListState
                                             discountController.text.trim(),
                                           );
 
-                                          final double? tax =
-                                              double.tryParse(
+                                          final double? tax = double.tryParse(
                                             taxController.text.trim(),
                                           );
 
@@ -3055,8 +3075,7 @@ class _PerformaInvoice_BigView_ListState
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
-                                                backgroundColor:
-                                                    Colors.red,
+                                                backgroundColor: Colors.red,
                                                 content: Text(
                                                   'Enter a valid quantity.',
                                                 ),
@@ -3069,8 +3088,7 @@ class _PerformaInvoice_BigView_ListState
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
-                                                backgroundColor:
-                                                    Colors.red,
+                                                backgroundColor: Colors.red,
                                                 content: Text(
                                                   'Enter a valid rate.',
                                                 ),
@@ -3084,8 +3102,7 @@ class _PerformaInvoice_BigView_ListState
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
-                                                backgroundColor:
-                                                    Colors.red,
+                                                backgroundColor: Colors.red,
                                                 content: Text(
                                                   'Enter a valid discount.',
                                                 ),
@@ -3098,8 +3115,7 @@ class _PerformaInvoice_BigView_ListState
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
-                                                backgroundColor:
-                                                    Colors.red,
+                                                backgroundColor: Colors.red,
                                                 content: Text(
                                                   'Enter a valid tax.',
                                                 ),
@@ -3108,8 +3124,7 @@ class _PerformaInvoice_BigView_ListState
                                             return;
                                           }
 
-                                          final int productId =
-                                              _asInt(
+                                          final int productId = _asInt(
                                             item['product_id'],
                                           );
 
@@ -3124,8 +3139,7 @@ class _PerformaInvoice_BigView_ListState
                                           final num? availableStock =
                                               await fetchAvailableStockForProduct(
                                             productId: productId,
-                                            productName:
-                                                _safeText(
+                                            productName: _safeText(
                                               item['name'],
                                               fallback: '',
                                             ),
@@ -3143,17 +3157,13 @@ class _PerformaInvoice_BigView_ListState
                                             return;
                                           }
 
-                                          if (quantity >
-                                              availableStock) {
+                                          if (quantity > availableStock) {
                                             await _showInsufficientStockDialog(
-                                              productName:
-                                                  _safeText(
+                                              productName: _safeText(
                                                 item['name'],
                                               ),
-                                              requestedQuantity:
-                                                  quantity,
-                                              availableStock:
-                                                  availableStock,
+                                              requestedQuantity: quantity,
+                                              availableStock: availableStock,
                                             );
                                             return;
                                           }
@@ -3165,8 +3175,7 @@ class _PerformaInvoice_BigView_ListState
                                           final bool success =
                                               await updateProformaItem(
                                             orderId: orderId,
-                                            itemId:
-                                                _asInt(item['id']),
+                                            itemId: _asInt(item['id']),
                                             quantity: quantity,
                                             rate: rate,
                                             discount: discount,
@@ -3193,8 +3202,7 @@ class _PerformaInvoice_BigView_ListState
                                       ? const SizedBox(
                                           width: 17,
                                           height: 17,
-                                          child:
-                                              CircularProgressIndicator(
+                                          child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             color: Colors.white,
                                           ),
@@ -3212,15 +3220,12 @@ class _PerformaInvoice_BigView_ListState
                                     ),
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    minimumSize:
-                                        const Size.fromHeight(48),
+                                    minimumSize: const Size.fromHeight(48),
                                     elevation: 0,
-                                    backgroundColor:
-                                        const Color(0xFF2563EB),
+                                    backgroundColor: const Color(0xFF2563EB),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                 ),
@@ -3488,16 +3493,27 @@ class _PerformaInvoice_BigView_ListState
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: imagePath.isNotEmpty
-                ? Image.network(
-                    "$api$imagePath",
-                    width: 76,
-                    height: 76,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: imagePath.isNotEmpty
+                    ? Image.network(
+                        "$api$imagePath",
+                        width: 76,
+                        height: 76,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 76,
+                            height: 76,
+                            color: const Color(0xFFF2F4F7),
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              color: Color(0xFF98A2B3),
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
                         width: 76,
                         height: 76,
                         color: const Color(0xFFF2F4F7),
@@ -3505,98 +3521,87 @@ class _PerformaInvoice_BigView_ListState
                           Icons.image_not_supported_outlined,
                           color: Color(0xFF98A2B3),
                         ),
-                      );
-                    },
-                  )
-                : Container(
-                    width: 76,
-                    height: 76,
-                    color: const Color(0xFFF2F4F7),
-                    child: const Icon(
-                      Icons.image_not_supported_outlined,
-                      color: Color(0xFF98A2B3),
-                    ),
-                  ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _safeText(item['name']),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF101828),
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
-                  children: [
-                    _itemBadge(
-                      icon: Icons.shopping_bag_outlined,
-                      text: "Qty $quantity",
-                    ),
-                    _itemBadge(
-                      icon: Icons.currency_rupee_rounded,
-                      text: rate.toStringAsFixed(2),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "Discount: ${_currency(discountTotal)}",
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFFB42318),
-                        ),
                       ),
-                    ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      _currency(lineTotal),
+                      _safeText(item['name']),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF027A48),
+                        color: Color(0xFF101828),
+                        height: 1.3,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () {
-                        _confirmDeleteProformaItem(
-                          orderId: orderId,
-                          item: item,
-                        );
-                      },
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3F2),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: [
+                        _itemBadge(
+                          icon: Icons.shopping_bag_outlined,
+                          text: "Qty $quantity",
+                        ),
+                        _itemBadge(
+                          icon: Icons.currency_rupee_rounded,
+                          text: rate.toStringAsFixed(2),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "Discount: ${_currency(discountTotal)}",
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFFB42318),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _currency(lineTotal),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF027A48),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        InkWell(
                           borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            _confirmDeleteProformaItem(
+                              orderId: orderId,
+                              item: item,
+                            );
+                          },
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3F2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: Color(0xFFB42318),
+                            ),
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.delete_outline_rounded,
-                          size: 18,
-                          color: Color(0xFFB42318),
-                        ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
             ],
           ),
         ),
@@ -3642,7 +3647,75 @@ class _PerformaInvoice_BigView_ListState
     );
   }
 
+  Future<void> _logReturnedProductChanges(
+      int orderId, Map<String, dynamic> before) async {
+    // Observe persisted changes made by the separate Add Product screen.
+    // This is a before/after observation, not its original HTTP response.
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) return;
+      final response = await http.get(
+        Uri.parse('$api/api/perfoma/${widget.invoice}/invoice/'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode != 200) return;
+      final dynamic after = jsonDecode(response.body);
+      if (after is! Map || after['perfoma_items'] is! List) return;
+      Map<String, Map<String, dynamic>> indexItems(dynamic rows) {
+        final result = <String, Map<String, dynamic>>{};
+        if (rows is List) {
+          for (final row in rows) {
+            if (row is Map && row['id'] != null) {
+              result[row['id'].toString()] = Map<String, dynamic>.from(row);
+            }
+          }
+        }
+        return result;
+      }
+
+      final previous = indexItems(before['perfoma_items']);
+      final current = indexItems(after['perfoma_items']);
+      for (final id in {...previous.keys, ...current.keys}) {
+        final oldItem = previous[id];
+        final newItem = current[id];
+        if (jsonEncode(oldItem) == jsonEncode(newItem)) continue;
+        final action = oldItem == null
+            ? 'added'
+            : newItem == null
+                ? 'deleted'
+                : 'updated';
+        final logged = await AuditLogService.log(
+          action: 'proforma_item_${action}_observed',
+          orderId: null,
+          beforeData: {
+            'proforma_id': orderId,
+            'invoice': widget.invoice,
+            'item_id': id,
+            'item_details': oldItem
+          },
+          afterData: {
+            'proforma_id': orderId,
+            'invoice': widget.invoice,
+            'item_id': id,
+            'item_details': newItem,
+            'metadata': {
+              'source': 'PerformaInvoice_BigView_List',
+              'observation': 'after_return_from_add_product_page',
+              'recorded_at': DateTime.now().toUtc().toIso8601String()
+            }
+          },
+        );
+        if (!logged) debugPrint('Product change audit log failed [$id].');
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Product change audit log failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
   Future<void> _openAddProductPage(int orderId) async {
+    final before =
+        Map<String, dynamic>.from(_auditCopy(_loadedProforma) as Map);
     final bool? productAdded = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -3652,6 +3725,7 @@ class _PerformaInvoice_BigView_ListState
       ),
     );
 
+    await _logReturnedProductChanges(orderId, before);
     if (!mounted || productAdded != true) return;
 
     await fetchperformalistData();
@@ -3745,7 +3819,10 @@ class _PerformaInvoice_BigView_ListState
                 child: _buildBody(),
               ),
             ),
-            if (!isLoading && loadError == null && orders.isNotEmpty)
+            if (!isLoading &&
+                loadError == null &&
+                orders.isNotEmpty &&
+                _canGenerateInvoice)
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 decoration: const BoxDecoration(
@@ -4266,9 +4343,640 @@ class _PerformaInvoice_BigView_ListState
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+            _ProformaPaymentSlips(
+              key: ValueKey(_asInt(order['id'])),
+              proformaId: _asInt(order['id']),
+              invoice: widget.invoice.toString(),
+              getToken: getTokenFromPrefs,
+            ),
+            const SizedBox(height: 16),
+            _ProformaNotes(
+              key: ValueKey('notes-${order['id']}'),
+              note: order['note']?.toString() ?? '',
+              courierNote: order['parcel_note']?.toString() ?? '',
+              onSave: (note, courierNote) => _saveProformaNotes(
+                _asInt(order['id']),
+                note,
+                courierNote,
+              ),
+            ),
           ],
         );
       },
     );
   }
+}
+
+class _ProformaPaymentSlips extends StatefulWidget {
+  final int proformaId;
+  final String invoice;
+  final Future<String?> Function() getToken;
+  const _ProformaPaymentSlips(
+      {super.key, required this.proformaId, required this.invoice, required this.getToken});
+
+  @override
+  State<_ProformaPaymentSlips> createState() => _ProformaPaymentSlipsState();
+}
+
+class _ProformaPaymentSlipsState extends State<_ProformaPaymentSlips> {
+  final ImagePicker _picker = ImagePicker();
+  final http.Client _client = http.Client();
+  List<XFile> _selected = [];
+  List<String> _images = [];
+  bool _loading = false;
+  bool _uploading = false;
+  bool _picking = false;
+  String? _error;
+  Map<String, String> _imageHeaders = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSlips();
+  }
+
+  @override
+  void dispose() {
+    _client.close();
+    super.dispose();
+  }
+
+  Uri _endpoint(String path) =>
+      Uri.parse('${api.toString().replaceFirst(RegExp(r'/+$'), '')}$path');
+
+  Future<String> _token() async {
+    final token = await widget.getToken();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Session expired. Please log in again.');
+    }
+    return token;
+  }
+
+  String _message(Object error) =>
+      error.toString().replaceFirst('Exception: ', '');
+
+  List<String> _parseImages(dynamic payload) {
+    dynamic rows = payload;
+    for (var depth = 0; depth < 5 && rows is Map; depth++) {
+      dynamic nested;
+      for (final key in [
+        'results',
+        'data',
+        'payment_slips',
+        'slips',
+        'files'
+      ]) {
+        if (rows[key] is List || rows[key] is Map) {
+          nested = rows[key];
+          break;
+        }
+      }
+      if (nested == null) {
+        rows = [rows];
+        break;
+      }
+      rows = nested;
+    }
+    if (rows is! List)
+      throw const FormatException('Unexpected payment slips response.');
+    final urls = <String>[];
+    for (final row in rows) {
+      dynamic value = row;
+      if (row is Map) {
+        value = row['file_url'] ??
+            row['image_url'] ??
+            row['file'] ??
+            row['image'] ??
+            row['payment_slip'] ??
+            row['slip'] ??
+            row['url'];
+      }
+      if (value is Map) value = value['url'] ?? value['file'] ?? value['image'];
+      if (value is! String || value.trim().isEmpty) continue;
+      final base = _endpoint('/');
+      final uri = base.resolve(value.trim());
+      if (uri.scheme == 'http' || uri.scheme == 'https')
+        urls.add(uri.toString());
+    }
+    if (rows.isNotEmpty && urls.isEmpty) {
+      throw const FormatException(
+          'Payment slips received, but no image URL was found.');
+    }
+    return urls.toSet().toList();
+  }
+
+  Future<void> _loadSlips() async {
+    if (_loading || !mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final token = await _token();
+      if (widget.proformaId <= 0) throw Exception('Invalid proforma ID.');
+      final response = await _client.get(
+        _endpoint('/api/perfoma/payment/slips/${widget.proformaId}/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json'
+        },
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw Exception(
+            'Unable to load payment slips (${response.statusCode}).');
+      }
+      final images = _parseImages(jsonDecode(response.body));
+      if (!mounted) return;
+      setState(() {
+        _images = images;
+        _imageHeaders = {'Authorization': 'Bearer $token'};
+      });
+    } catch (error) {
+      if (mounted)
+        setState(() {
+          _error = _message(error);
+        });
+    } finally {
+      if (mounted)
+        setState(() {
+          _loading = false;
+        });
+    }
+  }
+
+  Future<void> _pickImages() async {
+    if (_picking || _uploading) return;
+    setState(() {
+      _picking = true;
+    });
+    try {
+      final images = await _picker.pickMultiImage();
+      if (!mounted || images.isEmpty) return;
+      setState(() {
+        final existing = _selected.map((file) => file.path).toSet();
+        _selected.addAll(images.where((file) => existing.add(file.path)));
+      });
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Unable to select images. Please check photo access.')),
+        );
+    } finally {
+      if (mounted)
+        setState(() {
+          _picking = false;
+        });
+    }
+  }
+
+  Future<http.Response> _sendAuditedUpload(
+      http.MultipartRequest request) async {
+    final before = <String, dynamic>{
+      'proforma_id': widget.proformaId,
+      'invoice': widget.invoice,
+      'payment_slip_urls': List<String>.from(_images),
+    };
+    final submitted = <String, dynamic>{
+      'fields': Map<String, String>.from(request.fields),
+      'files': request.files
+          .map((file) => <String, dynamic>{
+                'field': file.field,
+                'filename': file.filename,
+                'size_bytes': file.length,
+                'content_type': file.contentType.toString(),
+              })
+          .toList(),
+    };
+    Future<void> record({http.Response? response, Object? error}) async {
+      try {
+        final success = response != null &&
+            response.statusCode >= 200 &&
+            response.statusCode < 300;
+        dynamic responseData;
+        if (response != null && response.body.trim().isNotEmpty) {
+          try {
+            responseData = jsonDecode(response.body);
+          } catch (_) {
+            responseData = response.body;
+          }
+        }
+        final logged = await AuditLogService.log(
+          action: success
+              ? 'proforma_payment_slips_uploaded'
+              : 'proforma_payment_slips_uploaded_failed',
+          orderId: null,
+          beforeData: before,
+          afterData: {
+            'proforma_id': widget.proformaId,
+      'invoice': widget.invoice,
+            'submitted_data': submitted,
+            'response_data': responseData,
+            'outcome': success ? 'success' : 'failed',
+            if (error != null) 'error_type': error.runtimeType.toString(),
+            'metadata': {
+              'source': 'PerformaInvoice_BigView_List',
+              'method': request.method,
+              'endpoint': request.url.path,
+              if (response != null) 'http_status': response.statusCode,
+              'recorded_at': DateTime.now().toUtc().toIso8601String(),
+            },
+          },
+        );
+        if (!logged) debugPrint('Payment slip audit log creation failed.');
+      } catch (error, stackTrace) {
+        debugPrint('Payment slip audit log creation failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    }
+
+    late final http.Response response;
+    try {
+      response = await http.Response.fromStream(await _client.send(request));
+    } catch (error) {
+      await record(error: error);
+      rethrow;
+    }
+    await record(response: response);
+    return response;
+  }
+
+  Future<void> _uploadImages() async {
+    if (_uploading || _selected.isEmpty || widget.proformaId <= 0) return;
+    setState(() {
+      _uploading = true;
+    });
+    try {
+      final token = await _token();
+      final request = http.MultipartRequest(
+          'POST', _endpoint('/api/perfoma/payment/slips/upload/'))
+        ..headers.addAll(
+            {'Authorization': 'Bearer $token', 'Accept': 'application/json'})
+        ..fields['proforma'] = widget.proformaId.toString();
+      for (final file in List<XFile>.of(_selected)) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty)
+          throw Exception(
+              '${file.name} is empty. Please select another image.');
+        final extension = file.name.split('.').last.toLowerCase();
+        final mime = file.mimeType ??
+            const {
+              'jpg': 'image/jpeg',
+              'jpeg': 'image/jpeg',
+              'png': 'image/png',
+              'webp': 'image/webp',
+              'gif': 'image/gif',
+              'heic': 'image/heic',
+              'heif': 'image/heif',
+            }[extension];
+        if (mime == null || !mime.startsWith('image/')) {
+          throw Exception('Please select supported image files.');
+        }
+        request.files.add(http.MultipartFile.fromBytes('files', bytes,
+            filename: file.name, contentType: MediaType.parse(mime)));
+      }
+      final response = await _sendAuditedUpload(request);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Payment slip upload failed (${response.statusCode}).');
+      }
+      if (!mounted) return;
+      setState(() {
+        _selected = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Payment slips uploaded successfully.')),
+      );
+      await _loadSlips();
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_message(error))),
+        );
+    } finally {
+      if (mounted)
+        setState(() {
+          _uploading = false;
+        });
+    }
+  }
+
+  Map<String, String> _headersFor(String url) =>
+      Uri.parse(url).origin == _endpoint('/').origin
+          ? _imageHeaders
+          : <String, String>{};
+
+  void _preview(String url) {
+    showDialog<void>(
+        context: context,
+        builder: (dialogContext) => Dialog(
+              child: SizedBox(
+                height: MediaQuery.of(dialogContext).size.height * 0.75,
+                child: Column(children: [
+                  Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: 'Close',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(dialogContext),
+                      )),
+                  Expanded(
+                      child: InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 5,
+                          child: Image.network(url,
+                              headers: _headersFor(url),
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Center(
+                                  child: Text('Unable to display image.'))))),
+                ]),
+              ),
+            ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFEAECF0))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.receipt_long_outlined, color: Color(0xFF2563EB)),
+          const SizedBox(width: 10),
+          const Expanded(
+              child: Text('Payment Slips',
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF101828)))),
+          IconButton(
+              tooltip: 'Refresh payment slips',
+              onPressed: _loading || _uploading ? null : _loadSlips,
+              icon: const Icon(Icons.refresh_rounded)),
+        ]),
+        const SizedBox(height: 6),
+        const Text('Upload payment images for this proforma.',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF667085))),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+            onPressed: _uploading || _picking ? null : _pickImages,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: Text(_picking ? 'Selecting images…' : 'Select Images')),
+        if (_selected.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ..._selected.asMap().entries.map((entry) => Row(children: [
+                const Icon(Icons.image_outlined,
+                    size: 18, color: Color(0xFF2563EB)),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(entry.value.name,
+                        maxLines: 2, overflow: TextOverflow.ellipsis)),
+                IconButton(
+                    tooltip: 'Remove selected image',
+                    onPressed: _uploading
+                        ? null
+                        : () => setState(() {
+                              _selected.removeAt(entry.key);
+                            }),
+                    icon: const Icon(Icons.close, size: 18)),
+              ])),
+          ElevatedButton.icon(
+              onPressed: _uploading || _loading ? null : _uploadImages,
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white),
+              icon: _uploading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.cloud_upload_outlined),
+              label: Text(_uploading
+                  ? 'Uploading…'
+                  : 'Upload ${_selected.length} Image${_selected.length == 1 ? '' : 's'}')),
+        ],
+        const SizedBox(height: 14),
+        if (_loading) const LinearProgressIndicator(),
+        if (_error != null) ...[
+          Text(_error!, style: const TextStyle(color: Color(0xFFB42318))),
+          Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                  onPressed: _loading || _uploading ? null : _loadSlips,
+                  child: const Text('Retry'))),
+        ],
+        if (!_loading && _error == null && _images.isEmpty)
+          const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text('No payment slips uploaded yet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF667085)))),
+        if (_images.isNotEmpty)
+          Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _images
+                  .map((url) => InkWell(
+                      onTap: () => _preview(url),
+                      borderRadius: BorderRadius.circular(12),
+                      child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            url,
+                            headers: _headersFor(url),
+                            width: 110,
+                            height: 110,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (_, child, progress) =>
+                                progress == null
+                                    ? child
+                                    : const SizedBox(
+                                        width: 110,
+                                        height: 110,
+                                        child: Center(
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2))),
+                            errorBuilder: (_, __, ___) => Container(
+                                width: 110,
+                                height: 110,
+                                color: const Color(0xFFF2F4F7),
+                                child: const Icon(Icons.broken_image_outlined)),
+                          ))))
+                  .toList()),
+      ]),
+    );
+  }
+}
+
+class _ProformaNotes extends StatefulWidget {
+  final String note;
+  final String courierNote;
+  final Future<Map<String, String>> Function(String note, String courierNote)
+      onSave;
+
+  const _ProformaNotes(
+      {super.key,
+      required this.note,
+      required this.courierNote,
+      required this.onSave});
+
+  @override
+  State<_ProformaNotes> createState() => _ProformaNotesState();
+}
+
+class _ProformaNotesState extends State<_ProformaNotes> {
+  late final TextEditingController _accountsController;
+  late final TextEditingController _courierController;
+  late String _savedNote;
+  late String _savedCourierNote;
+  bool _saving = false;
+
+  bool get _hasChanges =>
+      _accountsController.text != _savedNote ||
+      _courierController.text != _savedCourierNote;
+
+  @override
+  void initState() {
+    super.initState();
+    _savedNote = widget.note;
+    _savedCourierNote = widget.courierNote;
+    _accountsController = TextEditingController(text: _savedNote);
+    _courierController = TextEditingController(text: _savedCourierNote);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProformaNotes oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Preserve unsaved typing during unrelated page refreshes.
+    if (!_saving &&
+        !_hasChanges &&
+        (widget.note != oldWidget.note ||
+            widget.courierNote != oldWidget.courierNote)) {
+      _savedNote = widget.note;
+      _savedCourierNote = widget.courierNote;
+      _accountsController.text = _savedNote;
+      _courierController.text = _savedCourierNote;
+    }
+  }
+
+  @override
+  void dispose() {
+    _accountsController.dispose();
+    _courierController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving || !_hasChanges) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _saving = true;
+    });
+    try {
+      final saved = await widget.onSave(
+          _accountsController.text, _courierController.text);
+      if (!mounted) return;
+      setState(() {
+        _savedNote = saved['note'] ?? '';
+        _savedCourierNote = saved['parcel_note'] ?? '';
+        _accountsController.text = _savedNote;
+        _courierController.text = _savedCourierNote;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          backgroundColor: Color(0xFF027A48),
+          content: Text('Proforma notes updated successfully.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: const Color(0xFFB42318),
+          content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    } finally {
+      if (mounted)
+        setState(() {
+          _saving = false;
+        });
+    }
+  }
+
+  InputDecoration _decoration(String label, String hint) => InputDecoration(
+        labelText: label,
+        hintText: hint,
+        alignLabelWithHint: true,
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFD0D5DD))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
+      );
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFEAECF0))),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Row(children: [
+            Icon(Icons.notes_rounded, color: Color(0xFF2563EB)),
+            SizedBox(width: 10),
+            Expanded(
+                child: Text('Proforma Notes',
+                    style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF101828)))),
+          ]),
+          const SizedBox(height: 18),
+          TextField(
+              controller: _accountsController,
+              enabled: !_saving,
+              minLines: 3,
+              maxLines: 6,
+              keyboardType: TextInputType.multiline,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) => setState(() {}),
+              decoration: _decoration('Accounts Note', 'Enter accounts note')),
+          const SizedBox(height: 16),
+          TextField(
+              controller: _courierController,
+              enabled: !_saving,
+              minLines: 3,
+              maxLines: 6,
+              keyboardType: TextInputType.multiline,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) => setState(() {}),
+              decoration: _decoration('Courier Note', 'Enter courier note')),
+          const SizedBox(height: 16),
+          SizedBox(
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: _saving || !_hasChanges ? null : _save,
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.save_outlined, size: 19),
+                label: Text(_saving ? 'Saving…' : 'Save Notes'),
+              )),
+        ]),
+      );
 }

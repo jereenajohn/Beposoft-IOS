@@ -8597,6 +8597,7 @@ _buildDashboardCard(
                   _buildDropdownTile(context, 'Proforma Invoice', [
                     'New Proforma Invoice',
                     'Proforma Invoice List',
+                    'Proforma Invoice List (Payment-Slips)'
                   ]),
                     _buildDropdownTile(
                 context,

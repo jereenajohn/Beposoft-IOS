@@ -1,3 +1,6 @@
+import 'package:beposoft/pages/ADMIN/dgm_page.dart';
+import 'package:beposoft/pages/ADMIN/family_date_summary_page.dart';
+import 'package:beposoft/pages/ACCOUNTS/daily_goods_movement.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:beposoft/pages/ACCOUNTS/Vehiclemanagementpage.dart';
@@ -79,6 +82,27 @@ class dashboard extends StatefulWidget {
 
 class _admin_dashboardState extends State<dashboard>
     with WidgetsBindingObserver {
+  Map<String, String> myAttendanceByDate = {};
+  bool isMyAttendanceLoading = true;
+  bool myAttendanceFailed = false;
+  bool _attendanceRequestBusy = false;
+
+  final _currency =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+  Map<String, dynamic>? productsData;
+  Map<String, bool> dashboardCardExpanded = {};
+  Map<String, dynamic> dgmTodaySummary = {};
+  Map<String, dynamic> dgmCurrentMonthSummary = {};
+  List<Map<String, dynamic>> dgmTodayRows = [];
+  bool dgmLoading = false;
+  double monthTotalOrderAmount = 0.0;
+  int monthTotalOrders = 0;
+  double todayTotalOrderAmount = 0.0;
+  int todayTotalOrders = 0;
+  double monthTotalParcelAmount = 0.0;
+  double monthTotalWeight = 0.0;
+  double monthAverage = 0.0;
+
   List<String> statusOptions = ["pending", "approved", "rejected"];
   List<Map<String, dynamic>> company = [];
   bool isCompanyLoading = false;
@@ -142,6 +166,9 @@ class _admin_dashboardState extends State<dashboard>
 
     fetchInboxMailCount();
     fetchMyOrderSummary();
+    fetchMyAttendanceDetails();
+    fetchOrdersSummaryFamilyData();
+    getdgm();
 
     mailCountTimer = Timer.periodic(
       const Duration(seconds: 15),
@@ -163,9 +190,12 @@ class _admin_dashboardState extends State<dashboard>
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
+      fetchMyAttendanceDetails();
       fetchInboxMailCount();
       fetchMyOrderSummary();
       fetchBeposoftSummary();
+      fetchOrdersSummaryFamilyData();
+      getdgm();
     }
   }
 
@@ -1872,6 +1902,7 @@ class _admin_dashboardState extends State<dashboard>
                 _buildDropdownTile(context, 'Proforma Invoice', [
                   'New Proforma Invoice',
                   'Proforma Invoice List',
+                  'Proforma Invoice List (Payment-Slips)'
                 ]),
                     _buildDropdownTile(
                 context,
@@ -2541,6 +2572,9 @@ class _admin_dashboardState extends State<dashboard>
                     mainAxisSpacing: 12,
                     mainAxisExtent: 185,
                     children: [
+                      _buildMyAttendanceCalendarCard(),
+                      _buildSalesGridCard(),
+                      _buildLogisticsGridCard(),
                       _buildCompanyGridCard(),
                       _buildFinanceGridCard(),
                       _buildPurchaseGridCard(),
@@ -3121,6 +3155,768 @@ class _admin_dashboardState extends State<dashboard>
 
   // Companies are displayed directly in the dashboard card. Selecting a
   // company opens its finance report without an intermediate list screen.
+  int _asInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  double _asDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is int) return v.toDouble();
+    if (v is double) return v;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  Map<String, dynamic> _asMap(dynamic v) {
+    if (v == null) return {};
+    if (v is Map<String, dynamic>) return v;
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return {};
+  }
+
+  String _formatDashboardAmount(dynamic value) {
+    final double amount = _asDouble(value);
+    final double absAmount = amount.abs();
+    final String sign = amount < 0 ? "-" : "";
+
+    if (absAmount >= 10000000) {
+      return "$sign₹${(absAmount / 10000000).toStringAsFixed(2)} Cr";
+    }
+
+    if (absAmount >= 100000) {
+      return "$sign₹${(absAmount / 100000).toStringAsFixed(2)} L";
+    }
+
+    if (absAmount >= 1000) {
+      return "$sign₹${(absAmount / 1000).toStringAsFixed(2)}K";
+    }
+
+    return "$sign${_currency.format(absAmount)}";
+  }
+
+Widget _buildDashboardLineItem({
+  required String title,
+  required String value,
+  IconData? icon,
+  bool isGreen = false,
+}) {
+  return Container(
+    width: double.infinity,
+    height: 26,
+    padding: const EdgeInsets.symmetric(horizontal: 9),
+    decoration: BoxDecoration(
+      color: isGreen
+          ? Colors.green
+          : Colors.white.withOpacity(0.14),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: isGreen
+            ? Colors.white.withOpacity(0.35)
+            : Colors.white.withOpacity(0.22),
+      ),
+    ),
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(
+            icon,
+            color: Colors.white,
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+        ],
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.88),
+              fontSize: 11,
+              fontWeight:
+                  isGreen ? FontWeight.w800 : FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (value.isNotEmpty)
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight:
+                  isGreen ? FontWeight.w900 : FontWeight.w800,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
+    ),
+  );
+}
+
+ Widget _buildDashboardCard({
+  required String title,
+  required String value,
+  required List<dynamic> lines,
+  required VoidCallback onTap,
+  String valueLabel = "",
+  Widget? bottom,
+  bool enableSeeMore = false,
+  double bottomTopSpacing = 8,
+  double titleBottomSpacing = 8,
+  bool greenValueTab = false,
+}) {
+  final bool isExpanded = dashboardCardExpanded[title] ?? false;
+
+  final bool canExpand = enableSeeMore && lines.length > 1;
+
+  final List<dynamic> displayLines = canExpand
+      ? isExpanded
+          ? lines
+          : lines.take(1).toList()
+      : lines;
+
+  Widget buildLine(dynamic line) {
+    if (line is Widget) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(
+            minHeight: 32,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.22),
+            ),
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: line,
+          ),
+        ),
+      );
+    }
+
+    final String text = line?.toString() ?? '';
+    final List<String> parts = text.split(':');
+
+    final String titleText =
+        parts.length > 1 ? parts.first.trim() : text.trim();
+
+    final String valueText =
+        parts.length > 1 ? parts.sublist(1).join(':').trim() : '';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: _buildDashboardLineItem(
+        title: titleText,
+        value: valueText,
+      ),
+    );
+  }
+
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF56AFFF),
+              Color(0xFF2C74FF),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2C74FF).withOpacity(0.28),
+              blurRadius: 12,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(11),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.25,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: titleBottomSpacing),
+
+              const SizedBox(height: 5),
+
+              if (value.isNotEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  height: 32,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: greenValueTab ? 9 : 0,
+                  ),
+                  decoration: greenValueTab
+                      ? BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.35),
+                          ),
+                        )
+                      : null,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        valueLabel.isNotEmpty
+                            ? "$valueLabel - $value"
+                            : value,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 7),
+              ],
+
+              Expanded(
+                child: SingleChildScrollView(
+                  primary: false,
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.only(
+                    bottom: 4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...displayLines.map(buildLine),
+
+                      if (bottom != null) ...[
+                        if (bottomTopSpacing > 0)
+                          SizedBox(height: bottomTopSpacing),
+                        bottom,
+                      ],
+
+                      if (canExpand)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                dashboardCardExpanded[title] =
+                                    !isExpanded;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: Text(
+                                isExpanded
+                                    ? "See less"
+                                    : "See more",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+  Future<void> fetchOrdersSummaryFamilyData() async {
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null) return;
+
+      final response = await http.get(
+        Uri.parse('$api/api/orders/summary/family/data/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final parsed = jsonDecode(response.body);
+
+        if (!mounted) return;
+        setState(() {
+          productsData = parsed['overall'] ?? {};
+        });
+      }
+    } catch (e) {
+      // optional print
+      // print("fetchOrdersSummaryFamilyData error: $e");
+    }
+  }
+
+  Future<void> getdgm() async {
+    final token = await getTokenFromPrefs();
+
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        dgmLoading = false;
+
+        todayTotalOrders = 0;
+        todayTotalOrderAmount = 0.0;
+
+        monthTotalOrders = 0;
+        monthTotalOrderAmount = 0.0;
+
+        monthTotalParcelAmount = 0.0;
+        monthTotalWeight = 0.0;
+        monthAverage = 0.0;
+
+        dgmTodayRows = [];
+        dgmTodaySummary = {};
+        dgmCurrentMonthSummary = {};
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      dgmLoading = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('$api/api/warehouse/get/summary/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        final Map<String, dynamic> todaySummary =
+            decoded['today_summary'] is Map
+                ? Map<String, dynamic>.from(decoded['today_summary'])
+                : {};
+
+        final Map<String, dynamic> currentMonthSummary =
+            decoded['current_month_summary'] is Map
+                ? Map<String, dynamic>.from(decoded['current_month_summary'])
+                : {};
+
+        final Map<String, dynamic> data = decoded['data'] is Map
+            ? Map<String, dynamic>.from(decoded['data'])
+            : {};
+
+        final List<Map<String, dynamic>> todayRows = [];
+
+        data.forEach((serviceName, serviceValue) {
+          final Map<String, dynamic> serviceMap = serviceValue is Map
+              ? Map<String, dynamic>.from(serviceValue)
+              : {};
+
+          final Map<String, dynamic> today = serviceMap['today'] is Map
+              ? Map<String, dynamic>.from(serviceMap['today'])
+              : {};
+
+          final int boxes = _asInt(today['total_boxes']);
+
+          if (boxes > 0) {
+            todayRows.add({
+              'service': serviceName.toString(),
+              'boxes': boxes,
+              'orders': _asInt(today['total_orders']),
+              'actual_weight': _asDouble(today['total_actual_weight_kg']),
+              'post_office_weight': _asDouble(
+                today['total_weight_field_kg'] ?? today['total_weight_field'],
+              ),
+              'volume': _asDouble(today['total_volume']),
+              'parcel_amount': _asDouble(today['total_parcel_amount']),
+              'average': _asDouble(today['average']),
+            });
+          }
+        });
+
+        todayRows.sort(
+          (a, b) => a['service'].toString().compareTo(
+                b['service'].toString(),
+              ),
+        );
+
+        if (!mounted) return;
+        setState(() {
+          dgmTodaySummary = todaySummary;
+          dgmCurrentMonthSummary = currentMonthSummary;
+          dgmTodayRows = todayRows;
+
+          todayTotalOrders = _asInt(todaySummary['total_orders']);
+          todayTotalOrderAmount = _asDouble(todaySummary['total_order_amount']);
+
+          monthTotalOrders = _asInt(currentMonthSummary['total_orders']);
+          monthTotalOrderAmount =
+              _asDouble(currentMonthSummary['total_order_amount']);
+
+          monthTotalParcelAmount =
+              _asDouble(currentMonthSummary['total_parcel_amount']);
+
+          monthTotalWeight = _asDouble(
+            currentMonthSummary['total_weight_field_kg'] ??
+                currentMonthSummary['total_weight_field'],
+          );
+
+          monthAverage = _asDouble(currentMonthSummary['average']);
+
+          dgmLoading = false;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          dgmLoading = false;
+
+          todayTotalOrders = 0;
+          todayTotalOrderAmount = 0.0;
+
+          monthTotalOrders = 0;
+          monthTotalOrderAmount = 0.0;
+
+          monthTotalParcelAmount = 0.0;
+          monthTotalWeight = 0.0;
+          monthAverage = 0.0;
+
+          dgmTodayRows = [];
+          dgmTodaySummary = {};
+          dgmCurrentMonthSummary = {};
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        dgmLoading = false;
+
+        todayTotalOrders = 0;
+        todayTotalOrderAmount = 0.0;
+
+        monthTotalOrders = 0;
+        monthTotalOrderAmount = 0.0;
+
+        monthTotalParcelAmount = 0.0;
+        monthTotalWeight = 0.0;
+        monthAverage = 0.0;
+
+        dgmTodayRows = [];
+        dgmTodaySummary = {};
+        dgmCurrentMonthSummary = {};
+      });
+
+      print("DGM SUMMARY ERROR: $e");
+    }
+  }
+
+  Widget _buildSalesGridCard() {
+    final paymentSummary = _asMap(productsData?['payment_status_summary']);
+    final todayPayment = _asMap(paymentSummary['today']);
+    final monthPayment = _asMap(paymentSummary['month']);
+    final todayPaid = _asMap(todayPayment['paid']);
+    final todayCod = _asMap(todayPayment['COD']);
+    final monthPaid = _asMap(monthPayment['paid']);
+    final monthCod = _asMap(monthPayment['COD']);
+    return _buildDashboardCard(
+  title: "Sales",
+  value:
+      "M.Total- ${_formatDashboardAmount(productsData?['month_total_amount'])}",
+  greenValueTab: true,
+            lines: [
+              "MT. Invoices: ${_asInt(productsData?['month_count'])}",
+              "T Paid: ${_asInt(todayPaid['count'])} | ${_formatDashboardAmount(todayPaid['total'])}",
+              "T. COD: ${_asInt(todayCod['count'])} | ${_formatDashboardAmount(todayCod['total'])}",
+              "M. Paid: ${_asInt(monthPaid['count'])} | ${_formatDashboardAmount(monthPaid['total'])}",
+              "M. COD: ${_asInt(monthCod['count'])} | ${_formatDashboardAmount(monthCod['total'])}",
+            ],
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FamilyDateSummaryPage()),
+              );
+            },
+          );
+  }
+
+  Widget _buildLogisticsGridCard() {
+    final dgmWeightFieldKg = _asDouble(dgmCurrentMonthSummary['total_weight_field_kg']);
+    return _buildDashboardCard(
+  title: "Logistics (DGM)",
+  value: dgmLoading
+      ? "Loading..."
+      : _formatDashboardAmount(monthTotalOrderAmount),
+  greenValueTab: true,
+  lines: [
+    dgmLoading
+        ? "Today Invoices: Loading..."
+        : "Today INV: $todayTotalOrders",
+    dgmLoading
+        ? "Today Amount: Loading..."
+        : "T.Amount: ${_formatDashboardAmount(
+            todayTotalOrderAmount,
+          )}",
+    dgmLoading
+        ? "Today Weight: Loading..."
+        : "T.Weight: ${_asDouble(
+            dgmTodaySummary['total_weight_field_kg'],
+          ).toStringAsFixed(3)} kg",
+    dgmLoading
+        ? "Month Invoices: Loading..."
+        : "Month INV: $monthTotalOrders",
+    dgmLoading
+        ? "Month Amount: Loading..."
+        : "M.Amount: ${_formatDashboardAmount(
+            monthTotalOrderAmount,
+          )}",
+    dgmLoading
+        ? "Weight: Loading..."
+        : "M.Weight: ${dgmWeightFieldKg.toStringAsFixed(3)} kg",
+    dgmLoading
+        ? "PO Amount: Loading..."
+        : "PO Amount: ${_formatDashboardAmount(
+            monthTotalParcelAmount,
+          )}",
+    dgmLoading
+        ? "Avg: Loading..."
+        : "Avg: ₹${monthAverage.toStringAsFixed(2)}/kg",
+  ],
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => daily_goods_movementt(),
+      ),
+    );
+  },
+);
+  }
+
+  Future<void> fetchMyAttendanceDetails() async {
+    if (!mounted || _attendanceRequestBusy) return;
+    _attendanceRequestBusy = true;
+    setState(() { isMyAttendanceLoading = true; myAttendanceFailed = false; });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) throw Exception('Login required');
+      final response = await http.get(
+        Uri.parse('$api/api/staff/attendance/my/details/'),
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) throw Exception('Attendance request failed');
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['status'] != 'success' || decoded['data'] is! List) {
+        throw Exception('Invalid attendance response');
+      }
+      final statuses = <String, String>{};
+      final newestIds = <String, int>{};
+      for (final row in decoded['data'] as List) {
+        if (row is! Map) throw Exception('Invalid attendance record');
+        final date = DateTime.tryParse(row['attendance_date']?.toString() ?? '');
+        if (date == null) continue;
+        final key = DateFormat('yyyy-MM-dd').format(date);
+        final id = int.tryParse(row['id']?.toString() ?? '') ?? 0;
+        if (newestIds.containsKey(key) && newestIds[key]! >= id) continue;
+        newestIds[key] = id;
+        statuses[key] = row['status']?.toString().trim().toLowerCase() ?? '';
+      }
+      if (!mounted) return;
+      setState(() => myAttendanceByDate = statuses);
+    } catch (error) {
+      debugPrint('MY ATTENDANCE ERROR: $error');
+      if (mounted) setState(() => myAttendanceFailed = true);
+    } finally {
+      _attendanceRequestBusy = false;
+      if (mounted) setState(() => isMyAttendanceLoading = false);
+    }
+  }
+
+  Widget _buildMyAttendanceCalendarCard() {
+    final now = DateTime.now();
+    final month = DateFormat('MMM').format(now);
+    final first = DateTime(now.year, now.month, 1);
+    final days = DateTime(now.year, now.month + 1, 0).day;
+    final offset = first.weekday - 1;
+    final rows = ((offset + days) / 7).ceil();
+    const sundayBlue = Color(0xFF134D99);
+    const saturdayBlue = Color(0xFF91C9F2);
+    const pink = Color(0xFFEB4899);
+    Widget legend(Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 7, height: 7, decoration: BoxDecoration(
+          color: color, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 3),
+        Text(label, style: const TextStyle(color: Colors.black87, fontSize: 7)),
+      ],
+    );
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: InkWell(
+        onTap: () async {
+          await Navigator.push<void>(context, MaterialPageRoute<void>(
+            builder: (context) => StaffSelfAttendanceScreen(),
+          ));
+          if (!mounted) return;
+          await fetchMyAttendanceDetails();
+        },
+        child: LayoutBuilder(builder: (context, constraints) {
+          // A minimum design canvas keeps every label and all six calendar
+          // rows inside the card, including on narrow screens.
+          final designWidth = constraints.maxWidth < 220 ? 220.0 : constraints.maxWidth;
+          final designHeight = constraints.maxHeight < 280 ? 280.0 : constraints.maxHeight;
+          return FittedBox(
+            fit: BoxFit.fill,
+            child: SizedBox(width: designWidth, height: designHeight,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(children: [
+                  Row(children: [
+                    Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                      child: Text('$month Attendance', style: const TextStyle(
+                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)))),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(color: const Color(0xFFBFDDFB), borderRadius: BorderRadius.circular(8)),
+                      child: Text(month, style: const TextStyle(color: Color(0xFF154776), fontSize: 16, fontWeight: FontWeight.w800)),
+                    ),
+                  ]),
+                  const SizedBox(height: 7),
+                  FittedBox(fit: BoxFit.scaleDown, child: Text(
+                    'Attendance tracking • ${DateFormat('MMMM yyyy').format(now)}',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500))),
+                  const SizedBox(height: 10),
+                  Expanded(child: Container(
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8, offset: const Offset(0, 3))]),
+                    padding: const EdgeInsets.all(8),
+                    child: Column(children: [
+                      const SizedBox(height: 5),
+                      Row(children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) =>
+                        Expanded(child: Center(child: FittedBox(fit: BoxFit.scaleDown,
+                          child: Text(day, style: const TextStyle(color: Color(0xFF355A7A), fontSize: 10, fontWeight: FontWeight.w700)))))).toList()),
+                      const SizedBox(height: 10),
+                      Expanded(child: isMyAttendanceLoading
+                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                        : myAttendanceFailed
+                          ? Center(child: TextButton(onPressed: fetchMyAttendanceDetails, child: const Text('Retry attendance')))
+                          : Column(children: List.generate(rows, (week) => Expanded(
+                            child: Row(children: List.generate(7, (column) {
+                              final day = week * 7 + column - offset + 1;
+                              final valid = day >= 1 && day <= days;
+                              final date = DateTime(now.year, now.month, day);
+                              final status = valid ? myAttendanceByDate[DateFormat('yyyy-MM-dd').format(date)] : null;
+                              final today = valid && day == now.day;
+                              final absent = status == 'absent';
+                              final sunday = valid && date.weekday == DateTime.sunday;
+                              final saturday = valid && date.weekday == DateTime.saturday;
+                              final background = !valid ? const Color(0xFFF8F8F8)
+                                : today ? pink : absent ? Colors.black
+                                : sunday ? sundayBlue : saturday ? saturdayBlue : Colors.white;
+                              final foreground = today || absent || sunday ? Colors.white
+                                : saturday ? sundayBlue : Colors.black;
+                              return Expanded(child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Tooltip(message: valid ? '${DateFormat('dd MMM yyyy').format(date)}: ${status ?? 'No attendance record'}' : '',
+                                  child: Container(
+                                    width: double.infinity, height: double.infinity,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(7),
+                                      border: Border.all(color: const Color(0xFFF0F0F0), width: 0.5),
+                                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(valid ? 0.14 : 0.04), blurRadius: 3, offset: const Offset(0, 2))]),
+                                    child: valid ? FittedBox(fit: BoxFit.scaleDown, child: Padding(
+                                      padding: const EdgeInsets.all(2),
+                                      child: Text('$day', style: TextStyle(color: foreground, fontSize: 17, fontWeight: FontWeight.w800)))) : null,
+                                  ),
+                                ),
+                              ));
+                            })),
+                          )))),
+                      const SizedBox(height: 12),
+                      FittedBox(fit: BoxFit.scaleDown, child: Row(children: [
+                        legend(Colors.black, 'Absent'), const SizedBox(width: 9),
+                        legend(pink, 'Today'), const SizedBox(width: 9),
+                        legend(saturdayBlue, 'Saturday'), const SizedBox(width: 9),
+                        legend(sundayBlue, 'Sunday'),
+                      ])),
+                      const SizedBox(height: 4),
+                    ]),
+                  )),
+                ]),
+              ),
+            ),
+          );
+        }),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompanyGridCard() {
     return LayoutBuilder(
       builder: (context, constraints) {

@@ -59,6 +59,11 @@ class marketing_dashboard extends StatefulWidget {
 
 class _marketing_dashboardState extends State<marketing_dashboard>
     with WidgetsBindingObserver {
+  Map<String, String> myAttendanceByDate = {};
+  bool isMyAttendanceLoading = true;
+  bool myAttendanceFailed = false;
+  bool _attendanceRequestBusy = false;
+
   List<String> statusOptions = ["pending", "approved", "rejected"];
   List<Map<String, dynamic>> grvlist = [];
   List<Map<String, dynamic>> proforma = [];
@@ -101,6 +106,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
     fetchshippedorders();
     fetchInboxMailCount();
     fetchMyOrderSummary();
+    fetchMyAttendanceDetails();
 
     mailCountTimer = Timer.periodic(
       const Duration(seconds: 15),
@@ -136,6 +142,7 @@ class _marketing_dashboardState extends State<marketing_dashboard>
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
+      fetchMyAttendanceDetails();
       fetchInboxMailCount();
       fetchMyOrderSummary();
     }
@@ -1101,12 +1108,184 @@ class _marketing_dashboardState extends State<marketing_dashboard>
 
   // All existing Marketing destinations are retained; only their presentation
   // moves from the old drawer into BDO-style dashboard cards.
+  Future<void> fetchMyAttendanceDetails() async {
+    if (!mounted || _attendanceRequestBusy) return;
+    _attendanceRequestBusy = true;
+    setState(() { isMyAttendanceLoading = true; myAttendanceFailed = false; });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) throw Exception('Login required');
+      final response = await http.get(
+        Uri.parse('$api/api/staff/attendance/my/details/'),
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) throw Exception('Attendance request failed');
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['status'] != 'success' || decoded['data'] is! List) {
+        throw Exception('Invalid attendance response');
+      }
+      final statuses = <String, String>{};
+      final newestIds = <String, int>{};
+      for (final row in decoded['data'] as List) {
+        if (row is! Map) throw Exception('Invalid attendance record');
+        final date = DateTime.tryParse(row['attendance_date']?.toString() ?? '');
+        if (date == null) continue;
+        final key = DateFormat('yyyy-MM-dd').format(date);
+        final id = int.tryParse(row['id']?.toString() ?? '') ?? 0;
+        if (newestIds.containsKey(key) && newestIds[key]! >= id) continue;
+        newestIds[key] = id;
+        statuses[key] = row['status']?.toString().trim().toLowerCase() ?? '';
+      }
+      if (!mounted) return;
+      setState(() => myAttendanceByDate = statuses);
+    } catch (error) {
+      debugPrint('MY ATTENDANCE ERROR: $error');
+      if (mounted) setState(() => myAttendanceFailed = true);
+    } finally {
+      _attendanceRequestBusy = false;
+      if (mounted) setState(() => isMyAttendanceLoading = false);
+    }
+  }
+
+  Widget _buildMyAttendanceCalendarCard() {
+    final now = DateTime.now();
+    final month = DateFormat('MMM').format(now);
+    final first = DateTime(now.year, now.month, 1);
+    final days = DateTime(now.year, now.month + 1, 0).day;
+    final offset = first.weekday - 1;
+    final rows = ((offset + days) / 7).ceil();
+    const sundayBlue = Color(0xFF134D99);
+    const saturdayBlue = Color(0xFF91C9F2);
+    const pink = Color(0xFFEB4899);
+    Widget legend(Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 7, height: 7, decoration: BoxDecoration(
+          color: color, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 3),
+        Text(label, style: const TextStyle(color: Colors.black87, fontSize: 7)),
+      ],
+    );
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: InkWell(
+        onTap: () async {
+          await Navigator.push<void>(context, MaterialPageRoute<void>(
+            builder: (context) => StaffSelfAttendanceScreen(),
+          ));
+          if (!mounted) return;
+          await fetchMyAttendanceDetails();
+        },
+        child: LayoutBuilder(builder: (context, constraints) {
+          // A minimum design canvas keeps every label and all six calendar
+          // rows inside the card, including on narrow screens.
+          final designWidth = constraints.maxWidth < 220 ? 220.0 : constraints.maxWidth;
+          final designHeight = constraints.maxHeight < 280 ? 280.0 : constraints.maxHeight;
+          return FittedBox(
+            fit: BoxFit.fill,
+            child: SizedBox(width: designWidth, height: designHeight,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(children: [
+                  Row(children: [
+                    Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                      child: Text('$month Attendance', style: const TextStyle(
+                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)))),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(color: const Color(0xFFBFDDFB), borderRadius: BorderRadius.circular(8)),
+                      child: Text(month, style: const TextStyle(color: Color(0xFF154776), fontSize: 16, fontWeight: FontWeight.w800)),
+                    ),
+                  ]),
+                  const SizedBox(height: 7),
+                  FittedBox(fit: BoxFit.scaleDown, child: Text(
+                    'Attendance tracking • ${DateFormat('MMMM yyyy').format(now)}',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500))),
+                  const SizedBox(height: 10),
+                  Expanded(child: Container(
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8, offset: const Offset(0, 3))]),
+                    padding: const EdgeInsets.all(8),
+                    child: Column(children: [
+                      const SizedBox(height: 5),
+                      Row(children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) =>
+                        Expanded(child: Center(child: FittedBox(fit: BoxFit.scaleDown,
+                          child: Text(day, style: const TextStyle(color: Color(0xFF355A7A), fontSize: 10, fontWeight: FontWeight.w700)))))).toList()),
+                      const SizedBox(height: 10),
+                      Expanded(child: isMyAttendanceLoading
+                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                        : myAttendanceFailed
+                          ? Center(child: TextButton(onPressed: fetchMyAttendanceDetails, child: const Text('Retry attendance')))
+                          : Column(children: List.generate(rows, (week) => Expanded(
+                            child: Row(children: List.generate(7, (column) {
+                              final day = week * 7 + column - offset + 1;
+                              final valid = day >= 1 && day <= days;
+                              final date = DateTime(now.year, now.month, day);
+                              final status = valid ? myAttendanceByDate[DateFormat('yyyy-MM-dd').format(date)] : null;
+                              final today = valid && day == now.day;
+                              final absent = status == 'absent';
+                              final sunday = valid && date.weekday == DateTime.sunday;
+                              final saturday = valid && date.weekday == DateTime.saturday;
+                              final background = !valid ? const Color(0xFFF8F8F8)
+                                : today ? pink : absent ? Colors.black
+                                : sunday ? sundayBlue : saturday ? saturdayBlue : Colors.white;
+                              final foreground = today || absent || sunday ? Colors.white
+                                : saturday ? sundayBlue : Colors.black;
+                              return Expanded(child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Tooltip(message: valid ? '${DateFormat('dd MMM yyyy').format(date)}: ${status ?? 'No attendance record'}' : '',
+                                  child: Container(
+                                    width: double.infinity, height: double.infinity,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(7),
+                                      border: Border.all(color: const Color(0xFFF0F0F0), width: 0.5),
+                                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(valid ? 0.14 : 0.04), blurRadius: 3, offset: const Offset(0, 2))]),
+                                    child: valid ? FittedBox(fit: BoxFit.scaleDown, child: Padding(
+                                      padding: const EdgeInsets.all(2),
+                                      child: Text('$day', style: TextStyle(color: foreground, fontSize: 17, fontWeight: FontWeight.w800)))) : null,
+                                  ),
+                                ),
+                              ));
+                            })),
+                          )))),
+                      const SizedBox(height: 12),
+                      FittedBox(fit: BoxFit.scaleDown, child: Row(children: [
+                        legend(Colors.black, 'Absent'), const SizedBox(width: 9),
+                        legend(pink, 'Today'), const SizedBox(width: 9),
+                        legend(saturdayBlue, 'Saturday'), const SizedBox(width: 9),
+                        legend(sundayBlue, 'Sunday'),
+                      ])),
+                      const SizedBox(height: 4),
+                    ]),
+                  )),
+                ]),
+              ),
+            ),
+          );
+        }),
+        ),
+      ),
+    );
+  }
+
   List<Map<String, dynamic>> _getMarketingFrontMenuItems() {
     return [
       {
-        'title': 'Add Attendance',
-        'icon': Icons.person_outline_rounded,
-        'keywords': 'self attendance fingerprint check in',
+        'title': 'My Attendance',
+        'icon': Icons.calendar_month_outlined,
+        'groupType': 'myAttendanceCalendar',
+        'keywords': 'my attendance calendar present absent month self attendance fingerprint check in',
       },
       {
         'title': 'Customers',
@@ -1566,6 +1745,10 @@ class _marketing_dashboardState extends State<marketing_dashboard>
             final title = item['title'] as String;
             final icon = item['icon'] as IconData;
             final groupType = item['groupType']?.toString();
+            if (groupType == 'myAttendanceCalendar') {
+              return _buildMyAttendanceCalendarCard();
+            }
+
             if (groupType != null && groupType.isNotEmpty) {
               return _buildGroupedMenuCard(
                 title: title,

@@ -15,9 +15,9 @@ import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/new_performa_products.dart';
 import 'package:beposoft/pages/ACCOUNTS/order_products.dart';
-import 'package:beposoft/pages/ACCOUNTS/view_cart.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -54,6 +54,60 @@ class proforma_to_order_request extends StatefulWidget {
 }
 
 class _proforma_to_order_requestState extends State<proforma_to_order_request> {
+  // Diagnostic output only; business logic and API payloads are unchanged.
+  void _printDetails(String label, dynamic value) {
+    if (!kDebugMode) return;
+    String output;
+    try {
+      output = JsonEncoder.withIndent('  ', (item) => item.toString())
+          .convert(value);
+    } catch (_) {
+      output = value.toString();
+    }
+    debugPrint('[PROFORMA CONVERSION] $label');
+    // Chunk long lines so large product responses remain readable in logs.
+    for (final line in output.split('\n')) {
+      if (line.isEmpty) {
+        debugPrint('');
+        continue;
+      }
+      for (int start = 0; start < line.length; start += 800) {
+        final end = start + 800 < line.length ? start + 800 : line.length;
+        debugPrint(line.substring(start, end));
+      }
+    }
+    debugPrint('[PROFORMA CONVERSION] END $label');
+  }
+
+  Future<http.Response> _debugGet(Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    _printDetails('GET REQUEST', {
+      'url': uri.toString(),
+      'headers': {
+        for (final entry in (headers ?? <String, String>{}).entries)
+          entry.key: entry.key.toLowerCase() == 'authorization'
+              ? '[REDACTED]' : entry.value,
+      },
+    });
+    try {
+      final response = await http.get(uri, headers: headers);
+      _printDetails('GET RESPONSE', {
+        'url': uri.toString(),
+        'status_code': response.statusCode,
+        'body': _auditResponseData(response),
+      });
+      return response;
+    } catch (error, stackTrace) {
+      _printDetails('GET ERROR', {
+        'url': uri.toString(),
+        'error': error.toString(),
+        'stack_trace': stackTrace.toString(),
+      });
+      rethrow;
+    }
+  }
+
   Map<String, dynamic> _loadedAuditOrder = <String, dynamic>{};
 
   dynamic _auditCopy(dynamic value) {
@@ -66,7 +120,6 @@ class _proforma_to_order_requestState extends State<proforma_to_order_request> {
       'proforma_invoice': widget.invoice,
       'loaded_proforma_response': _loadedAuditOrder,
       'proforma_details': orders,
-      'cart_details': cartdata,
     }) as Map);
   }
 
@@ -112,6 +165,8 @@ class _proforma_to_order_requestState extends State<proforma_to_order_request> {
           if (action == 'order_created_from_proforma' && successful)
             'created_order_id': _createdOrderId(_auditResponseData(response!)),
           'submitted_data': submitted,
+          if (action == 'order_created_from_proforma' && successful)
+            'product_details': before['conversion_product_details'],
           'response_data': response == null ? null : _auditResponseData(response),
           'outcome': successful ? 'success' : 'failed',
           if (method == 'DELETE' && successful) 'deleted': true,
@@ -134,63 +189,21 @@ class _proforma_to_order_requestState extends State<proforma_to_order_request> {
     }
   }
 
-  Future<http.Response> _auditMutation(
-    String method,
-    String action,
-    Uri uri, {
-    Map<String, String>? headers,
-    Object? body,
-    Encoding? encoding,
-  }) async {
-    final before = _auditSnapshot();
-    try {
-      final cartResponse = await http.get(
-        Uri.parse('$api/api/cart/products/'), headers: headers,
-      );
-      before['cart_snapshot_http_status'] = cartResponse.statusCode;
-      if (cartResponse.statusCode == 200) {
-        before['server_cart_before'] = _auditResponseData(cartResponse);
-      }
-    } catch (error) {
-      before['cart_snapshot_error_type'] = error.runtimeType.toString();
-    }
-    dynamic submitted = body;
-    if (body is String) {
-      try { submitted = jsonDecode(body); } catch (_) {}
-    }
-    submitted = _auditCopy(submitted);
-    late final http.Response response;
-    try {
-      switch (method) {
-        case 'POST':
-          response = await http.post(uri, headers: headers, body: body, encoding: encoding);
-          break;
-        case 'PUT':
-          response = await http.put(uri, headers: headers, body: body, encoding: encoding);
-          break;
-        case 'PATCH':
-          response = await http.patch(uri, headers: headers, body: body, encoding: encoding);
-          break;
-        case 'DELETE':
-          response = await http.delete(uri, headers: headers, body: body, encoding: encoding);
-          break;
-        default:
-          throw ArgumentError.value(method, 'method');
-      }
-    } catch (error) {
-      await _recordMutation(action: action, method: method, uri: uri,
-          before: before, submitted: submitted, error: error);
-      rethrow;
-    }
-    await _recordMutation(action: action, method: method, uri: uri,
-        before: before, submitted: submitted, response: response);
-    return response;
-  }
-
   Future<http.Response> _auditMultipart(http.MultipartRequest request, String action) async {
     final before = _auditSnapshot();
+    if (action == 'order_created_from_proforma') {
+      // Capture saved proforma products before conversion deletes the proforma.
+      // Keep product snapshots separate from the unmodified API response.
+      before['conversion_product_details'] = _auditCopy(<String, dynamic>{
+        'source': 'pre_conversion_snapshot',
+        'proforma_items': _loadedAuditOrder['perfoma_items'] ??
+            perfomaItemsWithImages,
+      });
+    }
     final submitted = <String, dynamic>{
       'fields': Map<String, String>.from(request.fields),
+      'proforma_payment_slip_ids': proformaPaymentSlips
+          .map((slip) => slip['id']).where((id) => id != null).toList(),
       'files': request.files.map((file) => <String, dynamic>{
         'field': file.field,
         'filename': file.filename,
@@ -198,10 +211,24 @@ class _proforma_to_order_requestState extends State<proforma_to_order_request> {
         'content_type': file.contentType.toString(),
       }).toList(),
     };
+    _printDetails('CONVERSION REQUEST', {
+      'method': request.method,
+      'url': request.url.toString(),
+      'fields_and_file_metadata': submitted,
+      'before_snapshot': before,
+      'existing_payment_slips': proformaPaymentSlips,
+      // File contents and authorization credentials are intentionally excluded.
+    });
     late final http.Response response;
     try {
       response = await http.Response.fromStream(await request.send());
+      _printDetails('CONVERSION RESPONSE', {
+        'url': request.url.toString(),
+        'status_code': response.statusCode,
+        'body': _auditResponseData(response),
+      });
     } catch (error) {
+      _printDetails('PAGE ERROR', error.toString());
       await _recordMutation(action: action,
           method: 'POST', uri: request.url, before: before,
           submitted: submitted, error: error);
@@ -259,7 +286,6 @@ class _proforma_to_order_requestState extends State<proforma_to_order_request> {
   int? selectedwarehouseId; // Variable to store the selected department's ID
   String? selectedwarehouseName;
 
-  List<Map<String, dynamic>> cartdata = [];
   var Discount;
   List<Map<String, dynamic>> orders = [];
   List<Map<String, dynamic>> stat = [];
@@ -285,9 +311,199 @@ final TextEditingController accountsNoteController =
 
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> paymentReceiptImages = [];
-  bool isUploadingReceiptImages = false;
-  bool paymentReceiptImagesUploaded = false;
   bool isCreatingOrder = false;
+  List<Map<String, dynamic>> proformaPaymentSlips = [];
+  bool _isLoadingConversionData = true;
+  String? _conversionDataError;
+  bool _proformaReady = false;
+
+  bool get _hasExistingPaymentSlip => proformaPaymentSlips.any(
+      (slip) => slip['id'] != null && _existingPaymentSlipUrl(slip) != null);
+
+  bool get _isFullCOD =>
+      selectpaystatus == 'COD' && selectcodtype == 'FULL_COD';
+
+  Future<void> _fetchProformaPaymentSlips(dynamic proformaId) async {
+    final token = await gettokenFromPrefs();
+    final response = await _debugGet(
+      Uri.parse('$api/api/perfoma/payment/slips/$proformaId/'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Unable to load existing proforma payment slips.');
+    }
+    final decoded = jsonDecode(response.body);
+    final dynamic slips = decoded is List
+        ? decoded
+        : decoded is Map ? decoded['data'] ?? decoded['results'] : null;
+    if (slips is! List) {
+      throw Exception('Invalid proforma payment slips response.');
+    }
+    if (!mounted) return;
+    setState(() {
+      proformaPaymentSlips = slips.whereType<Map>().map((item) =>
+          Map<String, dynamic>.from(item as Map))
+          .where((slip) => slip['id'] != null &&
+              _existingPaymentSlipUrl(slip) != null).toList();
+    });
+  }
+
+  String? _existingPaymentSlipUrl(Map<String, dynamic> slip) {
+    dynamic value = slip['file_url'] ?? slip['image_url'] ??
+        slip['file'] ?? slip['image'] ?? slip['payment_slip'] ??
+        slip['slip'] ?? slip['url'];
+    if (value is Map) value = value['url'] ?? value['file'] ?? value['image'];
+    if (value is! String || value.trim().isEmpty) return null;
+    final base = Uri.tryParse('${api.toString().replaceFirst(RegExp(r'/+$'), '')}/');
+    final uri = base?.resolve(value.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    return uri.toString();
+  }
+
+  Widget _existingPaymentSlipImage(String? url, {bool expanded = false}) {
+    if (url == null) {
+      return const Center(child: Icon(Icons.broken_image_outlined,
+          color: Color(0xFF98A2B3)));
+    }
+    return Image.network(
+      url,
+      fit: expanded ? BoxFit.contain : BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder: (context, child, progress) => progress == null
+          ? child
+          : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      errorBuilder: (context, error, stackTrace) => const Center(
+        child: Icon(Icons.broken_image_outlined, color: Color(0xFF98A2B3)),
+      ),
+    );
+  }
+
+  void _previewExistingPaymentSlip(String url) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          height: MediaQuery.of(dialogContext).size.height * 0.75,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  child: _existingPaymentSlipImage(url, expanded: true),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  tooltip: 'Close preview',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExistingPaymentSlipPreviews() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: proformaPaymentSlips.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 0.8,
+      ),
+      itemBuilder: (context, index) {
+        final url = _existingPaymentSlipUrl(proformaPaymentSlips[index]);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Material(
+                color: const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: url == null ? null : () => _previewExistingPaymentSlip(url),
+                  child: _existingPaymentSlipImage(url),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'From Proforma • ${index + 1}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10.5, color: Color(0xFF027A48)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String? _conversionValidationError() {
+    if (_isLoadingConversionData) return 'Please wait for proforma data to load.';
+    if (_conversionDataError != null) return _conversionDataError;
+    if (!_proformaReady || perfomaItemsWithImages.isEmpty) {
+      return 'Proforma products are not ready.';
+    }
+    if (paymentReceiptImages.isEmpty &&
+        !_hasExistingPaymentSlip) {
+      return 'At least one payment slip is required.';
+    }
+    if (selectpaystatus == 'Paid' || selectpaystatus == 'credit') {
+      if (selectpaymethod.isEmpty) return 'Please select a payment method.';
+      if (selectedbankId == null) return 'Please select a bank.';
+    }
+    if (selectpaystatus == 'COD') {
+      if (selectcodtype != 'FULL_COD' && selectcodtype != 'PARTIAL_COD') {
+        return 'Please select COD type.';
+      }
+      final amount = double.tryParse(codamountcontroller.text.trim());
+      if (amount == null || !amount.isFinite || amount < 0) {
+        return 'Please enter a valid COD amount.';
+      }
+      if (selectcodtype == 'PARTIAL_COD') {
+        final advance = double.tryParse(advancecodamount.text.trim());
+        if (advance == null || !advance.isFinite || advance < 0) {
+          return 'Please enter a valid Advance COD amount.';
+        }
+      }
+    }
+    return null;
+  }
+
+  String _conversionErrorMessage(dynamic value) {
+    if (value is List) {
+      return value.map((item) {
+        if (item is Map && item['message'] != null) {
+          return '${item['product_name'] ?? item['product_id'] ?? 'Product'}: ${item['message']}';
+        }
+        return _conversionErrorMessage(item);
+      }).join(' | ');
+    }
+    if (value is Map) {
+      if (value['errors'] != null) return _conversionErrorMessage(value['errors']);
+      return value.entries.map((entry) =>
+          '${entry.key}: ${_conversionErrorMessage(entry.value)}').join(' | ');
+    }
+    return value?.toString() ?? 'Order creation failed.';
+  }
+  bool _isConversionDialogOpen = false;
+  final ValueNotifier<bool> _conversionBusy = ValueNotifier<bool>(false);
 
 
   Future<void> _selectPaymentReceiptImages() async {
@@ -299,7 +515,6 @@ final TextEditingController accountsNoteController =
     if (selectedImages.isEmpty || !mounted) return;
 
     setState(() {
-      paymentReceiptImagesUploaded = false;
 
       for (final image in selectedImages) {
         final alreadyAdded = paymentReceiptImages.any(
@@ -318,7 +533,6 @@ final TextEditingController accountsNoteController =
 
     setState(() {
       paymentReceiptImages.removeAt(index);
-      paymentReceiptImagesUploaded = false;
     });
   }
 
@@ -346,69 +560,6 @@ final TextEditingController accountsNoteController =
     }
   }
 
-  Future<void> addimages(BuildContext scaffoldContext) async {
-    if (isUploadingReceiptImages) return;
-
-    if (paymentReceiptImages.isEmpty) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFD92D20),
-          content: Text(
-            'Please select at least one payment receipt image.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      isUploadingReceiptImages = true;
-      paymentReceiptImagesUploaded = false;
-    });
-
-    try {
-      for (final XFile image in paymentReceiptImages) {
-        await image.readAsBytes();
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        paymentReceiptImagesUploaded = true;
-      });
-
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF027A48),
-          content: Text(
-            'Receipt images are ready. You can now generate the invoice.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        paymentReceiptImagesUploaded = false;
-      });
-
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFFD92D20),
-          content: Text(
-            error.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          isUploadingReceiptImages = false;
-        });
-      }
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -418,6 +569,7 @@ final TextEditingController accountsNoteController =
   var dep;
   void initdata() async {
     dep = await getdepFromPrefs();
+    if (!mounted) return;
 
     selectedFamilyId = famid;
 
@@ -435,7 +587,7 @@ final TextEditingController accountsNoteController =
     try {
       final token = await gettokenFromPrefs();
 
-      final response = await http.get(
+      final response = await _debugGet(
         Uri.parse('$api/api/parcal/service/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -471,6 +623,7 @@ final TextEditingController accountsNoteController =
         );
       }
     } catch (error) {
+      _printDetails('PAGE ERROR', error.toString());
       debugPrint('Courier service fetch error: $error');
     }
   }
@@ -478,7 +631,7 @@ final TextEditingController accountsNoteController =
   Future<void> getstate() async {
     try {
       final token = await gettokenFromPrefs();
-      var response = await http.get(
+      var response = await _debugGet(
         Uri.parse('$api/api/states/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -497,11 +650,13 @@ final TextEditingController accountsNoteController =
                 })
             .toList();
 
+        if (!mounted) return;
         setState(() {
           stat = statelist;
         });
       }
-    } catch (error) {}
+    } catch (error) {
+      _printDetails('PAGE ERROR', error.toString());}
   }
 
   String getStateNameById(int stateId) {
@@ -514,9 +669,15 @@ final TextEditingController accountsNoteController =
 
   List<Map<String, dynamic>> perfomaItemsWithImages = [];
   Future<void> fetchperformalistData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingConversionData = true;
+      _conversionDataError = null;
+      _proformaReady = false;
+    });
     try {
       final token = await gettokenFromPrefs();
-      final response = await http.get(
+      final response = await _debugGet(
         Uri.parse('$api/api/perfoma/${widget.invoice}/invoice/'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -543,8 +704,19 @@ final TextEditingController accountsNoteController =
                 }).toList() ??
                 [];
 
-        // Get state name from ID
-        final stateName = getStateNameById(parsed['state']);
+        if (perfomaItemsWithImages.isEmpty) {
+          throw Exception('No proforma products available to convert.');
+        }
+        for (final item in perfomaItemsWithImages) {
+          final quantity = int.tryParse(item['quantity']?.toString() ?? '');
+          if (item['product'] == null || quantity == null || quantity <= 0) {
+            throw Exception('The proforma contains an invalid product or quantity.');
+          }
+        }
+        final savedTotal = double.tryParse(parsed['total_amount']?.toString() ?? '');
+        if (savedTotal == null || !savedTotal.isFinite || savedTotal < 0) {
+          throw Exception('The proforma total is invalid.');
+        }
 
         performaInvoiceList.add({
           'id': parsed['id'],
@@ -558,9 +730,9 @@ final TextEditingController accountsNoteController =
           'family': parsed['family'],
           'state': parsed['state'], // Use state name instead of ID
           'address': parsed['billing_address']?['address'] ?? 'Unknown',
-          'billing_id': parsed['billing_address']['id'],
+          'billing_id': parsed['billing_address']?['id'],
           'payment_status': parsed['payment_status'],
-          'bank': parsed['bank']?['name'] ?? 'Unknown',
+          'bank': parsed['bank'] is Map ? parsed['bank']['name'] : parsed['bank'],
           'payment_method': parsed['payment_method'],
           'status': parsed['status'],
           'total_amount': parsed['total_amount'],
@@ -574,203 +746,37 @@ final TextEditingController accountsNoteController =
 
         setState(() {
           orders = performaInvoiceList;
+          _printDetails('MAPPED PROFORMA AND PRODUCTS', {
+            'orders': orders,
+            'products': perfomaItemsWithImages,
+            'product_line_count': perfomaItemsWithImages.length,
+          });
+          accountsNoteController.text =
+              (parsed['note'] ?? parsed['accounts_note'] ?? '').toString();
+          parcelServiceNoteController.text =
+              (parsed['parcel_note'] ?? parsed['parcel_service_note'] ?? '').toString();
+          final courier = parsed['parcel_service'];
+          selectedCourierServiceId = int.tryParse(
+              (courier is Map ? courier['id'] : courier)?.toString() ?? '');
         });
 
-        await _prepareProformaCart(perfomaItemsWithImages);
+        await _fetchProformaPaymentSlips(parsed['id']);
+        if (mounted) setState(() => _proformaReady = true);
       } else {
-        // Handle error response
+        throw Exception('Unable to load proforma details.');
       }
     } catch (error) {
-      // Handle exception
+      _printDetails('PAGE ERROR', error.toString());
+      if (mounted) setState(() => _conversionDataError = error.toString());
+    } finally {
+      if (mounted) setState(() => _isLoadingConversionData = false);
     }
   }
-
-  Future<void> _prepareProformaCart(
-    List<Map<String, dynamic>> proformaItems,
-  ) async {
-    try {
-      await _clearExistingCart();
-      await addtocart(proformaItems);
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFFD92D20),
-          content: Text(
-            'Unable to prepare proforma products: $error',
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _clearExistingCart() async {
-    final String? token = await gettokenFromPrefs();
-
-    if (token == null || token.trim().isEmpty) {
-      throw Exception('Authentication token not found.');
-    }
-
-    final http.Response response = await _auditMutation('DELETE', 'proforma_cart_cleared', 
-      Uri.parse('$api/api/cart/delete/all/'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode != 200 &&
-        response.statusCode != 202 &&
-        response.statusCode != 204) {
-      String message = 'Unable to clear the existing cart.';
-
-      try {
-        final dynamic decoded = jsonDecode(response.body);
-
-        if (decoded is Map) {
-          message = decoded['message']?.toString() ??
-              decoded['detail']?.toString() ??
-              decoded['error']?.toString() ??
-              message;
-        }
-      } catch (_) {}
-
-      throw Exception(message);
-    }
-
-    if (mounted) {
-      setState(() {
-        cartdata = [];
-        total = 0.0;
-      });
-    }
-  }
-
- Future<void> addtocart(
-  List<Map<String, dynamic>> proformaItems,
-) async {
-  final String? token = await gettokenFromPrefs();
-
-  if (token == null || token.trim().isEmpty) {
-    throw Exception(
-      'Authentication token not found.',
-    );
-  }
-
-  for (final Map<String, dynamic> item
-      in proformaItems) {
-    final dynamic productId =
-        item['product'];
-
-    final int quantity =
-        int.tryParse(
-          (item['quantity'] ?? 0).toString(),
-        ) ??
-        0;
-
-    // IMPORTANT:
-    // This is the saved/edited Proforma price.
-    final double proformaPrice =
-        _parseAmount(
-          item['actual_price'],
-        );
-
-    final double discount =
-        _parseAmount(
-          item['discount'],
-        );
-
-    if (productId == null ||
-        quantity <= 0) {
-      throw Exception(
-        'Invalid product or quantity in the selected proforma.',
-      );
-    }
-
-    if (proformaPrice < 0) {
-      throw Exception(
-        'Invalid product price in the selected proforma.',
-      );
-    }
-
-    final Map<String, dynamic> payload = {
-      'product': productId,
-      'quantity': quantity,
-
-      // Preserve edited Proforma price
-      'price': proformaPrice,
-    };
-
-    debugPrint(
-      'PROFORMA TO ORDER CART PAYLOAD: '
-      '${jsonEncode(payload)}',
-    );
-
-    final http.Response response =
-        await _auditMutation('POST', 'proforma_product_added_to_cart', 
-      Uri.parse(
-        '$api/api/cart/product/excel/',
-      ),
-      headers: {
-        'Content-Type':
-            'application/json',
-        'Authorization':
-            'Bearer $token',
-      },
-      body: jsonEncode(
-        payload,
-      ),
-    );
-
-    debugPrint(
-      'PROFORMA TO ORDER CART STATUS: '
-      '${response.statusCode}',
-    );
-
-    debugPrint(
-      'PROFORMA TO ORDER CART RESPONSE: '
-      '${response.body}',
-    );
-
-    if (response.statusCode != 200 &&
-        response.statusCode != 201) {
-      String message =
-          'Unable to add a proforma product to the cart.';
-
-      try {
-        final dynamic decoded =
-            jsonDecode(
-          response.body,
-        );
-
-        if (decoded is Map) {
-          message =
-              decoded['message']
-                      ?.toString() ??
-                  decoded['detail']
-                      ?.toString() ??
-                  decoded['error']
-                      ?.toString() ??
-                  message;
-        }
-      } catch (_) {}
-
-      throw Exception(
-        message,
-      );
-    }
-  }
-
-  await fetchCartData();
-}
-
-
 
   Future<void> ordercreate(
     BuildContext scaffoldContext,
   ) async {
-    if (isCreatingOrder) return;
+    if (!mounted || isCreatingOrder) return;
 
     if (orders.isEmpty) {
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
@@ -784,82 +790,62 @@ final TextEditingController accountsNoteController =
       return;
     }
 
-    if (paymentReceiptImages.isEmpty) {
+    final validationError = _conversionValidationError();
+    _printDetails('SUBMISSION VALIDATION', {
+      'error': validationError,
+      'proforma_ready': _proformaReady,
+      'loading': _isLoadingConversionData,
+      'load_error': _conversionDataError,
+      'selected_image_count': paymentReceiptImages.length,
+      'existing_slip_count': proformaPaymentSlips.length,
+    });
+    if (validationError != null) {
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFD92D20),
-          content: Text(
-            'Please select at least one payment receipt image.',
-          ),
-        ),
+        SnackBar(content: Text(validationError), backgroundColor: Colors.red),
       );
       return;
     }
 
-    if (!paymentReceiptImagesUploaded) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFD92D20),
-          content: Text(
-            'Please click Upload Receipt Images before generating the invoice.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final String? token = await gettokenFromPrefs();
-
-    if (token == null || token.trim().isEmpty) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFD92D20),
-          content: Text('Authentication token not found.'),
-        ),
-      );
-      return;
-    }
-
-    final String? warehouseId = _resolveWarehouseId();
-
-    if (warehouseId == null || warehouseId.trim().isEmpty) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFD92D20),
-          content: Text('Warehouse information is missing.'),
-        ),
-      );
-      return;
-    }
-
-    if (selectpaymethod == 'Bank Transfer' && selectedbankId == null) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFD92D20),
-          content: Text('Please select the bank used for payment.'),
-        ),
-      );
-      return;
-    }
-
+    // Lock synchronously before the first await so rapid taps cannot race.
     setState(() {
       isCreatingOrder = true;
     });
+    _conversionBusy.value = true;
+    bool orderCreated = false;
 
     try {
-      String? codStatusToSend;
+      final String? token = await gettokenFromPrefs();
+      if (!mounted) return;
 
-      if (selectcodtype != 'select type') {
-        codStatusToSend = selectcodtype;
+      if (token == null || token.trim().isEmpty) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFFD92D20),
+            content: Text('Authentication token not found.'),
+          ),
+        );
+        return;
       }
 
-      final double totalAmount = _parseAmount(
-        orders.first['total_amount'],
-      );
+      final String? warehouseId = _resolveWarehouseId();
+
+      if (warehouseId == null || warehouseId.trim().isEmpty) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFFD92D20),
+            content: Text('Warehouse information is missing.'),
+          ),
+        );
+        return;
+      }
+
+      final String? codStatusToSend =
+          selectpaystatus == 'COD' ? selectcodtype : null;
+      final double totalAmount = _parseAmount(orders.first['total_amount']);
 
       final http.MultipartRequest request = http.MultipartRequest(
         'POST',
-        Uri.parse('$api/api/order/create/new/'),
+        Uri.parse('$api/api/order/create/performa/'),
       );
 
       request.headers['Authorization'] = 'Bearer $token';
@@ -879,7 +865,7 @@ final TextEditingController accountsNoteController =
         'order_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
         'status': 'Invoice Created',
         'payment_status': _paymentStatusForApi(),
-        'payment_method': selectpaymethod,
+        if (selectpaymethod.isNotEmpty) 'payment_method': selectpaymethod,
       });
 
       if (selectedCourierServiceId != null) {
@@ -912,6 +898,16 @@ final TextEditingController accountsNoteController =
         }
       }
 
+      // Repeated text parts preserve every ID, matching React FormData.append.
+      for (final slip in proformaPaymentSlips) {
+        if (slip['id'] != null) {
+          request.files.add(http.MultipartFile.fromString(
+            'proforma_payment_slip_ids', slip['id'].toString(),
+          ));
+        }
+      }
+      request.fields.removeWhere((key, value) => value.isEmpty);
+
       for (int index = 0;
           index < paymentReceiptImages.length;
           index++) {
@@ -937,6 +933,7 @@ final TextEditingController accountsNoteController =
 
       if (response.statusCode == 200 ||
           response.statusCode == 201) {
+        orderCreated = true;
         dynamic createdOrderData;
         dynamic createdOrderId;
 
@@ -982,10 +979,12 @@ final TextEditingController accountsNoteController =
           final dynamic decoded = jsonDecode(response.body);
 
           if (decoded is Map) {
-            message = decoded['message']?.toString() ??
+            message = decoded['errors'] != null
+                ? _conversionErrorMessage(decoded['errors'])
+                : decoded['message']?.toString() ??
                 decoded['detail']?.toString() ??
                 decoded['error']?.toString() ??
-                decoded.toString();
+                _conversionErrorMessage(decoded);
           }
         } catch (_) {
           if (response.body.trim().isNotEmpty) {
@@ -1001,6 +1000,7 @@ final TextEditingController accountsNoteController =
         );
       }
     } catch (error) {
+      _printDetails('PAGE ERROR', error.toString());
       if (!mounted) return;
 
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
@@ -1010,10 +1010,12 @@ final TextEditingController accountsNoteController =
         ),
       );
     } finally {
-      if (mounted) {
+      // Allow retry after failure; retain the lock after confirmed success.
+      if (mounted && !orderCreated) {
         setState(() {
           isCreatingOrder = false;
         });
+        _conversionBusy.value = false;
       }
     }
   }
@@ -1061,24 +1063,6 @@ final TextEditingController accountsNoteController =
     return warehouseValue.toString();
   }
 
-  double _calculateCartTotal() {
-    double calculatedTotal = 0.0;
-
-    for (final item in cartdata) {
-      final double discountPerQuantity =
-          double.tryParse((item['discount'] ?? 0).toString()) ?? 0.0;
-      final int quantity =
-          int.tryParse((item['quantity'] ?? 0).toString()) ?? 0;
-      final double price =
-          double.tryParse((item['price'] ?? 0).toString()) ?? 0.0;
-
-      calculatedTotal +=
-          (quantity * price) - (quantity * discountPerQuantity);
-    }
-
-    return calculatedTotal;
-  }
-
   Future<String?> getwarehouseFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     int? warehouseId = prefs.getInt('warehouse');
@@ -1111,7 +1095,7 @@ final TextEditingController accountsNoteController =
   Future<void> getbank() async {
     final token = await gettokenFromPrefs();
     try {
-      final response = await http.get(Uri.parse('$api/api/banks/'), headers: {
+      final response = await _debugGet(Uri.parse('$api/api/banks/'), headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       });
@@ -1129,71 +1113,13 @@ final TextEditingController accountsNoteController =
             'branch': productData['branch']
           });
         }
+        if (!mounted) return;
         setState(() {
           bank = banklist;
         });
       }
-    } catch (e) {}
-  }
-
-  Future<void> fetchCartData() async {
-    try {
-      final token = await gettokenFromPrefs();
-
-      final response = await http.get(
-        Uri.parse("$api/api/cart/products/"),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final parsed = jsonDecode(response.body);
-        final List<dynamic> cartsData = parsed['data'];
-        List<Map<String, dynamic>> cartList = [];
-
-        double total = 0.0; // Initialize total here
-
-        for (var cartData in cartsData) {
-          // Safely handle the null value for image
-          String imageUrl = cartData['image'] ??
-              'default_image_url'; // Provide a default value or a placeholder URL
-
-          cartList.add({
-            'id': cartData['id'],
-            'name': cartData['name'],
-            'image': imageUrl,
-            'slug': cartData['slug'],
-            'size': cartData['size'],
-            'quantity': cartData['quantity'],
-            'price': cartData['price'],
-            'discount': cartData['discount'],
-          });
-        }
-
-        setState(() {
-          cartdata = cartList;
-
-          // Calculate total
-          for (var item in cartdata) {
-            final discountPerQuantity = item['discount'] ?? 0.0;
-            final quantity = int.tryParse(item['quantity'].toString()) ??
-                0; // Ensure it's an integer
-            final price = double.tryParse(item['price'].toString()) ??
-                0.0; // Ensure it's a double
-            final totalItemPrice = quantity * price;
-            final totalDiscount = quantity * discountPerQuantity;
-            total += totalItemPrice - totalDiscount;
-          }
-        });
-
-        // Call the function to show total in a dialog box
-      } else {
-        throw Exception('Failed to load cart data');
-      }
-    } catch (error) {
-      // Consider adding error handling in the UI
-    }
+    } catch (e) {
+      _printDetails('PAGE ERROR', e.toString());}
   }
 
   var tot;
@@ -1204,6 +1130,7 @@ final TextEditingController accountsNoteController =
   }
 
   void showTotalDialog(BuildContext pageContext) {
+    if (!mounted || isCreatingOrder || _isConversionDialogOpen) return;
     if (orders.isEmpty) {
       ScaffoldMessenger.of(pageContext).showSnackBar(
         const SnackBar(
@@ -1216,6 +1143,7 @@ final TextEditingController accountsNoteController =
       return;
     }
 
+    _isConversionDialogOpen = true;
     double totalItemPrice = 0.0;
     double totalDiscount = 0.0;
 
@@ -1229,16 +1157,8 @@ final TextEditingController accountsNoteController =
       totalDiscount += quantity * discountPerQuantity;
     }
 
-    final double proformaTotal = _parseAmount(
-      orders.first['total_amount'],
-    );
-
-    final double calculatedNetAmount =
-        totalItemPrice - totalDiscount;
-
-    final double netAmount = proformaTotal > 0
-        ? proformaTotal
-        : calculatedNetAmount;
+    // Match the backend: the saved proforma total is authoritative.
+    final double netAmount = _parseAmount(orders.first['total_amount']);
 
     setState(() {
       tot = netAmount;
@@ -1246,9 +1166,14 @@ final TextEditingController accountsNoteController =
 
     showDialog<void>(
       context: pageContext,
-      barrierDismissible: !isCreatingOrder,
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
+        return ValueListenableBuilder<bool>(
+          valueListenable: _conversionBusy,
+          builder: (context, busy, child) {
+            return PopScope(
+              canPop: !busy,
+              child: AlertDialog(
           title: const Text('Proforma Total'),
           content: SizedBox(
             width: 300,
@@ -1278,7 +1203,7 @@ final TextEditingController accountsNoteController =
                 Row(
                   children: [
                     const Text(
-                      'Net Amount:',
+                      'Proforma Total:',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                       ),
@@ -1297,7 +1222,7 @@ final TextEditingController accountsNoteController =
           ),
           actions: <Widget>[
             TextButton(
-              onPressed: isCreatingOrder
+              onPressed: busy
                   ? null
                   : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
@@ -1309,16 +1234,21 @@ final TextEditingController accountsNoteController =
                   foregroundColor: Colors.white,
                   backgroundColor: Colors.blue,
                 ),
-                onPressed: isCreatingOrder
+                onPressed: busy
                     ? null
                     : () => ordercreate(dialogContext),
-                child: const Text('OK'),
+                child: Text(busy ? 'Creating...' : 'OK'),
               ),
             ),
           ],
+              ),
+            );
+          },
         );
       },
-    );
+    ).whenComplete(() {
+      _isConversionDialogOpen = false;
+    });
   }
 
   String? selectedValue;
@@ -1327,6 +1257,7 @@ final TextEditingController accountsNoteController =
 
 @override
 void dispose() {
+  _conversionBusy.dispose();
   textEditingController.dispose();
   searchController.dispose();
   codamountcontroller.dispose();
@@ -1562,69 +1493,16 @@ void dispose() {
     );
   }
 
-  void _handleGenerateInvoice() async {
-    if (paymentReceiptImages.isEmpty) {
+  void _handleGenerateInvoice() {
+    if (isCreatingOrder || _isConversionDialogOpen) return;
+    final error = _conversionValidationError();
+    _printDetails('GENERATE INVOICE VALIDATION', {'error': error});
+    if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Please select payment receipt images.",
-          ),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(error), backgroundColor: Colors.red),
       );
       return;
     }
-
-    if (!paymentReceiptImagesUploaded) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Please upload the selected payment receipt images.",
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (selectpaystatus == "COD") {
-      if (codamountcontroller.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Please enter COD amount"),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-    }
-
-    if (selectpaystatus == "COD") {
-      if (selectcodtype == "PARTIAL_COD") {
-        if (advancecodamount.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Please enter Advance COD amount"),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-      }
-    }
-
-    if (selectpaystatus == "COD") {
-      if (selectcodtype == "select type") {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Please select COD type"),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-    }
-
     showTotalDialog(context);
   }
 
@@ -1829,6 +1707,16 @@ void dispose() {
                         if (value == null) return;
                         setState(() {
                           selectpaystatus = value;
+                          if (value == 'COD') {
+                            selectpaymethod = '';
+                            selectedbankId = null;
+                          } else {
+                            selectcodtype = 'select type';
+                            codamountcontroller.clear();
+                            advancecodamount.clear();
+                            selectpaymethod = 'Bank Transfer';
+                            if (bank.isNotEmpty) selectedbankId = bank.first['id'];
+                          }
                         });
                       },
                     ),
@@ -1884,7 +1772,7 @@ void dispose() {
                       ),
                     ],
 
-                    if (selectcodtype == "PARTIAL_COD") ...[
+                    if (selectpaystatus == "COD" && selectcodtype == "PARTIAL_COD") ...[
                       const SizedBox(height: 16),
                       _fieldLabel("Advance COD Amount", required: true),
                       TextField(
@@ -1939,7 +1827,7 @@ void dispose() {
                     const SizedBox(height: 16),
                     _fieldLabel("Payment Method", required: true),
                     DropdownButtonFormField<String>(
-                      value: selectpaymethod,
+                      value: selectpaymethod.isEmpty ? null : selectpaymethod,
                       isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       decoration: _professionalInputDecoration(
@@ -1972,7 +1860,9 @@ void dispose() {
 
                          _fieldLabel("Courier Service"),
                     DropdownButtonFormField<int>(
-                      value: selectedCourierServiceId,
+                      value: courierdata.any((service) =>
+                              service['id'] == selectedCourierServiceId)
+                          ? selectedCourierServiceId : null,
                       isExpanded: true,
                       icon: const Icon(
                         Icons.keyboard_arrow_down_rounded,
@@ -2051,6 +1941,21 @@ const SizedBox(height: 16),
                       "Payment Receipt Images",
                       required: true,
                     ),
+                    if (_isLoadingConversionData)
+                      const LinearProgressIndicator(),
+                    if (_conversionDataError != null)
+                      Text(_conversionDataError!, style: const TextStyle(color: Colors.red)),
+                    if (proformaPaymentSlips.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          '${proformaPaymentSlips.length} existing proforma payment slip(s) will be attached.',
+                          style: const TextStyle(color: Color(0xFF027A48)),
+                        ),
+                      ),
+                      _buildExistingPaymentSlipPreviews(),
+                      const SizedBox(height: 14),
+                    ],
                     InkWell(
                       borderRadius: BorderRadius.circular(14),
                       onTap: _selectPaymentReceiptImages,
@@ -2136,8 +2041,7 @@ const SizedBox(height: 16),
                             onPressed: () {
                               setState(() {
                                 paymentReceiptImages.clear();
-                                paymentReceiptImagesUploaded = false;
-                              });
+                                                        });
                             },
                             child: const Text("Remove all"),
                           ),
@@ -2223,73 +2127,17 @@ const SizedBox(height: 16),
                         },
                       ),
                       const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: ElevatedButton.icon(
-                          onPressed: isUploadingReceiptImages
-                              ? null
-                              : () => addimages(context),
-                          icon: isUploadingReceiptImages
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Icon(
-                                  paymentReceiptImagesUploaded
-                                      ? Icons.check_circle_outline_rounded
-                                      : Icons.cloud_upload_outlined,
-                                  size: 20,
-                                ),
-                          label: Text(
-                            isUploadingReceiptImages
-                                ? "Uploading Images..."
-                                : paymentReceiptImagesUploaded
-                                    ? "Images Uploaded"
-                                    : "Upload Receipt Images",
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            backgroundColor:
-                                paymentReceiptImagesUploaded
-                                    ? const Color(0xFF027A48)
-                                    : const Color(0xFF7F56D9),
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor:
-                                const Color(0xFFBDB4FE),
-                            disabledForegroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Payment receipt images are required.",
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFFD92D20),
-                        ),
-                      ),
                     ],
 
                     const SizedBox(height: 24),
                     SizedBox(
                       height: 54,
                       child: ElevatedButton.icon(
-                        onPressed: paymentReceiptImagesUploaded &&
-                                !isUploadingReceiptImages &&
-                                !isCreatingOrder
+                        onPressed: !_isLoadingConversionData &&
+                                _conversionDataError == null &&
+                                _proformaReady && !isCreatingOrder &&
+                                (paymentReceiptImages.isNotEmpty ||
+                                    _hasExistingPaymentSlip)
                             ? _handleGenerateInvoice
                             : null,
                         icon: isCreatingOrder
@@ -2301,18 +2149,11 @@ const SizedBox(height: 16),
                                   color: Colors.white,
                                 ),
                               )
-                            : Icon(
-                                paymentReceiptImagesUploaded
-                                    ? Icons.description_outlined
-                                    : Icons.lock_outline_rounded,
-                                size: 20,
-                              ),
+                            : const Icon(Icons.description_outlined, size: 20),
                         label: Text(
                           isCreatingOrder
                               ? "Creating Order..."
-                              : paymentReceiptImagesUploaded
-                                  ? "Generate Invoice"
-                                  : "Upload Receipt Images First",
+                              : "Generate Invoice",
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
