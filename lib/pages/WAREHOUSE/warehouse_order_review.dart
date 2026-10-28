@@ -31,6 +31,27 @@ class WarehouseOrderReview extends StatefulWidget {
 }
 
 class _WarehouseOrderReviewState extends State<WarehouseOrderReview> {
+  bool _departmentPermissionLoaded = false;
+  bool get _canModify => _departmentPermissionLoaded && dep != null &&
+      dep.toString().trim().isNotEmpty &&
+      dep.toString().trim().toUpperCase() != 'OPERATIONS';
+
+  Future<void> _loadDepartmentPermission() async {
+    final department = await getdepartment();
+    if (!mounted) return;
+    setState(() {
+      dep = department;
+      _departmentPermissionLoaded = true;
+    });
+  }
+
+  Future<bool> _allowMutation({bool allowOperations = false}) async {
+    final department = await getdepartment();
+    return mounted && department != null && department.trim().isNotEmpty &&
+        (allowOperations || department.trim().toUpperCase() != 'OPERATIONS');
+  }
+
+
 String getStatusDisplayName(dynamic status) {
   final String value = status?.toString().trim() ?? '';
 
@@ -132,6 +153,13 @@ String getStatusDisplayName(dynamic status) {
     Object? body,
     Encoding? encoding,
   }) async {
+    final isDeliveryNoteUnlock = method == 'POST' &&
+        action == 'delivery_note_unlocked' &&
+        uri == Uri.parse('$api/api/orders/unlock/${widget.id}/');
+    if (!await _allowMutation(allowOperations: isDeliveryNoteUnlock)) {
+      throw StateError('OPERATIONS has read-only access.');
+    }
+
     final before = _auditSnapshot();
     dynamic submitted = body;
     if (body is String) {
@@ -167,6 +195,8 @@ String getStatusDisplayName(dynamic status) {
   }
 
   Future<http.Response> _auditMultipart(http.MultipartRequest request, String action) async {
+    if (!await _allowMutation()) throw StateError('OPERATIONS has read-only access.');
+
     final before = _auditSnapshot();
     final submitted = <String, dynamic>{
       'fields': Map<String, String>.from(request.fields),
@@ -218,6 +248,7 @@ String getStatusDisplayName(dynamic status) {
   @override
   void initState() {
     super.initState();
+    _loadDepartmentPermission();
     initData();
     getbank();
     getimage();
@@ -338,6 +369,8 @@ String getStatusDisplayName(dynamic status) {
   }
 
   void addimages(BuildContext context) async {
+    if (!await _allowMutation()) return;
+
     final token = await getTokenFromPrefs();
 
     try {
@@ -394,6 +427,8 @@ String getStatusDisplayName(dynamic status) {
   }
 
   Future<void> deleteimage(var Id) async {
+    if (!await _allowMutation()) return;
+
     try {
       final token = await getTokenFromPrefs();
 
@@ -627,6 +662,7 @@ String getStatusDisplayName(dynamic status) {
   'Shipped',
 ];
 List<String> getAvailableOrderStatuses() {
+  if (!_canModify) return <String>[];
   final String currentStatus =
       ord?['status']?.toString().trim() ?? '';
 
@@ -699,6 +735,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
  Future<void> unlockorder(var id) async {
+    if (!await _allowMutation(allowOperations: true)) return;
+
   final token = await getTokenFromPrefs();
 
   try {
@@ -783,6 +821,8 @@ List<String> getAvailableOrderStatuses() {
   Future<void> updatestatus({
     String? deliveryReturnReason,
   }) async {
+    if (!await _allowMutation()) return;
+
     try {
       final token = await getTokenFromPrefs();
 
@@ -862,6 +902,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
   Future<void> _handleStatusUpdate() async {
+    if (!await _allowMutation()) return;
+
     if (selectedOrderStatus == null || selectedOrderStatus!.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -889,6 +931,7 @@ List<String> getAvailableOrderStatuses() {
             'Delivery Return Reason',
           ),
           content: TextField(
+                          readOnly: !_canModify,
             controller: deliveryReturnReasonController,
             autofocus: true,
             maxLines: 4,
@@ -948,6 +991,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
   Future<void> updatecount() async {
+    if (!await _allowMutation()) return;
+
     try {
       final token = await getTokenFromPrefs();
 
@@ -1070,6 +1115,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
   Future<void> updateverifiedby(var orderId, selectedManagerId) async {
+    if (!await _allowMutation()) return;
+
     try {
       ;
       final token = await getTokenFromPrefs();
@@ -1119,6 +1166,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
   Future<void> updateboxstatus(var orderId) async {
+    if (!await _allowMutation()) return;
+
     try {
       final token = await getTokenFromPrefs();
 
@@ -1166,6 +1215,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
   Future<void> deletebox(var orderId) async {
+    if (!await _allowMutation()) return;
+
     try {
       ;
       final token = await getTokenFromPrefs();
@@ -1354,12 +1405,12 @@ List<String> getAvailableOrderStatuses() {
                         ),
                       );
                     }).toList(),
-                    onChanged: (val) {
+                    onChanged: _canModify ? (val) {
                       setState(() {
                         selectedManagerName = val!['name'];
                         selectedManagerId = val['id'];
                       });
-                    },
+                    } : null,
                     decoration: const InputDecoration(
                       labelText: 'Verify By',
                       border: OutlineInputBorder(),
@@ -1377,10 +1428,10 @@ List<String> getAvailableOrderStatuses() {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              onPressed: () {
+              onPressed: _canModify ? () {
                 updateverifiedby(boxDetails['id'], selectedManagerId);
                 Navigator.of(context).pop();
-              },
+              } : null,
               child: const Text('Save', style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -1390,6 +1441,8 @@ List<String> getAvailableOrderStatuses() {
   }
 
   void Editbox(var order, BuildContext context) {
+    if (!_canModify) return;
+
     updatebox.text = order['box'] ?? '';
     length.text = order['length']?.toString() ?? '';
     breadth.text = order['breadth']?.toString() ?? '';
@@ -1461,6 +1514,7 @@ selectedBoxStatus = order['status']?.toString();
 
                   // Length & Breadth Fields
                   TextField(
+                          readOnly: !_canModify,
                     controller: updatebox,
                     decoration: InputDecoration(
                       labelText: 'Boxes',
@@ -1475,6 +1529,7 @@ selectedBoxStatus = order['status']?.toString();
                     children: [
                       Expanded(
                         child: TextField(
+                          readOnly: !_canModify,
                           controller: length,
                           decoration: InputDecoration(
                             labelText: 'Length',
@@ -1490,6 +1545,7 @@ selectedBoxStatus = order['status']?.toString();
                       SizedBox(width: 8),
                       Expanded(
                         child: TextField(
+                          readOnly: !_canModify,
                           controller: breadth,
                           decoration: InputDecoration(
                             labelText: 'Breadth',
@@ -1511,6 +1567,7 @@ selectedBoxStatus = order['status']?.toString();
                     children: [
                       Expanded(
                         child: TextField(
+                          readOnly: !_canModify,
                           controller: height,
                           decoration: InputDecoration(
                             labelText: 'Height',
@@ -1526,6 +1583,7 @@ selectedBoxStatus = order['status']?.toString();
                       SizedBox(width: 8),
                       Expanded(
                         child: TextField(
+                          readOnly: !_canModify,
                           controller: weight,
                           decoration: const InputDecoration(
                             labelText: 'Weight(g)',
@@ -1575,11 +1633,11 @@ selectedBoxStatus = order['status']?.toString();
                           child: Text(item['name']),
                         );
                       }).toList(),
-                      onChanged: (value) {
+                      onChanged: _canModify ? (value) {
                         setState(() {
                           selectedserviceId = value;
                         });
-                      },
+                      } : null,
                     ),
                   ),
                   SizedBox(height: 8),
@@ -1611,11 +1669,11 @@ selectedBoxStatus = order['status']?.toString();
                         child: Text(getStatusDisplayName(status)),
                       );
                     }).toList(),
-                    onChanged: (value) {
+                    onChanged: _canModify ? (value) {
                       setState(() {
                         selectedBoxStatus = value;
                       });
-                    },
+                    } : null,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Status',
@@ -1684,7 +1742,7 @@ selectedBoxStatus = order['status']?.toString();
                 onPressed: () => Navigator.pop(context),
               ),
               ElevatedButton(
-               onPressed: () async {
+               onPressed: _canModify ? () async {
   Navigator.pop(context);
 
   await updateOrderParcelService();
@@ -1696,7 +1754,7 @@ selectedBoxStatus = order['status']?.toString();
     selectedDate,
     context,
   );
-},
+} : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue, // 👈 Button color
                   foregroundColor: Colors.white, // 👈 Text/icon color
@@ -1722,6 +1780,8 @@ selectedBoxStatus = order['status']?.toString();
     DateTime selectedDate,
     BuildContext scaffoldContext,
   ) async {
+    if (!await _allowMutation()) return;
+
     final token = await getTokenFromPrefs();
     try {
       var request =
@@ -1804,6 +1864,8 @@ selectedBoxStatus = order['status']?.toString();
   }
 
  Future<bool> updateOrderParcelService() async {
+    if (!await _allowMutation()) return false;
+
   try {
     final token = await getTokenFromPrefs();
 
@@ -1875,6 +1937,8 @@ selectedBoxStatus = order['status']?.toString();
     DateTime selectedDate,
     BuildContext scaffoldContext,
   ) async {
+    if (!await _allowMutation()) return;
+
     final token = await getTokenFromPrefs();
 
     try {
@@ -1980,6 +2044,8 @@ selectedBoxStatus = order['status']?.toString();
   }
 
   void showStatusDialog(BuildContext context, var order) {
+    if (!_canModify) return;
+
     selectedBoxStatus = order['status']?.toString();
 
     showDialog(
@@ -1999,12 +2065,12 @@ selectedBoxStatus = order['status']?.toString();
                     child: Text(getStatusDisplayName(status)),
                   );
                 }).toList(),
-                onChanged: (value) {
+                onChanged: _canModify ? (value) {
                   setState(() {
                     selectedBoxStatus =
                         value; // Box status selection
                   });
-                },
+                } : null,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(),
                 ),
@@ -2013,11 +2079,11 @@ selectedBoxStatus = order['status']?.toString();
               Padding(
                 padding: const EdgeInsets.only(left: 12),
                 child: ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: _canModify ? () async {
                     await updateboxstatus(order['id']);
                     Navigator.of(context)
                         .pop(); // Close the dialog after saving
-                  },
+                  } : null,
                   label: Text("Save"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue, // Button color
@@ -2034,6 +2100,8 @@ selectedBoxStatus = order['status']?.toString();
   }
 
   void showAddDialog(BuildContext context) {
+    if (!_canModify) return;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -2056,6 +2124,7 @@ selectedBoxStatus = order['status']?.toString();
                   ),
                 ),
                 TextField(
+                          readOnly: !_canModify,
                   controller: amountController,
                   decoration: InputDecoration(labelText: 'Amount'),
                   keyboardType: TextInputType.number,
@@ -2068,11 +2137,11 @@ selectedBoxStatus = order['status']?.toString();
                             child: Text(bankItem['name']),
                           ))
                       .toList(),
-                  onChanged: (value) {
+                  onChanged: _canModify ? (value) {
                     setState(() {
                       selectedBank = value; // Update selected bank
                     });
-                  },
+                  } : null,
                   decoration: InputDecoration(labelText: 'Bank'),
                 ),
                 TextField(
@@ -2091,6 +2160,7 @@ selectedBoxStatus = order['status']?.toString();
                 ),
 
                 TextField(
+                          readOnly: !_canModify,
                   controller: remarkController,
                   decoration: InputDecoration(labelText: 'Remark (optional)'),
                 ),
@@ -2105,11 +2175,11 @@ selectedBoxStatus = order['status']?.toString();
               },
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: _canModify ? () {
                 // Handle save action here
 
                 AddReceipt(context);
-              },
+              } : null,
               child: Text('Save'),
             ),
           ],
@@ -2148,6 +2218,8 @@ selectedBoxStatus = order['status']?.toString();
   }
 
   Future<void> updateaddress() async {
+    if (!await _allowMutation()) return;
+
     try {
       final token = await gettoken();
 
@@ -2309,6 +2381,8 @@ selectedBoxStatus = order['status']?.toString();
   Future<void> AddReceipt(
     BuildContext scaffoldContext,
   ) async {
+    if (!await _allowMutation()) return;
+
     final token = await gettoken();
     try {
       String formattedReceivedDate =
@@ -2475,6 +2549,8 @@ selectedBoxStatus = order['status']?.toString();
   }
 
   Future<void> removeproduct(int Id) async {
+    if (!await _allowMutation()) return;
+
     final token = await getTokenFromPrefs();
 
     try {
@@ -2504,12 +2580,16 @@ selectedBoxStatus = order['status']?.toString();
   }
 
   void removeProductindex(int index) {
+    if (!_canModify) return;
+
     setState(() {
       items.removeAt(index);
     });
   }
 
   void showPopupDialog(BuildContext context, Map<String, dynamic> item) {
+    if (!_canModify) return;
+
     TextEditingController quantityController =
         TextEditingController(text: item['quantity']?.toString() ?? '');
     TextEditingController discountController =
@@ -2532,6 +2612,7 @@ selectedBoxStatus = order['status']?.toString();
                 keyboardType: TextInputType.number,
               ),
               TextField(
+                          readOnly: !_canModify,
                 controller: discountController,
                 decoration: InputDecoration(
                     labelText: 'Discount (in Rs for each product)'),
@@ -2554,7 +2635,7 @@ selectedBoxStatus = order['status']?.toString();
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: () {
+              onPressed: _canModify ? () {
                 final quantity =
                     int.tryParse(quantityController.text) ?? item['quantity'];
                 final discount = double.tryParse(discountController.text) ??
@@ -2562,7 +2643,7 @@ selectedBoxStatus = order['status']?.toString();
 
                 updatedetails(item['id'], quantity, discount);
                 Navigator.of(context).pop();
-              },
+              } : null,
               child: Text('Save'),
             ),
           ],
@@ -2572,6 +2653,8 @@ selectedBoxStatus = order['status']?.toString();
   }
 
   Future<void> updatedetails(int id, int quantity, double discount) async {
+    if (!await _allowMutation()) return;
+
     try {
       final token = await getTokenFromPrefs();
       final response = await _auditMutation('PUT', 'order_item_updated', 
@@ -2761,9 +2844,10 @@ selectedBoxStatus = order['status']?.toString();
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () async {
+                    onPressed: _departmentPermissionLoaded && dep != null &&
+                        dep.toString().trim().isNotEmpty ? () async {
                       unlockorder(ord['id']);
-                    },
+                    } : null,
                     icon: Icon(Icons.download,
                         color: Colors.white), // Download icon
                     label: Text("Unlock Delivery Note"),
@@ -3508,6 +3592,7 @@ selectedBoxStatus = order['status']?.toString();
                         const SizedBox(height: 6),
 
                         TextField(
+                          readOnly: !_canModify,
                           controller: count,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
@@ -3528,10 +3613,10 @@ selectedBoxStatus = order['status']?.toString();
                           width: double.infinity,
                           height: 44,
                           child: ElevatedButton(
-                            onPressed: () {
+                            onPressed: _canModify ? () {
                               
                               updatecount();
-                            },
+                            } : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
@@ -3619,6 +3704,7 @@ selectedBoxStatus = order['status']?.toString();
 
                         SizedBox(height: 8),
                         TextField(
+                          readOnly: !_canModify,
                           controller: box,
                           decoration: InputDecoration(
                             labelText: 'Boxes',
@@ -3635,6 +3721,7 @@ selectedBoxStatus = order['status']?.toString();
                           children: [
                             Expanded(
                               child: TextField(
+                          readOnly: !_canModify,
                                 controller: transactionid,
                                 decoration: InputDecoration(
                                   labelText: 'Tracking Id',
@@ -3673,13 +3760,13 @@ selectedBoxStatus = order['status']?.toString();
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             ElevatedButton(
-                              onPressed: () {
+                              onPressed: _canModify ? () {
                                 
 
                                 addboxdetails(selectedImage, selectedImage2,
                                     selectedDate, context);
                                 //updatestatus();
-                              },
+                              } : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
                                     Colors.blue, // Button background color
@@ -3809,9 +3896,9 @@ selectedBoxStatus = order['status']?.toString();
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: Colors.blue,
                                               ),
-                                              onPressed: () {
+                                              onPressed: _canModify ? () {
                                                 Editbox(order, context);
-                                              },
+                                              } : null,
                                               child: Text('Views',
                                                   style: TextStyle(
                                                       color: Colors.white)),
@@ -3820,10 +3907,10 @@ selectedBoxStatus = order['status']?.toString();
                                             // Delete Button
                                             if (dep != "warehouse")
                                               GestureDetector(
-                                                onTap: () {
+                                                onTap: _canModify ? () {
                                                   deletebox(order['id']);
                                                   
-                                                },
+                                                } : null,
                                                 child: Image.asset(
                                                   "lib/assets/close.png",
                                                   height: 15,
@@ -4011,9 +4098,9 @@ selectedBoxStatus = order['status']?.toString();
 
                                         // Status
                                         GestureDetector(
-                                          onTap: () {
+                                          onTap: _canModify ? () {
                                             showStatusDialog(context, order);
-                                          },
+                                          } : null,
                                           child: Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.spaceBetween,

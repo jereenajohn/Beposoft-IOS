@@ -10,6 +10,7 @@ import 'package:beposoft/pages/ACCOUNTS/add_state.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_supervisor.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoice_report.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -343,7 +344,19 @@ else if(dep=="Warehouse Admin" ){
                 context,
                 MaterialPageRoute(builder: (context) => bdm_dashbord()), // Replace AnotherPage with your target page
               );
-      }
+      }else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }
       else if(dep=="warehouse" ){
          Navigator.pushReplacement(
                 context,

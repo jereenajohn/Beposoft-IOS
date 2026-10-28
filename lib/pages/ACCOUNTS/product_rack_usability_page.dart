@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -112,6 +113,9 @@ class _ProductRackUsabilityPageState extends State<ProductRackUsabilityPage> {
         break;
       case 'WAREHOUSE':
         destination = WarehouseDashboard();
+        break;
+      case 'OPERATIONS':
+        destination = OperationsExecutiveDashboard();
         break;
       case 'WAREHOUSE ADMIN':
         destination = WarehouseAdmin();

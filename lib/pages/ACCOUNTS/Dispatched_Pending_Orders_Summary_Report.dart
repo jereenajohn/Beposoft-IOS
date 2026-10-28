@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -2712,6 +2713,11 @@ Future<void> _navigateBack() async {
           case 'HR':
         destination = HrDashboard();
         break;
+   case 'OPERATIONS':
+        destination = OperationsExecutiveDashboard();
+        break;
+      
+        
       case 'CEO':
       case 'COO':
         destination = ceo_dashboard();

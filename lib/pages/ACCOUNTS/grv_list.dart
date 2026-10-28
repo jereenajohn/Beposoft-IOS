@@ -4,6 +4,7 @@ import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -27,6 +28,21 @@ class GrvList extends StatefulWidget {
 }
 
 class _GrvListState extends State<GrvList> {
+  bool _departmentLoaded = false;
+  String? _department;
+
+  bool get _canModify => _departmentLoaded &&
+      _department?.trim().toUpperCase() != 'OPERATIONS';
+
+  Future<void> _loadDepartmentPermission() async {
+    final department = await getdepFromPrefs();
+    if (!mounted) return;
+    setState(() {
+      _department = department;
+      _departmentLoaded = true;
+    });
+  }
+
   static const Color primaryColor = Color.fromARGB(255, 12, 80, 163);
   static const Color backgroundColor = Color(0xffF5F7FB);
   static const Color textColor = Color.fromARGB(255, 32, 43, 61);
@@ -65,6 +81,7 @@ class _GrvListState extends State<GrvList> {
   @override
   void initState() {
     super.initState();
+    _loadDepartmentPermission();
 
     getGrvList(isRefresh: true);
 
@@ -213,6 +230,8 @@ class _GrvListState extends State<GrvList> {
   }
 
   Future<void> updateGrvItem(int id, String status, String remark) async {
+    final department = await getdepFromPrefs();
+    if (!mounted || department?.trim().toUpperCase() == 'OPERATIONS') return;
     try {
       final token = await getTokenFromPrefs();
       final formattedTime = DateFormat("HH:mm").format(DateTime.now());
@@ -373,7 +392,13 @@ class _GrvListState extends State<GrvList> {
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
-    } else if (dep == "warehouse") {
+    }   else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => WarehouseDashboard()),
@@ -954,7 +979,7 @@ class _GrvListState extends State<GrvList> {
             value: item['remark'],
             options: remarkOptions,
             onChanged: (newValue) {
-              if (newValue == null) return;
+              if (!_canModify || newValue == null) return;
 
               setState(() {
                 item['remark'] = newValue;
@@ -971,7 +996,7 @@ class _GrvListState extends State<GrvList> {
             value: item['status'],
             options: statusOptions,
             onChanged: (newValue) {
-              if (newValue == null) return;
+              if (!_canModify || newValue == null) return;
 
               setState(() {
                 item['status'] = newValue;
@@ -1015,7 +1040,7 @@ class _GrvListState extends State<GrvList> {
               ),
             );
           }).toList(),
-          onChanged: onChanged,
+          onChanged: _canModify ? onChanged : null,
         ),
       ),
     );

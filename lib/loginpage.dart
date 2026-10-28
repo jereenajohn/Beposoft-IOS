@@ -8,6 +8,7 @@ import 'package:beposoft/pages/ACCOUNTS/ASD_dashborad.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 
@@ -232,7 +233,10 @@ class _loginState extends State<login> {
             targetPage = bdo_dashbord();
 
             break;
+          case 'OPERATIONS':
+            targetPage = OperationsExecutiveDashboard();
 
+            break;
           case 'COO':
             targetPage = ceo_dashboard();
 
@@ -376,6 +380,9 @@ class _loginState extends State<login> {
 
             case 'COO':
               targetPage = ceo_dashboard();
+
+               case 'OPERATIONS':
+              targetPage = OperationsExecutiveDashboard();
 
               break;
 

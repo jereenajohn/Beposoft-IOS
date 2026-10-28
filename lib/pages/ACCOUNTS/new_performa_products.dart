@@ -10,6 +10,7 @@ import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 
@@ -235,7 +236,13 @@ class _CreatePerformaProduct_ListState
           builder: (context) => cso_dashboard(),
         ),
       );
-    } else if (dep == "Warehouse Admin") {
+    }else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              } else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -1494,7 +1501,13 @@ class _CreatePerformaProduct_ListState
                     builder: (context) => HrDashboard(),
                   ),
                 );
-              } else if (dep == "SD") {
+              } else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "SD") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

@@ -5,6 +5,7 @@ import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/ASD_dashborad.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/provider.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -338,6 +339,8 @@ class _beposoftmainState extends State<beposoftmain> {
                                                         ? marketing_dashboard()
                                                         : department == "COO"
                                                             ? ceo_dashboard()
+                                                            : department == "OPERATIONS"
+                                                            ? OperationsExecutiveDashboard()
                                                             : dashboard();
   }
 

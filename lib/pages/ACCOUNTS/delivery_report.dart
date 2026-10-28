@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/delivery_report_datewise.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -299,7 +300,13 @@ class _Delivery_ReportState extends State<Delivery_Report> {
             builder: (context) =>
                 ceo_dashboard()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "CSO") {
+    }else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              } else if (dep == "CSO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -349,7 +356,13 @@ class _Delivery_ReportState extends State<Delivery_Report> {
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              }  else if (dep == "HR") {
+              } else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              } else if (dep == "HR") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HrDashboard()),

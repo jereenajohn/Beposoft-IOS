@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -419,7 +420,13 @@ class _trackingReportState extends State<trackingReport> {
             builder: (context) =>
                 bdm_dashbord()), // Replace AnotherPage with your target page
       );
-    } else if (dep == "warehouse") {
+    }else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "warehouse") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -862,7 +869,13 @@ await SharePlus.instance.share(
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "BDM") {
+              } else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

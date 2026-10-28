@@ -31,6 +31,7 @@ import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
 
 import 'package:beposoft/pages/ACCOUNTS/order.review.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 
@@ -804,13 +805,25 @@ class _OrderList2State extends State<OrderList2> {
                     builder: (context) => HrDashboard(),
                   ),
                 );
-              } else if (dep == "BDM") {
+              }   else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "BDM") {
                 Navigator.pushReplacement(
                   context,
 
                   MaterialPageRoute(
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
+                );
+              }  else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
                 );
               } else if (dep == "warehouse") {
                 Navigator.pushReplacement(

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/statewise_order_list.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -703,6 +704,10 @@ class _StateWiseReport2State extends State<StateWiseReport2> {
         break;
       case 'BDM':
         destination = bdm_dashbord();
+        break;
+
+      case 'OPERATIONS':
+        destination = OperationsExecutiveDashboard();
         break;
 
       case 'warehouse':

@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/customer.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -1699,7 +1700,13 @@ Future<void> fetchStatusCountSummary() async {
               WarehouseAdmin(),
         ),
       );
-    } else if (dep == "CEO") {
+    }  else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              } else if (dep == "CEO") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -1783,6 +1790,12 @@ Future<void> fetchStatusCountSummary() async {
                     ) =>
                         bdo_dashbord(),
                   ),
+                );
+              }  else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
                 );
               }else if (dep == "HR") {
                 Navigator.pushReplacement(

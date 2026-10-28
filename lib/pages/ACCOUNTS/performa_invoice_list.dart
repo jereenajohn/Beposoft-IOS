@@ -7,6 +7,7 @@ import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/performa_big_view.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -77,6 +78,8 @@ class _ProformaInvoiceListState extends State<ProformaInvoiceList> {
 
 static const Set<String> _allInvoiceDepartments = {
   'ADMIN',
+  'OPERATIONS',
+  'HR',
   'CEO',
   'COO',
   'CSO',
@@ -1923,7 +1926,14 @@ static const Set<String> _allInvoiceDepartments = {
         context,
         MaterialPageRoute(builder: (context) => bdm_dashbord()),
       );
-    } else if (department == 'warehouse') {
+    } 
+    else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (department == 'warehouse') {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => WarehouseDashboard()),

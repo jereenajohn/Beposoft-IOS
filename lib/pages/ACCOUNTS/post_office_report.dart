@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -279,7 +280,13 @@ else if(dep=="COO" ){
               MaterialPageRoute(builder: (context) => ceo_dashboard()), // Replace AnotherPage with your target page
             );
 }
-
+else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }
 
 else if(dep=="Warehouse Admin" ){
    Navigator.pushReplacement(
@@ -353,6 +360,13 @@ else if(dep=="Warehouse Admin" ){
                 MaterialPageRoute(builder: (context) => WarehouseAdmin()), // Replace AnotherPage with your target page
               );
       }
+      else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }
            
            else if(dep=="CEO" ){
    Navigator.pushReplacement(

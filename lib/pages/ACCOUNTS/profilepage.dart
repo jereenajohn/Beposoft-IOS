@@ -4,6 +4,7 @@ import 'package:beposoft/Sales%20Directors/SD_dashboard.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -268,6 +269,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } else if (dep == "CSO") {
       page = cso_dashboard();
     } 
+    else if (dep == "OPERATIONS") {
+      page = OperationsExecutiveDashboard();
+    }
      else if (dep == "HR") {
       page = HrDashboard();
     } 

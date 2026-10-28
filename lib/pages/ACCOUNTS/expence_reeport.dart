@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_Expense.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -407,7 +408,13 @@ class _Expence_ReportState extends State<Expence_Report> {
         context,
         MaterialPageRoute(builder: (context) => cso_dashboard()),
       );
-    } else if (dep == "Warehouse Admin") {
+    } else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              }else if (dep == "Warehouse Admin") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -448,7 +455,13 @@ class _Expence_ReportState extends State<Expence_Report> {
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              }  else if (dep == "HR") {
+              } else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              } else if (dep == "HR") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HrDashboard()),

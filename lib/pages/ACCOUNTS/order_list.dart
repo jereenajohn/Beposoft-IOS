@@ -31,6 +31,7 @@ import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/methods.dart';
 
 import 'package:beposoft/pages/ACCOUNTS/order.review.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 
@@ -1040,6 +1041,12 @@ class _OrderListState extends State<OrderList> {
         context,
         MaterialPageRoute(builder: (context) => ceo_dashboard()),
       );
+    }
+     else if (dep == "OPERATIONS") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => OperationsExecutiveDashboard()),
+      );
     } else if (dep == "HR") {
       Navigator.pushReplacement(
         context,
@@ -1146,7 +1153,12 @@ class _OrderListState extends State<OrderList> {
                       builder: (context) =>
                           bdo_dashbord()), // Replace AnotherPage with your target page
                 );
-              } else if (dep == "HR") {
+              }  else if (dep == "OPERATIONS") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => OperationsExecutiveDashboard()),
+      );
+    }else if (dep == "HR") {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(

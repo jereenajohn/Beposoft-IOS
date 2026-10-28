@@ -5,6 +5,7 @@ import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoice_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/invoicereportstaffwise.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/familywise_salesreport.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
@@ -339,7 +340,13 @@ class _Sales_ReportState extends State<Sales_Report> {
         context,
         MaterialPageRoute(builder: (context) => bdo_dashbord()),
       );
-    } else if (dep == "HR") {
+    }else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
+                );
+              } else if (dep == "HR") {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HrDashboard()),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:beposoft/loginpage.dart';
 
@@ -635,72 +636,73 @@ class _dailygoodspageState extends State<daily_goods_movement> {
     return Uint8List.fromList(encoded);
   }
 
- Future<void> _exportToExcel() async {
-  if (isExporting) {
-    return;
-  }
-
-  setState(() {
-    isExporting = true;
-  });
-
-  try {
-    final exportRows = await _fetchAllGoodsForExcel();
-
-    if (exportRows.isEmpty) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No data available to export.'),
-        ),
-      );
+  Future<void> _exportToExcel() async {
+    if (isExporting) {
       return;
     }
 
-    final Uint8List excelBytes = _buildExcelBytes(exportRows);
+    setState(() {
+      isExporting = true;
+    });
 
-    final String fileName =
-        'Daily_Goods_Movement_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+    try {
+      final exportRows = await _fetchAllGoodsForExcel();
 
-    if (!mounted) return;
+      if (exportRows.isEmpty) {
+        if (!mounted) return;
 
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [
-          XFile.fromData(
-            excelBytes,
-            mimeType:
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No data available to export.'),
           ),
-        ],
-        fileNameOverrides: [fileName],
-        title: 'Daily Goods Movement',
-        subject: 'Daily Goods Movement Excel Report',
-        sharePositionOrigin: box != null && box.hasSize
-            ? box.localToGlobal(Offset.zero) & box.size
-            : const Rect.fromLTWH(0, 0, 1, 1),
-      ),
-    );
-  } catch (error) {
-    if (!mounted) return;
+        );
+        return;
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Excel export failed: $error'),
-        backgroundColor: Colors.red,
-      ),
-    );
-  } finally {
-    if (mounted) {
-      setState(() {
-        isExporting = false;
-      });
+      final Uint8List excelBytes = _buildExcelBytes(exportRows);
+
+      final String fileName =
+          'Daily_Goods_Movement_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+
+      if (!mounted) return;
+
+      final RenderBox? box = context.findRenderObject() as RenderBox?;
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              excelBytes,
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ),
+          ],
+          fileNameOverrides: [fileName],
+          title: 'Daily Goods Movement',
+          subject: 'Daily Goods Movement Excel Report',
+          sharePositionOrigin: box != null && box.hasSize
+              ? box.localToGlobal(Offset.zero) & box.size
+              : const Rect.fromLTWH(0, 0, 1, 1),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Excel export failed: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isExporting = false;
+        });
+      }
     }
   }
-}
+
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
@@ -817,6 +819,11 @@ class _dailygoodspageState extends State<daily_goods_movement> {
         MaterialPageRoute(
             builder: (context) =>
                 bdo_dashbord()), // Replace AnotherPage with your target page
+      );
+    } else if (dep == "OPERATIONS") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => OperationsExecutiveDashboard()),
       );
     } else if (dep == "BDM") {
       Navigator.pushReplacement(
@@ -1225,6 +1232,12 @@ class _dailygoodspageState extends State<daily_goods_movement> {
                   MaterialPageRoute(
                       builder: (context) =>
                           bdm_dashbord()), // Replace AnotherPage with your target page
+                );
+              } else if (dep == "OPERATIONS") {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => OperationsExecutiveDashboard()),
                 );
               } else if (dep == "warehouse") {
                 Navigator.pushReplacement(

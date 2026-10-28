@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
 import 'package:beposoft/pages/ACCOUNTS/dorwer.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
 import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
 import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
@@ -267,6 +268,8 @@ class _SalesReportExcelState extends State<SalesReportExcel> {
       case "COO":
         page = ceo_dashboard();
         break;
+      case "OPERATIONS":
+        page = OperationsExecutiveDashboard();
          case "HR":
         page = HrDashboard();
         break;

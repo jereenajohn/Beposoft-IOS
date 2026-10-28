@@ -122,6 +122,7 @@ class _InvoiceReportStaffwiseState extends State<InvoiceReportStaffwise> {
 
       debugPrint('STAFFWISE BREAKUP STATUS: ${response.statusCode}');
       debugPrint('STAFFWISE BREAKUP BODY: ${response.body}');
+      debugPrint('INVOICE REPORT RESPONSE: ${response.body}');
 
       if (response.statusCode == 200) {
         final parsed = jsonDecode(response.body);
