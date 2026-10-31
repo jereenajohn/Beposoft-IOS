@@ -18,13 +18,16 @@ import 'package:beposoft/pages/ACCOUNTS/ordercomparison_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/other_receipts.dart';
 import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/proforma_list_payment_slips.dart';
+import 'package:beposoft/pages/ACCOUNTS/sales_point_ranking_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
+import 'package:beposoft/pages/ACCOUNTS/teamsales_pointsandranking_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_all_team_members.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/add_staffwise_department.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_attendance.dart';
 import 'package:beposoft/pages/ADMIN/admin_add_team_staff.dart';
 import 'package:beposoft/pages/ADMIN/manager_leave_requestpage.dart';
+import 'package:beposoft/pages/ADMIN/sales_person_point_system_page.dart';
 import 'package:beposoft/pages/ADMIN/salesteam_cd_reportpage.dart';
 import 'package:beposoft/pages/HR/EmployeeLeaveListPage.dart';
 import 'package:beposoft/pages/HR/staff_attendance.dart';
@@ -137,6 +140,32 @@ class drower {
       BuildContext context, String option) async {
     // Navigate to the selected page based on the option
     switch (option) {
+      case 'Add Point System':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductPointSystemPage(),
+          ),
+        );
+        break;
+
+      case 'Point System List':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SalesPointRankingPage(),
+          ),
+        );
+        break;
+
+      case 'Point System Excel':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeamSalesPointRankingPage(),
+          ),
+        );
+        break;
       case 'Add Customer':
         Navigator.push(
           context,
@@ -181,12 +210,10 @@ class drower {
                   CyclingskatingCategoryDailyProductwiseReport()),
         );
         break;
-            case 'Approve BDO CD':
+      case 'Approve BDO CD':
         Navigator.push(
           context,
-          MaterialPageRoute(
-              builder: (context) =>
-                  SdAllDsrReportPage()),
+          MaterialPageRoute(builder: (context) => SdAllDsrReportPage()),
         );
         break;
       case 'Add Department & Managers':
@@ -405,7 +432,7 @@ class drower {
                   )),
         );
         break;
-    case 'Dispatched & Pending Orders Report':
+      case 'Dispatched & Pending Orders Report':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -414,13 +441,12 @@ class drower {
                   )),
         );
         break;
-        case 'Other Receipts List':
+      case 'Other Receipts List':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => OtherReceiptListPage()),
         );
         break;
-
 
       case 'COD Transfer List':
         Navigator.push(
@@ -448,8 +474,6 @@ class drower {
         );
         break;
 
-            
-
       case 'Delivery Order(Shipped)':
         Navigator.push(
           context,
@@ -459,7 +483,7 @@ class drower {
                   )),
         );
         break;
-              case 'Return From Delivery (RFD)':
+      case 'Return From Delivery (RFD)':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -487,7 +511,7 @@ class drower {
         );
         break;
 
-           case 'Delivery Order(Pending For Packing)':
+      case 'Delivery Order(Pending For Packing)':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -497,7 +521,6 @@ class drower {
         );
         break;
 
-        
       case 'Packed For Delivery(PFD)':
         Navigator.push(
           context,
@@ -525,7 +548,7 @@ class drower {
                   )),
         );
         break;
-              case 'Return From Delivery (RFD)':
+      case 'Return From Delivery (RFD)':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -534,7 +557,6 @@ class drower {
                   )),
         );
         break;
-      
 
       case 'Daily Goods Movement':
         Navigator.push(
@@ -584,7 +606,7 @@ class drower {
                   )),
         );
         break;
-        
+
       case 'DO(Delivery Order)':
         Navigator.push(
           context,
@@ -603,7 +625,7 @@ class drower {
                   )),
         );
         break;
-        case 'Pending For Packing':
+      case 'Pending For Packing':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -631,8 +653,7 @@ class drower {
         );
         break;
 
-        
-  case 'Return From Delivery':
+      case 'Return From Delivery':
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -669,10 +690,11 @@ class drower {
                   )),
         );
         break;
-        case 'Proforma Invoice List (Payment-Slips)':
+      case 'Proforma Invoice List (Payment-Slips)':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ProformaPaymentSlipInvoiceList()),
+          MaterialPageRoute(
+              builder: (context) => ProformaPaymentSlipInvoiceList()),
         );
         break;
       case 'View Orders List':
@@ -1005,7 +1027,7 @@ class drower {
           MaterialPageRoute(builder: (context) => bank_list()),
         );
         break;
-             case 'Create Proforma Invoice':
+      case 'Create Proforma Invoice':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => CreatePerformaProduct_List()),
@@ -1254,7 +1276,6 @@ class drower {
   void navigateToSelectedPage3(BuildContext context, String option) {
     // Navigate to the selected page based on the option
     switch (option) {
-      
       case 'Add Team':
         Navigator.push(
           context,
@@ -1313,13 +1334,14 @@ class drower {
           MaterialPageRoute(builder: (context) => ProformaInvoiceList()),
         );
         break;
-              case 'Proforma Invoice List (Payment-Slips)':
+      case 'Proforma Invoice List (Payment-Slips)':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ProformaPaymentSlipInvoiceList()),
+          MaterialPageRoute(
+              builder: (context) => ProformaPaymentSlipInvoiceList()),
         );
         break;
-       
+
       case 'Customers':
         Navigator.push(
           context,
@@ -1519,7 +1541,7 @@ class drower {
           MaterialPageRoute(builder: (context) => staff_list()),
         );
         break;
-                   case 'Create Proforma Invoice':
+      case 'Create Proforma Invoice':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => CreatePerformaProduct_List()),

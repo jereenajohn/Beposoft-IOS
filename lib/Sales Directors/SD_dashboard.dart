@@ -1,3 +1,4 @@
+import 'package:beposoft/pages/BDM/self_sales_point_ranking_page.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:beposoft/Sales%20Directors/sd_add_attendance.dart';
@@ -81,6 +82,94 @@ Timer? mailCountTimer;
       String profileImage = '';
       bool isFetchingInboxMailCount = false;
 
+  int? _salesPointStaffId;
+  int? _mySalesRank;
+  String _mySalesPoints = '0.00';
+  bool _salesPointsLoading = false;
+  String? _salesPointsError;
+
+  Future<void> fetchMySalesPoints() async {
+    if (_salesPointsLoading || !mounted) return;
+    setState(() {
+      _salesPointsLoading = true;
+      _salesPointsError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Session unavailable');
+      }
+      final headers = <String, String>{
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      };
+      final base = api.toString().replaceFirst(RegExp(r'/+$'), '');
+      int? staffId = _salesPointStaffId;
+      if (staffId == null) {
+        final profileResponse = await http.get(
+          Uri.parse('$base/api/profile/'), headers: headers,
+        ).timeout(const Duration(seconds: 30));
+        if (!mounted) return;
+        if (profileResponse.statusCode != 200) {
+          throw Exception('Unable to load profile');
+        }
+        final profile = jsonDecode(utf8.decode(profileResponse.bodyBytes));
+        if (profile is Map && profile['data'] is Map) {
+          staffId = int.tryParse(profile['data']['id']?.toString() ?? '');
+        }
+      }
+      if (staffId == null || staffId <= 0) {
+        throw Exception('Invalid staff profile');
+      }
+      _salesPointStaffId = staffId;
+      final now = DateTime.now();
+      final uri = Uri.parse('$base/api/sales/point/ranking/').replace(
+        queryParameters: {
+          'start_date': DateFormat('yyyy-MM-dd').format(
+            DateTime(now.year, now.month, 1),
+          ),
+          'end_date': DateFormat('yyyy-MM-dd').format(now),
+          'staff_id': staffId.toString(),
+        },
+      );
+      final response = await http.get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+      if (!mounted) return;
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load sales points');
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map || decoded['status'] != 'success' ||
+          decoded['data'] is! List) {
+        throw Exception('Invalid ranking response');
+      }
+      Map? ownRecord;
+      for (final item in decoded['data'] as List) {
+        if (item is Map &&
+            int.tryParse(item['staff_id']?.toString() ?? '') == staffId) {
+          ownRecord = item;
+          break;
+        }
+      }
+      setState(() {
+        _mySalesRank = int.tryParse(ownRecord?['rank']?.toString() ?? '');
+        _mySalesPoints = (num.tryParse(
+          ownRecord?['total_points']?.toString() ?? '0',
+        ) ?? 0).toStringAsFixed(2);
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _mySalesRank = null;
+          _salesPointsError = 'Unable to load';
+        });
+      }
+      debugPrint('MY SALES POINTS ERROR: $error');
+    } finally {
+      if (mounted) setState(() => _salesPointsLoading = false);
+    }
+  }
+
   String? username = '';
 
   // ============================================================
@@ -98,6 +187,7 @@ Timer? mailCountTimer;
 @override
 void initState() {
   super.initState();
+  fetchMySalesPoints();
 
   WidgetsBinding.instance.addObserver(this);
 
@@ -138,6 +228,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   super.didChangeAppLifecycleState(state);
 
   if (state == AppLifecycleState.resumed) {
+    fetchMySalesPoints();
     fetchMyAttendanceDetails();
     fetchInboxMailCount();
   }
@@ -862,6 +953,7 @@ void dispose() {
       });
 
       await Future.wait([
+        fetchMySalesPoints(),
         fetchproformaData(),
         getfamily(),
         getSalesReport(),
@@ -3373,17 +3465,17 @@ void dispose() {
                           vertical: isVerySmallPhone ? 5 : 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.11),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(9),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.20),
+                            color: const Color(0xFFE2E8F0),
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
                               itemIcon,
-                              color: Colors.white,
+                              color: const Color(0xFF0F172A),
                               size: isVerySmallPhone ? 13 : 14,
                             ),
                             const SizedBox(width: 6),
@@ -3393,7 +3485,7 @@ void dispose() {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: const Color(0xFF0F172A),
                                   fontSize:
                                       isVerySmallPhone ? 8.5 : 9.5,
                                   fontWeight: FontWeight.w600,
@@ -3403,7 +3495,7 @@ void dispose() {
                             const SizedBox(width: 3),
                             Icon(
                               Icons.chevron_right_rounded,
-                              color: Colors.white.withOpacity(0.90),
+                              color: const Color(0xFF0F172A),
                               size: 15,
                             ),
                           ],
@@ -4003,130 +4095,67 @@ void dispose() {
   // ============================================================
 
   Widget _buildSdSummaryCard() {
-    Widget buildInfo(
-      String value,
-      String label,
-    ) {
+    String sales(String value) => isFamilySummaryLoading ? '...' : value;
+
+    Widget tile(String label, String value, {bool emphasis = false}) {
       return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 4,
-          vertical: 6,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(emphasis ? 1 : .96),
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+            child: Text(value, maxLines: 1, style: TextStyle(
+              fontSize: emphasis ? 18 : 16, height: 1.15,
+              color: emphasis ? const Color(0xFF0F172A) : const Color(0xFF0F172A),
+              fontWeight: FontWeight.w900))),
+        ]),
       );
     }
 
+    Widget pair(Widget left, Widget right) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Expanded(child: left), const SizedBox(width: 10), Expanded(child: right)],
+    );
+
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.blue,
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(colors: [Color(0xFF2196F3), Color(0xFF337DFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(22),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 12,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: buildInfo(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : familyTotalBills.toString(),
-                  'Month Bills',
-                ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        pair(tile('Month Bills', sales('MB - $familyTotalBills')),
+          tile('Month Volume', sales('MV - ${formatCompactAmount(familyTotalAmount)}'))),
+        const SizedBox(height: 5),
+        pair(tile('Today Bills', sales('TB - $familyTodaysBills')),
+          tile('Today Volume', sales('TV - ${formatCompactAmount(familyTodaysTotalAmount)}'))),
+        const SizedBox(height: 5),
+        pair(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MySalesPointRankingPage(),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: buildInfo(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : formatCompactAmount(
-                          familyTotalAmount,
-                        ),
-                  'Month Volume',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: buildInfo(
-                  // isFamilySummaryLoading
-                  //     ? '...'
-                  //     : familyInvoiceCreatedBills
-                  //         .toString(),
-                  '0',
-                  // 'Waiting For Approval',
-                  'Rank',
-                ),
-              ),
-            ],
+            ),
+            child: tile('Rank', _salesPointsLoading ? '...' : (_mySalesRank == null ? '--' : '#$_mySalesRank'), emphasis: true),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: buildInfo(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : familyTodaysBills.toString(),
-                  'Today Bills',
-                ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MySalesPointRankingPage(),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: buildInfo(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : formatCompactAmount(
-                          familyTodaysTotalAmount,
-                        ),
-                  'Today Volume',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: buildInfo(
-                  '0',
-                  'Points',
-                ),
-              ),
-            ],
+            ),
+            child: tile('Points', _salesPointsLoading ? '...' : (_salesPointsError != null ? '--' : _mySalesPoints), emphasis: true),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 

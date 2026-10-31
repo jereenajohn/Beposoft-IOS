@@ -1,6 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
+import 'package:beposoft/pages/ACCOUNTS/dashboard.dart';
+import 'package:beposoft/pages/ADMIN/Operation_executive_dashboard.dart';
+import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
+import 'package:beposoft/pages/BDM/bdm_dshboard.dart';
+import 'package:beposoft/pages/BDO/bdo_dashboard.dart';
+import 'package:beposoft/pages/HR/hr_dashboard.dart';
+import 'package:beposoft/pages/MARKETING/marketing_dashboard.dart';
+import 'package:beposoft/pages/WAREHOUSE/warehouse_admin.dart';
+import 'package:beposoft/pages/WAREHOUSE/warehouse_dashboard.dart';
 import 'package:beposoft/pages/api.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -1673,54 +1683,36 @@ class _ProductPointSystemPageState extends State<ProductPointSystemPage> {
     return type;
   }
 
-  String _productDisplay(
-    Map<String, dynamic> record,
-  ) {
-    final dynamic product = record['product'];
+String _productDisplay(
+  Map<String, dynamic> record,
+) {
+  final String productName =
+      record['product_name']?.toString().trim() ?? '';
 
-    if (product == null) {
-      final String directName =
-          record['product_name']?.toString() ?? '';
-
-      if (directName.isNotEmpty) {
-        return directName;
-      }
-
-      final String directId =
-          record['product_id']?.toString() ?? '';
-
-      if (directId.isNotEmpty) {
-        return 'Product #$directId';
-      }
-
-      return '-';
-    }
-
-    if (product is Map) {
-      final String name =
-          product['name']?.toString() ??
-              product['product_name']
-                  ?.toString() ??
-              '';
-
-      final String id =
-          product['id']?.toString() ?? '';
-
-      if (name.isNotEmpty && id.isNotEmpty) {
-        return '$name (#$id)';
-      }
-
-      if (name.isNotEmpty) {
-        return name;
-      }
-
-      if (id.isNotEmpty) {
-        return '#$id';
-      }
-    }
-
-    return product.toString();
+  if (productName.isNotEmpty) {
+    return productName;
   }
+
+  final dynamic product = record['product'];
+
+  if (product is Map) {
+    final String nestedName =
+        product['name']?.toString().trim() ?? '';
+
+    if (nestedName.isNotEmpty) {
+      return nestedName;
+    }
+
+    final String nestedProductName =
+        product['product_name']?.toString().trim() ?? '';
+
+    if (nestedProductName.isNotEmpty) {
+      return nestedProductName;
+    }
+  }
+
+  return '-';
+}
 
   String _formatDate(dynamic value) {
     if (value == null ||
@@ -1842,13 +1834,80 @@ class _ProductPointSystemPageState extends State<ProductPointSystemPage> {
   // UI
   // ============================================================
 
+  bool _isNavigatingBack = false;
+
+  Future<void> _navigateBack() async {
+    if (_isNavigatingBack || !mounted) return;
+    _isNavigatingBack = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final department = prefs.getString('department');
+      if (!mounted) return;
+
+      final Widget destination;
+      switch (department) {
+        case 'BDO':
+          destination = bdo_dashbord();
+          break;
+        case 'COO':
+        case 'CEO':
+          destination = ceo_dashboard();
+          break;
+        case 'OPERATIONS':
+          destination = OperationsExecutiveDashboard();
+          break;
+        case 'HR':
+          destination = HrDashboard();
+          break;
+        case 'CSO':
+          destination = cso_dashboard();
+          break;
+        case 'BDM':
+          destination = bdm_dashbord();
+          break;
+        case 'warehouse':
+          destination = WarehouseDashboard();
+          break;
+        case 'Marketing':
+          destination = marketing_dashboard();
+          break;
+        case 'Warehouse Admin':
+          destination = WarehouseAdmin();
+          break;
+        default:
+          destination = dashboard();
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => destination),
+      );
+    } catch (error, stack) {
+      _isNavigatingBack = false;
+      debugPrint('Point System back navigation failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        _showMessage('Unable to return to dashboard. Please try again.',
+            isError: true);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        await _navigateBack();
+        return false;
+      },
+      child: Scaffold(
       backgroundColor: const Color(
         0xFFF4F6F8,
       ),
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 21),
+          onPressed: _navigateBack,
+        ),
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor:
@@ -1956,6 +2015,7 @@ class _ProductPointSystemPageState extends State<ProductPointSystemPage> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -2763,18 +2823,18 @@ class _ProductPointSystemPageState extends State<ProductPointSystemPage> {
                                   .w800,
                         ),
                       ),
-                      const SizedBox(
-                        height: 2,
-                      ),
-                      Text(
-                        'ID: ${record['id'] ?? '-'}',
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.white70,
-                          fontSize: 10,
-                        ),
-                      ),
+                      // const SizedBox(
+                      //   height: 2,
+                      // ),
+                      // Text(
+                      //   'ID: ${record['id'] ?? '-'}',
+                      //   style:
+                      //       const TextStyle(
+                      //     color:
+                      //         Colors.white70,
+                      //     fontSize: 10,
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),
@@ -2843,35 +2903,23 @@ class _ProductPointSystemPageState extends State<ProductPointSystemPage> {
                   emphasized: true,
                 ),
 
-                if (record[
-                        'created_by'] !=
-                    null) ...[
-                  const Divider(
-                    height: 20,
-                  ),
-                  _buildDetailRow(
-                    icon: Icons
-                        .person_outline,
-                    label:
-                        'Created By',
-                    value: record[
-                                'created_by']
-                            is Map
-                        ? record['created_by']
-                                    ['username']
-                                ?.toString() ??
-                            record['created_by']
-                                    ['name']
-                                ?.toString() ??
-                            record['created_by']
-                                    ['id']
-                                ?.toString() ??
-                            '-'
-                        : record[
-                                'created_by']
-                            .toString(),
-                  ),
-                ],
+            if (record['created_by'] != null ||
+    record['created_by_name'] != null) ...[
+  const Divider(
+    height: 20,
+  ),
+  _buildDetailRow(
+    icon: Icons.person_outline,
+    label: 'Created By',
+    value: record['created_by_name']
+                ?.toString()
+                .trim()
+                .isNotEmpty ==
+            true
+        ? record['created_by_name'].toString().trim()
+        : '-',
+  ),
+],
 
                 if (record[
                         'updated_at'] !=

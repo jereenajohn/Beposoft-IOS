@@ -1,3 +1,5 @@
+import 'package:beposoft/pages/ACCOUNTS/sales_point_ranking_page.dart';
+import 'package:beposoft/pages/ACCOUNTS/teamsales_pointsandranking_page.dart';
 import 'package:beposoft/pages/ADMIN/dgm_page.dart';
 import 'package:beposoft/pages/ADMIN/family_date_summary_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/daily_goods_movement.dart';
@@ -935,7 +937,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     } catch (error) {}
   }
 
-// Get token from SharedPreferences
+  // Get token from SharedPreferences
   Future<String?> getTokenFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     for (String key in prefs.getKeys()) {}
@@ -944,7 +946,7 @@ class _admin_dashboardState extends State<admin_dashboard>
 
   int grv = 0;
   int grvcount = 0;
-// Function to fetch GRV data
+  // Function to fetch GRV data
   Future<void> getGrvList() async {
     try {
       final token = await getTokenFromPrefs();
@@ -1212,8 +1214,7 @@ class _admin_dashboardState extends State<admin_dashboard>
   // ============================================================
 
   void _toggleBottomSearch() {
-    final bool shouldOpen =
-        !isBottomSearchOpen;
+    final bool shouldOpen = !isBottomSearchOpen;
 
     setState(() {
       isBottomSearchOpen = shouldOpen;
@@ -1226,26 +1227,21 @@ class _admin_dashboardState extends State<admin_dashboard>
     });
 
     if (shouldOpen) {
-      WidgetsBinding.instance
-          .addPostFrameCallback(
+      WidgetsBinding.instance.addPostFrameCallback(
         (_) {
           if (!mounted) return;
 
-          dashboardSearchFocusNode
-              .requestFocus();
+          dashboardSearchFocusNode.requestFocus();
         },
       );
     } else {
-      dashboardSearchFocusNode
-          .unfocus();
+      dashboardSearchFocusNode.unfocus();
     }
   }
 
   void _closeBottomSearch() {
     if (!isBottomSearchOpen &&
-        dashboardSearchController
-            .text
-            .isEmpty &&
+        dashboardSearchController.text.isEmpty &&
         dashboardSearchQuery.isEmpty) {
       return;
     }
@@ -1271,8 +1267,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const StaffMailPage(),
+        builder: (_) => const StaffMailPage(),
       ),
     );
 
@@ -1291,8 +1286,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            EditProfileScreen(),
+        builder: (_) => EditProfileScreen(),
       ),
     );
   }
@@ -1308,33 +1302,26 @@ class _admin_dashboardState extends State<admin_dashboard>
       child: Material(
         color: Colors.white,
         elevation: 14,
-        shadowColor:
-            Colors.black.withOpacity(
+        shadowColor: Colors.black.withOpacity(
           0.10,
         ),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: double.infinity,
               height: 68,
-              padding:
-                  const EdgeInsets.symmetric(
+              padding: const EdgeInsets.symmetric(
                 horizontal: 8,
                 vertical: 7,
               ),
-              decoration:
-                  const BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    BorderRadius.only(
-                  topLeft:
-                      Radius.circular(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(
                     26,
                   ),
-                  topRight:
-                      Radius.circular(
+                  topRight: Radius.circular(
                     26,
                   ),
                 ),
@@ -1342,185 +1329,133 @@ class _admin_dashboardState extends State<admin_dashboard>
               child: Row(
                 children: [
                   Expanded(
-                    child:
-                        _buildBottomNavigationItem(
-                      icon:
-                          Icons.person_outline_rounded,
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.person_outline_rounded,
                       label: 'Profile',
                       isSelected: false,
-                      onTap:
-                          _openBottomProfile,
+                      onTap: _openBottomProfile,
                     ),
                   ),
                   Expanded(
-                    child:
-                        _buildBottomNavigationItem(
-                      icon:
-                          Icons.mail_outline_rounded,
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.mail_outline_rounded,
                       label: 'Mail',
                       isSelected: false,
-                      badgeCount:
-                          inboxMailCount,
+                      badgeCount: inboxMailCount,
                       onTap: () {
                         _openBottomMail();
                       },
                     ),
                   ),
                   Expanded(
-                    child:
-                        _buildBottomNavigationItem(
-                      icon:
-                          Icons.search_rounded,
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.search_rounded,
                       label: 'Search',
-                      isSelected:
-                          isBottomSearchOpen,
-                      onTap:
-                          _toggleBottomSearch,
+                      isSelected: isBottomSearchOpen,
+                      onTap: _toggleBottomSearch,
                     ),
                   ),
                 ],
               ),
             ),
             AnimatedSwitcher(
-              duration:
-                  const Duration(
+              duration: const Duration(
                 milliseconds: 220,
               ),
-              switchInCurve:
-                  Curves.easeOutCubic,
-              switchOutCurve:
-                  Curves.easeInCubic,
-              child:
-                  isBottomSearchOpen
-                      ? Padding(
-                          key:
-                              const ValueKey<String>(
-                            'dashboard-search-open',
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: isBottomSearchOpen
+                  ? Padding(
+                      key: const ValueKey<String>(
+                        'dashboard-search-open',
+                      ),
+                      padding: const EdgeInsets.fromLTRB(
+                        12,
+                        9,
+                        12,
+                        4,
+                      ),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFF2F2F7,
                           ),
-                          padding:
-                              const EdgeInsets.fromLTRB(
-                            12,
-                            9,
-                            12,
-                            4,
+                          borderRadius: BorderRadius.circular(
+                            16,
                           ),
-                          child:
-                              Container(
-                            height: 48,
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  const Color(
-                                0xFFF2F2F7,
-                              ),
-                              borderRadius:
-                                  BorderRadius.circular(
-                                16,
-                              ),
-                              border:
-                                  Border.all(
-                                color:
-                                    const Color(
-                                  0xFFE5E5EA,
-                                ),
-                              ),
+                          border: Border.all(
+                            color: const Color(
+                              0xFFE5E5EA,
                             ),
-                            child:
-                                TextField(
-                              controller:
-                                  dashboardSearchController,
-                              focusNode:
-                                  dashboardSearchFocusNode,
-                              textInputAction:
-                                  TextInputAction.search,
-                              autocorrect:
-                                  false,
-                              enableSuggestions:
-                                  false,
-                              onChanged:
-                                  (String value) {
-                                setState(
-                                  () {
-                                    dashboardSearchQuery =
-                                        value;
-                                  },
-                                );
-                              },
-                              decoration:
-                                  InputDecoration(
-                                hintText:
-                                    'Search cards',
-                                hintStyle:
-                                    const TextStyle(
-                                  color:
-                                      Color(
-                                    0xFF8E8E93,
-                                  ),
-                                  fontSize:
-                                      15,
-                                  fontWeight:
-                                      FontWeight
-                                          .w400,
-                                ),
-                                prefixIcon:
-                                    const Icon(
-                                  Icons.search_rounded,
-                                  color:
-                                      Color(
-                                    0xFF8E8E93,
-                                  ),
-                                  size:
-                                      22,
-                                ),
-                                suffixIcon:
-                                    dashboardSearchQuery
-                                            .isNotEmpty
-                                        ? IconButton(
-                                            tooltip:
-                                                'Clear search',
-                                            onPressed:
-                                                () {
-                                              dashboardSearchController.clear();
-
-                                              setState(
-                                                () {
-                                                  dashboardSearchQuery =
-                                                      '';
-                                                },
-                                              );
-
-                                              dashboardSearchFocusNode.requestFocus();
-                                            },
-                                            icon:
-                                                const Icon(
-                                              Icons.cancel_rounded,
-                                              color: Color(
-                                                0xFF8E8E93,
-                                              ),
-                                              size:
-                                                  20,
-                                            ),
-                                          )
-                                        : null,
-                                border:
-                                    InputBorder.none,
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                  horizontal:
-                                      14,
-                                  vertical:
-                                      13,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(
-                          key:
-                              ValueKey<String>(
-                            'dashboard-search-closed',
                           ),
                         ),
+                        child: TextField(
+                          controller: dashboardSearchController,
+                          focusNode: dashboardSearchFocusNode,
+                          textInputAction: TextInputAction.search,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          onChanged: (String value) {
+                            setState(
+                              () {
+                                dashboardSearchQuery = value;
+                              },
+                            );
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search cards',
+                            hintStyle: const TextStyle(
+                              color: Color(
+                                0xFF8E8E93,
+                              ),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Color(
+                                0xFF8E8E93,
+                              ),
+                              size: 22,
+                            ),
+                            suffixIcon: dashboardSearchQuery.isNotEmpty
+                                ? IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      dashboardSearchController.clear();
+
+                                      setState(
+                                        () {
+                                          dashboardSearchQuery = '';
+                                        },
+                                      );
+
+                                      dashboardSearchFocusNode.requestFocus();
+                                    },
+                                    icon: const Icon(
+                                      Icons.cancel_rounded,
+                                      color: Color(
+                                        0xFF8E8E93,
+                                      ),
+                                      size: 20,
+                                    ),
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>(
+                        'dashboard-search-closed',
+                      ),
+                    ),
             ),
           ],
         ),
@@ -1535,57 +1470,48 @@ class _admin_dashboardState extends State<admin_dashboard>
     required VoidCallback onTap,
     int badgeCount = 0,
   }) {
-    final Color foregroundColor =
-        isSelected
-            ? const Color(
-                0xFF2C74FF,
-              )
-            : const Color(
-                0xFF6B7280,
-              );
+    final Color foregroundColor = isSelected
+        ? const Color(
+            0xFF2C74FF,
+          )
+        : const Color(
+            0xFF6B7280,
+          );
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius:
-            BorderRadius.circular(
+        borderRadius: BorderRadius.circular(
           20,
         ),
         onTap: onTap,
         child: SizedBox(
           height: 54,
           child: Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
                   AnimatedContainer(
-                    duration:
-                        const Duration(
-                      milliseconds:
-                          180,
+                    duration: const Duration(
+                      milliseconds: 180,
                     ),
                     width: 36,
                     height: 32,
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          isSelected
-                              ? const Color(
-                                  0xFFEAF2FF,
-                                )
-                              : Colors.transparent,
-                      borderRadius:
-                          BorderRadius.circular(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(
+                              0xFFEAF2FF,
+                            )
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(
                         12,
                       ),
                     ),
                     child: Icon(
                       icon,
-                      color:
-                          foregroundColor,
+                      color: foregroundColor,
                       size: 23,
                     ),
                   ),
@@ -1594,50 +1520,33 @@ class _admin_dashboardState extends State<admin_dashboard>
                       right: -7,
                       top: -5,
                       child: Container(
-                        constraints:
-                            const BoxConstraints(
+                        constraints: const BoxConstraints(
                           minWidth: 18,
                           minHeight: 18,
                         ),
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal:
-                              5,
-                          vertical:
-                              2,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
                         ),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
+                        decoration: BoxDecoration(
+                          color: const Color(
                             0xFFFF3B30,
                           ),
-                          borderRadius:
-                              BorderRadius.circular(
+                          borderRadius: BorderRadius.circular(
                             20,
                           ),
-                          border:
-                              Border.all(
-                            color:
-                                Colors.white,
+                          border: Border.all(
+                            color: Colors.white,
                             width: 1.5,
                           ),
                         ),
                         child: Text(
-                          badgeCount > 99
-                              ? '99+'
-                              : badgeCount
-                                  .toString(),
-                          textAlign:
-                              TextAlign.center,
-                          style:
-                              const TextStyle(
-                            color:
-                                Colors.white,
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
                             fontSize: 9,
-                            fontWeight:
-                                FontWeight
-                                    .w800,
+                            fontWeight: FontWeight.w800,
                             height: 1.1,
                           ),
                         ),
@@ -1651,16 +1560,11 @@ class _admin_dashboardState extends State<admin_dashboard>
               Text(
                 label,
                 maxLines: 1,
-                overflow:
-                    TextOverflow.ellipsis,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color:
-                      foregroundColor,
+                  color: foregroundColor,
                   fontSize: 10.5,
-                  fontWeight:
-                      isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                 ),
               ),
             ],
@@ -1669,7 +1573,6 @@ class _admin_dashboardState extends State<admin_dashboard>
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -1702,8 +1605,7 @@ class _admin_dashboardState extends State<admin_dashboard>
             ),
           ],
         ),
-        bottomNavigationBar:
-            _buildModernBottomNavigationBar(),
+        bottomNavigationBar: _buildModernBottomNavigationBar(),
         drawer: Drawer(
           backgroundColor: Colors.white,
           child: Container(
@@ -1854,17 +1756,39 @@ class _admin_dashboardState extends State<admin_dashboard>
                             builder: (context) => EmployeeLeaveFormPage()));
                   },
                 ),
-                ListTile(
-                  leading: Icon(Icons.person),
-                  title: Text('Point System'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => ProductPointSystemPage()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
+                // ListTile(
+                //   leading: Icon(Icons.person),
+                //   title: Text('Point System'),
+                //   onTap: () {
+                //     Navigator.push(
+                //         context,
+                //         MaterialPageRoute(
+                //             builder: (context) => ProductPointSystemPage()));
+                //     // Navigate to the Settings page or perform any other action
+                //   },
+                // ),
+                // ListTile(
+                //   leading: Icon(Icons.person),
+                //   title: Text('Point System List'),
+                //   onTap: () {
+                //     Navigator.push(
+                //         context,
+                //         MaterialPageRoute(
+                //             builder: (context) => SalesPointRankingPage()));
+                //     // Navigate to the Settings page or perform any other action
+                //   },
+                // ),
+                // ListTile(
+                //   leading: Icon(Icons.person),
+                //   title: Text('Point System Excel'),
+                //   onTap: () {
+                //     Navigator.push(
+                //         context,
+                //         MaterialPageRoute(
+                //             builder: (context) => TeamSalesPointRankingPage()));
+                //     // Navigate to the Settings page or perform any other action
+                //   },
+                // ),
                 ListTile(
                   title: const Text('Send Mail'),
                   onTap: () async {
@@ -1948,6 +1872,11 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'Return From Delivery',
                   'Shipped',
                   'Invoice Rejected'
+                ]),
+                _buildDropdownTile(context, 'Point System', [
+                  'Add Point System',
+                  'Point System List',
+                  'Point System Excel',
                 ]),
                 Divider(),
                 Text("Others"),
@@ -2413,6 +2342,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                 _buildDropdownTile(context, 'Reports', [
                   'Sales Report',
                   'Sales Report Excel',
+                  'Point System Excel',
                   'GST Report',
                   // 'All Division Product Sale Report',
                   // 'Cycling & Skating Monthly Excel',
@@ -2712,284 +2642,272 @@ class _admin_dashboardState extends State<admin_dashboard>
     return "$sign${_currency.format(absAmount)}";
   }
 
-Widget _buildDashboardLineItem({
-  required String title,
-  required String value,
-  IconData? icon,
-  bool isGreen = false,
-}) {
-  return Container(
-    width: double.infinity,
-    height: 26,
-    padding: const EdgeInsets.symmetric(horizontal: 9),
-    decoration: BoxDecoration(
-      color: isGreen
-          ? Colors.green
-          : Colors.white.withOpacity(0.14),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: isGreen
-            ? Colors.white.withOpacity(0.35)
-            : Colors.white.withOpacity(0.22),
+  Widget _buildDashboardLineItem({
+    required String title,
+    required String value,
+    IconData? icon,
+    bool isGreen = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      decoration: BoxDecoration(
+        color: isGreen ? Colors.green : Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isGreen
+              ? Colors.white.withOpacity(0.35)
+              : Colors.white.withOpacity(0.22),
+        ),
       ),
-    ),
-    child: Row(
-      children: [
-        if (icon != null) ...[
-          Icon(
-            icon,
-            color: Colors.white,
-            size: 14,
-          ),
-          const SizedBox(width: 6),
-        ],
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.88),
-              fontSize: 11,
-              fontWeight:
-                  isGreen ? FontWeight.w800 : FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (value.isNotEmpty)
-          Text(
-            value,
-            style: TextStyle(
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(
+              icon,
               color: Colors.white,
-              fontSize: 12,
-              fontWeight:
-                  isGreen ? FontWeight.w900 : FontWeight.w800,
+              size: 14,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-      ],
-    ),
-  );
-}
-
- Widget _buildDashboardCard({
-  required String title,
-  required String value,
-  required List<dynamic> lines,
-  required VoidCallback onTap,
-  String valueLabel = "",
-  Widget? bottom,
-  bool enableSeeMore = false,
-  double bottomTopSpacing = 8,
-  double titleBottomSpacing = 8,
-  bool greenValueTab = false,
-}) {
-  final bool isExpanded = dashboardCardExpanded[title] ?? false;
-
-  final bool canExpand = enableSeeMore && lines.length > 1;
-
-  final List<dynamic> displayLines = canExpand
-      ? isExpanded
-          ? lines
-          : lines.take(1).toList()
-      : lines;
-
-  Widget buildLine(dynamic line) {
-    if (line is Widget) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(
-            minHeight: 32,
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 6,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.14),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.22),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.88),
+                fontSize: 11,
+                fontWeight: isGreen ? FontWeight.w800 : FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: line,
-          ),
-        ),
-      );
-    }
-
-    final String text = line?.toString() ?? '';
-    final List<String> parts = text.split(':');
-
-    final String titleText =
-        parts.length > 1 ? parts.first.trim() : text.trim();
-
-    final String valueText =
-        parts.length > 1 ? parts.sublist(1).join(':').trim() : '';
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: _buildDashboardLineItem(
-        title: titleText,
-        value: valueText,
+          if (value.isNotEmpty)
+            Text(
+              value,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: isGreen ? FontWeight.w900 : FontWeight.w800,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
       ),
     );
   }
 
-  return Material(
-    color: Colors.transparent,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF56AFFF),
-              Color(0xFF2C74FF),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2C74FF).withOpacity(0.28),
-              blurRadius: 12,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
+  Widget _buildDashboardCard({
+    required String title,
+    required String value,
+    required List<dynamic> lines,
+    required VoidCallback onTap,
+    String valueLabel = "",
+    Widget? bottom,
+    bool enableSeeMore = false,
+    double bottomTopSpacing = 8,
+    double titleBottomSpacing = 8,
+    bool greenValueTab = false,
+  }) {
+    final bool isExpanded = dashboardCardExpanded[title] ?? false;
+
+    final bool canExpand = enableSeeMore && lines.length > 1;
+
+    final List<dynamic> displayLines = canExpand
+        ? isExpanded
+            ? lines
+            : lines.take(1).toList()
+        : lines;
+
+    Widget buildLine(dynamic line) {
+      if (line is Widget) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(
+              minHeight: 32,
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(11),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.22),
               ),
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: line,
+            ),
+          ),
+        );
+      }
 
-              SizedBox(height: titleBottomSpacing),
+      final String text = line?.toString() ?? '';
+      final List<String> parts = text.split(':');
 
-              const SizedBox(height: 5),
+      final String titleText =
+          parts.length > 1 ? parts.first.trim() : text.trim();
 
-              if (value.isNotEmpty) ...[
-                Container(
-                  width: double.infinity,
-                  height: 32,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: greenValueTab ? 9 : 0,
-                  ),
-                  decoration: greenValueTab
-                      ? BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.35),
-                          ),
-                        )
-                      : null,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
+      final String valueText =
+          parts.length > 1 ? parts.sublist(1).join(':').trim() : '';
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: _buildDashboardLineItem(
+          title: titleText,
+          value: valueText,
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF56AFFF),
+                Color(0xFF2C74FF),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2C74FF).withOpacity(0.28),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
                       child: Text(
-                        valueLabel.isNotEmpty
-                            ? "$valueLabel - $value"
-                            : value,
-                        maxLines: 1,
-                        softWrap: false,
+                        title,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: titleBottomSpacing),
+                const SizedBox(height: 5),
+                if (value.isNotEmpty) ...[
+                  Container(
+                    width: double.infinity,
+                    height: 32,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: greenValueTab ? 9 : 0,
+                    ),
+                    decoration: greenValueTab
+                        ? BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.35),
+                            ),
+                          )
+                        : null,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          valueLabel.isNotEmpty
+                              ? "$valueLabel - $value"
+                              : value,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 7),
-              ],
-
-              Expanded(
-                child: SingleChildScrollView(
-                  primary: false,
-                  physics: const ClampingScrollPhysics(),
-                  padding: const EdgeInsets.only(
-                    bottom: 4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ...displayLines.map(buildLine),
-
-                      if (bottom != null) ...[
-                        if (bottomTopSpacing > 0)
-                          SizedBox(height: bottomTopSpacing),
-                        bottom,
-                      ],
-
-                      if (canExpand)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                dashboardCardExpanded[title] =
-                                    !isExpanded;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 6,
-                              ),
-                              child: Text(
-                                isExpanded
-                                    ? "See less"
-                                    : "See more",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                  const SizedBox(height: 7),
+                ],
+                Expanded(
+                  child: SingleChildScrollView(
+                    primary: false,
+                    physics: const ClampingScrollPhysics(),
+                    padding: const EdgeInsets.only(
+                      bottom: 4,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...displayLines.map(buildLine),
+                        if (bottom != null) ...[
+                          if (bottomTopSpacing > 0)
+                            SizedBox(height: bottomTopSpacing),
+                          bottom,
+                        ],
+                        if (canExpand)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: InkWell(
+                              onTap: () {
+                                setState(() {
+                                  dashboardCardExpanded[title] = !isExpanded;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 6,
+                                ),
+                                child: Text(
+                                  isExpanded ? "See less" : "See more",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   Future<void> fetchOrdersSummaryFamilyData() async {
     try {
       final token = await getTokenFromPrefs();
@@ -3186,100 +3104,112 @@ Widget _buildDashboardLineItem({
     final monthPaid = _asMap(monthPayment['paid']);
     final monthCod = _asMap(monthPayment['COD']);
     return _buildDashboardCard(
-  title: "Sales",
-  value:
-      "M.Total- ${_formatDashboardAmount(productsData?['month_total_amount'])}",
-  greenValueTab: true,
-            lines: [
-              "MT. Invoices: ${_asInt(productsData?['month_count'])}",
-              "T Paid: ${_asInt(todayPaid['count'])} | ${_formatDashboardAmount(todayPaid['total'])}",
-              "T. COD: ${_asInt(todayCod['count'])} | ${_formatDashboardAmount(todayCod['total'])}",
-              "M. Paid: ${_asInt(monthPaid['count'])} | ${_formatDashboardAmount(monthPaid['total'])}",
-              "M. COD: ${_asInt(monthCod['count'])} | ${_formatDashboardAmount(monthCod['total'])}",
-            ],
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => FamilyDateSummaryPage()),
-              );
-            },
-          );
+      title: "Sales",
+      value:
+          "M.Total- ${_formatDashboardAmount(productsData?['month_total_amount'])}",
+      greenValueTab: true,
+      lines: [
+        "MT. Invoices: ${_asInt(productsData?['month_count'])}",
+        "T Paid: ${_asInt(todayPaid['count'])} | ${_formatDashboardAmount(todayPaid['total'])}",
+        "T. COD: ${_asInt(todayCod['count'])} | ${_formatDashboardAmount(todayCod['total'])}",
+        "M. Paid: ${_asInt(monthPaid['count'])} | ${_formatDashboardAmount(monthPaid['total'])}",
+        "M. COD: ${_asInt(monthCod['count'])} | ${_formatDashboardAmount(monthCod['total'])}",
+      ],
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => FamilyDateSummaryPage()),
+        );
+      },
+    );
   }
 
   Widget _buildLogisticsGridCard() {
-    final dgmWeightFieldKg = _asDouble(dgmCurrentMonthSummary['total_weight_field_kg']);
+    final dgmWeightFieldKg =
+        _asDouble(dgmCurrentMonthSummary['total_weight_field_kg']);
     return _buildDashboardCard(
-  title: "Logistics (DGM)",
-  value: dgmLoading
-      ? "Loading..."
-      : _formatDashboardAmount(monthTotalOrderAmount),
-  greenValueTab: true,
-  lines: [
-    dgmLoading
-        ? "Today Invoices: Loading..."
-        : "Today INV: $todayTotalOrders",
-    dgmLoading
-        ? "Today Amount: Loading..."
-        : "T.Amount: ${_formatDashboardAmount(
-            todayTotalOrderAmount,
-          )}",
-    dgmLoading
-        ? "Today Weight: Loading..."
-        : "T.Weight: ${_asDouble(
-            dgmTodaySummary['total_weight_field_kg'],
-          ).toStringAsFixed(3)} kg",
-    dgmLoading
-        ? "Month Invoices: Loading..."
-        : "Month INV: $monthTotalOrders",
-    dgmLoading
-        ? "Month Amount: Loading..."
-        : "M.Amount: ${_formatDashboardAmount(
-            monthTotalOrderAmount,
-          )}",
-    dgmLoading
-        ? "Weight: Loading..."
-        : "M.Weight: ${dgmWeightFieldKg.toStringAsFixed(3)} kg",
-    dgmLoading
-        ? "PO Amount: Loading..."
-        : "PO Amount: ${_formatDashboardAmount(
-            monthTotalParcelAmount,
-          )}",
-    dgmLoading
-        ? "Avg: Loading..."
-        : "Avg: ₹${monthAverage.toStringAsFixed(2)}/kg",
-  ],
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => daily_goods_movementt(),
-      ),
+      title: "Logistics (DGM)",
+      value: dgmLoading
+          ? "Loading..."
+          : _formatDashboardAmount(monthTotalOrderAmount),
+      greenValueTab: true,
+      lines: [
+        dgmLoading
+            ? "Today Invoices: Loading..."
+            : "Today INV: $todayTotalOrders",
+        dgmLoading
+            ? "Today Amount: Loading..."
+            : "T.Amount: ${_formatDashboardAmount(
+                todayTotalOrderAmount,
+              )}",
+        dgmLoading
+            ? "Today Weight: Loading..."
+            : "T.Weight: ${_asDouble(
+                dgmTodaySummary['total_weight_field_kg'],
+              ).toStringAsFixed(3)} kg",
+        dgmLoading
+            ? "Month Invoices: Loading..."
+            : "Month INV: $monthTotalOrders",
+        dgmLoading
+            ? "Month Amount: Loading..."
+            : "M.Amount: ${_formatDashboardAmount(
+                monthTotalOrderAmount,
+              )}",
+        dgmLoading
+            ? "Weight: Loading..."
+            : "M.Weight: ${dgmWeightFieldKg.toStringAsFixed(3)} kg",
+        dgmLoading
+            ? "PO Amount: Loading..."
+            : "PO Amount: ${_formatDashboardAmount(
+                monthTotalParcelAmount,
+              )}",
+        dgmLoading
+            ? "Avg: Loading..."
+            : "Avg: ₹${monthAverage.toStringAsFixed(2)}/kg",
+      ],
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => daily_goods_movementt(),
+          ),
+        );
+      },
     );
-  },
-);
   }
 
   Future<void> fetchMyAttendanceDetails() async {
     if (!mounted || _attendanceRequestBusy) return;
     _attendanceRequestBusy = true;
-    setState(() { isMyAttendanceLoading = true; myAttendanceFailed = false; });
+    setState(() {
+      isMyAttendanceLoading = true;
+      myAttendanceFailed = false;
+    });
     try {
       final token = await getTokenFromPrefs();
-      if (token == null || token.trim().isEmpty) throw Exception('Login required');
+      if (token == null || token.trim().isEmpty)
+        throw Exception('Login required');
       final response = await http.get(
         Uri.parse('$api/api/staff/attendance/my/details/'),
-        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json'
+        },
       ).timeout(const Duration(seconds: 30));
-      if (response.statusCode != 200) throw Exception('Attendance request failed');
+      if (response.statusCode != 200)
+        throw Exception('Attendance request failed');
       final decoded = jsonDecode(response.body);
-      if (decoded is! Map || decoded['status'] != 'success' || decoded['data'] is! List) {
+      if (decoded is! Map ||
+          decoded['status'] != 'success' ||
+          decoded['data'] is! List) {
         throw Exception('Invalid attendance response');
       }
       final statuses = <String, String>{};
       final newestIds = <String, int>{};
       for (final row in decoded['data'] as List) {
         if (row is! Map) throw Exception('Invalid attendance record');
-        final date = DateTime.tryParse(row['attendance_date']?.toString() ?? '');
+        final date =
+            DateTime.tryParse(row['attendance_date']?.toString() ?? '');
         if (date == null) continue;
         final key = DateFormat('yyyy-MM-dd').format(date);
         final id = int.tryParse(row['id']?.toString() ?? '') ?? 0;
@@ -3309,14 +3239,18 @@ Widget _buildDashboardLineItem({
     const saturdayBlue = Color(0xFF91C9F2);
     const pink = Color(0xFFEB4899);
     Widget legend(Color color, String label) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 7, height: 7, decoration: BoxDecoration(
-          color: color, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 3),
-        Text(label, style: const TextStyle(color: Colors.black87, fontSize: 7)),
-      ],
-    );
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                    color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 3),
+            Text(label,
+                style: const TextStyle(color: Colors.black87, fontSize: 7)),
+          ],
+        );
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(20),
@@ -3330,101 +3264,248 @@ Widget _buildDashboardLineItem({
           ),
         ),
         child: InkWell(
-        onTap: () async {
-          await Navigator.push<void>(context, MaterialPageRoute<void>(
-            builder: (context) => StaffSelfAttendanceScreen(),
-          ));
-          if (!mounted) return;
-          await fetchMyAttendanceDetails();
-        },
-        child: LayoutBuilder(builder: (context, constraints) {
-          // A minimum design canvas keeps every label and all six calendar
-          // rows inside the card, including on narrow screens.
-          final designWidth = constraints.maxWidth < 220 ? 220.0 : constraints.maxWidth;
-          final designHeight = constraints.maxHeight < 280 ? 280.0 : constraints.maxHeight;
-          return FittedBox(
-            fit: BoxFit.fill,
-            child: SizedBox(width: designWidth, height: designHeight,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(children: [
-                  Row(children: [
-                    Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
-                      child: Text('$month Attendance', style: const TextStyle(
-                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)))),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(color: const Color(0xFFBFDDFB), borderRadius: BorderRadius.circular(8)),
-                      child: Text(month, style: const TextStyle(color: Color(0xFF154776), fontSize: 16, fontWeight: FontWeight.w800)),
-                    ),
-                  ]),
-                  const SizedBox(height: 7),
-                  FittedBox(fit: BoxFit.scaleDown, child: Text(
-                    'Attendance tracking • ${DateFormat('MMMM yyyy').format(now)}',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500))),
-                  const SizedBox(height: 10),
-                  Expanded(child: Container(
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8, offset: const Offset(0, 3))]),
-                    padding: const EdgeInsets.all(8),
-                    child: Column(children: [
-                      const SizedBox(height: 5),
-                      Row(children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) =>
-                        Expanded(child: Center(child: FittedBox(fit: BoxFit.scaleDown,
-                          child: Text(day, style: const TextStyle(color: Color(0xFF355A7A), fontSize: 10, fontWeight: FontWeight.w700)))))).toList()),
-                      const SizedBox(height: 10),
-                      Expanded(child: isMyAttendanceLoading
-                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                        : myAttendanceFailed
-                          ? Center(child: TextButton(onPressed: fetchMyAttendanceDetails, child: const Text('Retry attendance')))
-                          : Column(children: List.generate(rows, (week) => Expanded(
-                            child: Row(children: List.generate(7, (column) {
-                              final day = week * 7 + column - offset + 1;
-                              final valid = day >= 1 && day <= days;
-                              final date = DateTime(now.year, now.month, day);
-                              final status = valid ? myAttendanceByDate[DateFormat('yyyy-MM-dd').format(date)] : null;
-                              final today = valid && day == now.day;
-                              final absent = status == 'absent';
-                              final sunday = valid && date.weekday == DateTime.sunday;
-                              final saturday = valid && date.weekday == DateTime.saturday;
-                              final background = !valid ? const Color(0xFFF8F8F8)
-                                : today ? pink : absent ? Colors.black
-                                : sunday ? sundayBlue : saturday ? saturdayBlue : Colors.white;
-                              final foreground = today || absent || sunday ? Colors.white
-                                : saturday ? sundayBlue : Colors.black;
-                              return Expanded(child: Padding(
-                                padding: const EdgeInsets.all(2),
-                                child: Tooltip(message: valid ? '${DateFormat('dd MMM yyyy').format(date)}: ${status ?? 'No attendance record'}' : '',
-                                  child: Container(
-                                    width: double.infinity, height: double.infinity,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(7),
-                                      border: Border.all(color: const Color(0xFFF0F0F0), width: 0.5),
-                                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(valid ? 0.14 : 0.04), blurRadius: 3, offset: const Offset(0, 2))]),
-                                    child: valid ? FittedBox(fit: BoxFit.scaleDown, child: Padding(
-                                      padding: const EdgeInsets.all(2),
-                                      child: Text('$day', style: TextStyle(color: foreground, fontSize: 17, fontWeight: FontWeight.w800)))) : null,
-                                  ),
-                                ),
-                              ));
-                            })),
-                          )))),
-                      const SizedBox(height: 12),
-                      FittedBox(fit: BoxFit.scaleDown, child: Row(children: [
-                        legend(Colors.black, 'Absent'), const SizedBox(width: 9),
-                        legend(pink, 'Today'), const SizedBox(width: 9),
-                        legend(saturdayBlue, 'Saturday'), const SizedBox(width: 9),
-                        legend(sundayBlue, 'Sunday'),
-                      ])),
-                      const SizedBox(height: 4),
+          onTap: () async {
+            await Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => StaffSelfAttendanceScreen(),
+                ));
+            if (!mounted) return;
+            await fetchMyAttendanceDetails();
+          },
+          child: LayoutBuilder(builder: (context, constraints) {
+            // A minimum design canvas keeps every label and all six calendar
+            // rows inside the card, including on narrow screens.
+            final designWidth =
+                constraints.maxWidth < 220 ? 220.0 : constraints.maxWidth;
+            final designHeight =
+                constraints.maxHeight < 280 ? 280.0 : constraints.maxHeight;
+            return FittedBox(
+              fit: BoxFit.fill,
+              child: SizedBox(
+                width: designWidth,
+                height: designHeight,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(children: [
+                    Row(children: [
+                      Expanded(
+                          child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text('$month Attendance',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800)))),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFBFDDFB),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text(month,
+                            style: const TextStyle(
+                                color: Color(0xFF154776),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800)),
+                      ),
                     ]),
-                  )),
-                ]),
+                    const SizedBox(height: 7),
+                    FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                            'Attendance tracking • ${DateFormat('MMMM yyyy').format(now)}',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500))),
+                    const SizedBox(height: 10),
+                    Expanded(
+                        child: Container(
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withOpacity(0.12),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3))
+                          ]),
+                      padding: const EdgeInsets.all(8),
+                      child: Column(children: [
+                        const SizedBox(height: 5),
+                        Row(
+                            children: [
+                          'Mon',
+                          'Tue',
+                          'Wed',
+                          'Thu',
+                          'Fri',
+                          'Sat',
+                          'Sun'
+                        ]
+                                .map((day) => Expanded(
+                                    child: Center(
+                                        child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(day,
+                                                style: const TextStyle(
+                                                    color: Color(0xFF355A7A),
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.w700))))))
+                                .toList()),
+                        const SizedBox(height: 10),
+                        Expanded(
+                            child: isMyAttendanceLoading
+                                ? const Center(
+                                    child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2)))
+                                : myAttendanceFailed
+                                    ? Center(
+                                        child: TextButton(
+                                            onPressed: fetchMyAttendanceDetails,
+                                            child:
+                                                const Text('Retry attendance')))
+                                    : Column(
+                                        children: List.generate(
+                                            rows,
+                                            (week) => Expanded(
+                                                  child: Row(
+                                                      children: List.generate(7,
+                                                          (column) {
+                                                    final day = week * 7 +
+                                                        column -
+                                                        offset +
+                                                        1;
+                                                    final valid =
+                                                        day >= 1 && day <= days;
+                                                    final date = DateTime(
+                                                        now.year,
+                                                        now.month,
+                                                        day);
+                                                    final status = valid
+                                                        ? myAttendanceByDate[
+                                                            DateFormat(
+                                                                    'yyyy-MM-dd')
+                                                                .format(date)]
+                                                        : null;
+                                                    final today =
+                                                        valid && day == now.day;
+                                                    final absent =
+                                                        status == 'absent';
+                                                    final sunday = valid &&
+                                                        date.weekday ==
+                                                            DateTime.sunday;
+                                                    final saturday = valid &&
+                                                        date.weekday ==
+                                                            DateTime.saturday;
+                                                    final background = !valid
+                                                        ? const Color(
+                                                            0xFFF8F8F8)
+                                                        : today
+                                                            ? pink
+                                                            : absent
+                                                                ? Colors.black
+                                                                : sunday
+                                                                    ? sundayBlue
+                                                                    : saturday
+                                                                        ? saturdayBlue
+                                                                        : Colors
+                                                                            .white;
+                                                    final foreground = today ||
+                                                            absent ||
+                                                            sunday
+                                                        ? Colors.white
+                                                        : saturday
+                                                            ? sundayBlue
+                                                            : Colors.black;
+                                                    return Expanded(
+                                                        child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              2),
+                                                      child: Tooltip(
+                                                        message: valid
+                                                            ? '${DateFormat('dd MMM yyyy').format(date)}: ${status ?? 'No attendance record'}'
+                                                            : '',
+                                                        child: Container(
+                                                          width:
+                                                              double.infinity,
+                                                          height:
+                                                              double.infinity,
+                                                          alignment:
+                                                              Alignment.center,
+                                                          decoration: BoxDecoration(
+                                                              color: background,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          7),
+                                                              border: Border.all(
+                                                                  color: const Color(
+                                                                      0xFFF0F0F0),
+                                                                  width: 0.5),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                    color: Colors
+                                                                        .black
+                                                                        .withOpacity(valid
+                                                                            ? 0.14
+                                                                            : 0.04),
+                                                                    blurRadius:
+                                                                        3,
+                                                                    offset:
+                                                                        const Offset(
+                                                                            0,
+                                                                            2))
+                                                              ]),
+                                                          child: valid
+                                                              ? FittedBox(
+                                                                  fit: BoxFit
+                                                                      .scaleDown,
+                                                                  child: Padding(
+                                                                      padding:
+                                                                          const EdgeInsets
+                                                                              .all(
+                                                                              2),
+                                                                      child: Text(
+                                                                          '$day',
+                                                                          style: TextStyle(
+                                                                              color: foreground,
+                                                                              fontSize: 17,
+                                                                              fontWeight: FontWeight.w800))))
+                                                              : null,
+                                                        ),
+                                                      ),
+                                                    ));
+                                                  })),
+                                                )))),
+                        const SizedBox(height: 12),
+                        FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Row(children: [
+                              legend(Colors.black, 'Absent'),
+                              const SizedBox(width: 9),
+                              legend(pink, 'Today'),
+                              const SizedBox(width: 9),
+                              legend(saturdayBlue, 'Saturday'),
+                              const SizedBox(width: 9),
+                              legend(sundayBlue, 'Sunday'),
+                            ])),
+                        const SizedBox(height: 4),
+                      ]),
+                    )),
+                  ]),
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
         ),
       ),
     );
@@ -3554,10 +3635,12 @@ Widget _buildDashboardLineItem({
                                                 child: Text(
                                                   name,
                                                   maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: TextStyle(
                                                     color: Colors.white,
-                                                    fontSize: compact ? 10 : 10.5,
+                                                    fontSize:
+                                                        compact ? 10 : 10.5,
                                                     height: 1.2,
                                                     fontWeight: FontWeight.w700,
                                                   ),
@@ -3587,9 +3670,8 @@ Widget _buildDashboardLineItem({
 
   // Finance card: same layout and styling as the CEO dashboard Finance card.
   Widget _buildFinanceGridCard() {
-    Map<String, dynamic> asMap(dynamic value) => value is Map
-        ? Map<String, dynamic>.from(value)
-        : <String, dynamic>{};
+    Map<String, dynamic> asMap(dynamic value) =>
+        value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
     double asDouble(dynamic value) =>
         double.tryParse(value?.toString().replaceAll(',', '') ?? '') ?? 0.0;
@@ -4144,9 +4226,7 @@ Widget _buildDashboardLineItem({
       },
     );
   }
-
 }
-
 
 // ============================================================
 // COMPANY FINANCE - COMPANY SELECTION
@@ -4233,13 +4313,18 @@ class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = companies.where((c) =>
-      (c['name']?.toString() ?? '').toLowerCase().contains(search.toLowerCase()),
-    ).toList();
+    final filtered = companies
+        .where(
+          (c) => (c['name']?.toString() ?? '')
+              .toLowerCase()
+              .contains(search.toLowerCase()),
+        )
+        .toList();
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6FC),
       appBar: AppBar(
-        title: const Text('Company', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Company',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF17345C),
         elevation: 0,
@@ -4265,25 +4350,34 @@ class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(
-                  color: const Color(0xFF2C74FF).withOpacity(.20),
-                  blurRadius: 16,
-                  offset: const Offset(0, 7),
-                )],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2C74FF).withOpacity(.20),
+                    blurRadius: 16,
+                    offset: const Offset(0, 7),
+                  )
+                ],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.account_balance_rounded, color: Colors.white, size: 36),
+                  const Icon(Icons.account_balance_rounded,
+                      color: Colors.white, size: 36),
                   const SizedBox(width: 14),
-                  Expanded(child: Column(
+                  Expanded(
+                      child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Company Finance', style: TextStyle(
-                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800,
-                      )),
+                      const Text('Company Finance',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          )),
                       const SizedBox(height: 5),
-                      Text('${companies.length} companies • Select to view bank balances',
-                        style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+                      Text(
+                          '${companies.length} companies • Select to view bank balances',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12.5)),
                     ],
                   )),
                 ],
@@ -4296,13 +4390,15 @@ class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
               decoration: InputDecoration(
                 hintText: 'Search company',
                 prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: search.isEmpty ? null : IconButton(
-                  onPressed: () {
-                    searchController.clear();
-                    setState(() => search = '');
-                  },
-                  icon: const Icon(Icons.close_rounded),
-                ),
+                suffixIcon: search.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          searchController.clear();
+                          setState(() => search = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
@@ -4311,17 +4407,19 @@ class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
                 ),
               ),
             ),
-            if (loading) const Padding(
-              padding: EdgeInsets.all(16),
-              child: LinearProgressIndicator(color: Color(0xFF2C74FF)),
-            ),
-            if (error != null) Padding(
-              padding: const EdgeInsets.only(top: 18),
-              child: _FinanceMessage(
-                message: error!,
-                onRetry: _fetchCompanies,
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: LinearProgressIndicator(color: Color(0xFF2C74FF)),
               ),
-            ),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 18),
+                child: _FinanceMessage(
+                  message: error!,
+                  onRetry: _fetchCompanies,
+                ),
+              ),
             if (!loading && error == null && filtered.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 36),
@@ -4338,15 +4436,19 @@ class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
                   borderRadius: BorderRadius.circular(17),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(17),
-                    onTap: id == null ? null : () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => CompanyFinanceReportPage(
-                        companyId: id,
-                        companyName: name,
-                      )),
-                    ),
+                    onTap: id == null
+                        ? null
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => CompanyFinanceReportPage(
+                                        companyId: id,
+                                        companyName: name,
+                                      )),
+                            ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 17),
                       child: Row(children: [
                         Container(
                           padding: const EdgeInsets.all(11),
@@ -4354,14 +4456,19 @@ class _CompanyFinanceListPageState extends State<CompanyFinanceListPage> {
                             color: const Color(0xFFEAF2FF),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.business_rounded, color: Color(0xFF2C74FF)),
+                          child: const Icon(Icons.business_rounded,
+                              color: Color(0xFF2C74FF)),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(child: Text(name, style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700,
-                          color: Color(0xFF17345C),
-                        ))),
-                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF2C74FF)),
+                        Expanded(
+                            child: Text(name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF17345C),
+                                ))),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF2C74FF)),
                       ]),
                     ),
                   ),
@@ -4389,7 +4496,8 @@ class CompanyFinanceReportPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<CompanyFinanceReportPage> createState() => _CompanyFinanceReportPageState();
+  State<CompanyFinanceReportPage> createState() =>
+      _CompanyFinanceReportPageState();
 }
 
 class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
@@ -4434,7 +4542,8 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
     final buffer = StringBuffer();
     for (var i = 0; i < digits.length; i++) {
       final remaining = digits.length - i;
-      if (i > 0 && (remaining == 3 || (remaining > 3 && (remaining - 3) % 2 == 0))) {
+      if (i > 0 &&
+          (remaining == 3 || (remaining > 3 && (remaining - 3) % 2 == 0))) {
         buffer.write(',');
       }
       buffer.write(digits[i]);
@@ -4465,15 +4574,19 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
         'Content-Type': 'application/json',
       }).timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
-        throw Exception('Unable to load finance report (${response.statusCode}).');
+        throw Exception(
+            'Unable to load finance report (${response.statusCode}).');
       }
       final decoded = jsonDecode(response.body);
-      if (decoded is! Map || decoded['status'] != 'success' || decoded['data'] is! Map) {
+      if (decoded is! Map ||
+          decoded['status'] != 'success' ||
+          decoded['data'] is! Map) {
         throw const FormatException('Invalid finance report response.');
       }
       final data = Map<String, dynamic>.from(decoded['data'] as Map);
       if (data['banks'] is! List) {
-        throw const FormatException('Bank details are missing from the report.');
+        throw const FormatException(
+            'Bank details are missing from the report.');
       }
       if (!mounted || version != requestVersion) return;
       setState(() => report = Map<String, dynamic>.from(decoded));
@@ -4511,7 +4624,10 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
     await _fetchReport();
   }
 
-  Widget _metric(String label, dynamic value, IconData icon, {
+  Widget _metric(
+    String label,
+    dynamic value,
+    IconData icon, {
     Color? color,
   }) {
     return Container(
@@ -4525,17 +4641,24 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
         Row(children: [
           Icon(icon, color: color ?? blue, size: 19),
           const SizedBox(width: 6),
-          Expanded(child: Text(label, style: const TextStyle(
-            fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600,
-          ))),
+          Expanded(
+              child: Text(label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ))),
         ]),
         const SizedBox(height: 13),
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(_money(value), style: TextStyle(
-            fontSize: 19, color: color ?? navy, fontWeight: FontWeight.w800,
-          )),
+          child: Text(_money(value),
+              style: TextStyle(
+                fontSize: 19,
+                color: color ?? navy,
+                fontWeight: FontWeight.w800,
+              )),
         ),
       ]),
     );
@@ -4561,14 +4684,17 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
             child: const Icon(Icons.account_balance_rounded, color: blue),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(bank['name']?.toString() ?? 'Unnamed bank',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: navy))),
+          Expanded(
+              child: Text(bank['name']?.toString() ?? 'Unnamed bank',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800, color: navy))),
         ]),
         const SizedBox(height: 15),
         const Divider(height: 1),
         const SizedBox(height: 13),
         _bankLine('Opening Balance', bank['opening_balance']),
-        _bankLine('Credit', bank['credit'], valueColor: const Color(0xFF15803D)),
+        _bankLine('Credit', bank['credit'],
+            valueColor: const Color(0xFF15803D)),
         _bankLine('Debit', bank['debit'], valueColor: const Color(0xFFDC2626)),
         const Divider(height: 17),
         _bankLine('Closing Balance', bank['closing_balance'], bold: true),
@@ -4576,18 +4702,25 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
     );
   }
 
-  Widget _bankLine(String label, dynamic amount, {Color? valueColor, bool bold = false}) {
+  Widget _bankLine(String label, dynamic amount,
+      {Color? valueColor, bool bold = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(children: [
-        Expanded(child: Text(label, style: TextStyle(
-          color: bold ? navy : const Color(0xFF64748B),
-          fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-          fontSize: 13,
-        ))),
-        Flexible(child: Text(_money(amount), textAlign: TextAlign.right,
-          style: TextStyle(fontSize: 13, color: valueColor ?? navy,
-            fontWeight: bold ? FontWeight.w800 : FontWeight.w700))),
+        Expanded(
+            child: Text(label,
+                style: TextStyle(
+                  color: bold ? navy : const Color(0xFF64748B),
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+                  fontSize: 13,
+                ))),
+        Flexible(
+            child: Text(_money(amount),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: valueColor ?? navy,
+                    fontWeight: bold ? FontWeight.w800 : FontWeight.w700))),
       ]),
     );
   }
@@ -4598,9 +4731,12 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
         ? Map<String, dynamic>.from(report!['data'] as Map)
         : <String, dynamic>{};
     final banks = data['banks'] is List
-        ? (data['banks'] as List).whereType<Map>().map(
-            (item) => Map<String, dynamic>.from(item),
-          ).toList()
+        ? (data['banks'] as List)
+            .whereType<Map>()
+            .map(
+              (item) => Map<String, dynamic>.from(item),
+            )
+            .toList()
         : <Map<String, dynamic>>[];
 
     return Scaffold(
@@ -4609,7 +4745,8 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
         backgroundColor: Colors.white,
         foregroundColor: navy,
         elevation: 0,
-        title: const Text('Company Finance', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Company Finance',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             tooltip: 'Select date range',
@@ -4637,47 +4774,72 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(
-                  color: blue.withOpacity(.22), blurRadius: 16,
-                  offset: const Offset(0, 7),
-                )],
+                boxShadow: [
+                  BoxShadow(
+                    color: blue.withOpacity(.22),
+                    blurRadius: 16,
+                    offset: const Offset(0, 7),
+                  )
+                ],
               ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('COMPANY FINANCIAL OVERVIEW', style: TextStyle(
-                  color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
-                )),
-                const SizedBox(height: 10),
-                Text(data['company_name']?.toString() ?? widget.companyName,
-                  style: const TextStyle(color: Colors.white, fontSize: 20,
-                    fontWeight: FontWeight.w800)),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.all(13),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.13),
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: Colors.white.withOpacity(.23)),
-                  ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Closing Balance', style: TextStyle(
-                      color: Colors.white70, fontSize: 12,
-                    )),
-                    const SizedBox(height: 5),
-                    FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
-                      child: Text(loading && report == null ? 'Loading...' : _money(data['closing_balance']),
-                        style: const TextStyle(color: Colors.white, fontSize: 29,
-                          fontWeight: FontWeight.w900))),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('COMPANY FINANCIAL OVERVIEW',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                        )),
+                    const SizedBox(height: 10),
+                    Text(data['company_name']?.toString() ?? widget.companyName,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(13),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(.13),
+                        borderRadius: BorderRadius.circular(13),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(.23)),
+                      ),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Closing Balance',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                )),
+                            const SizedBox(height: 5),
+                            FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                    loading && report == null
+                                        ? 'Loading...'
+                                        : _money(data['closing_balance']),
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 29,
+                                        fontWeight: FontWeight.w900))),
+                          ]),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      const Icon(Icons.account_balance_rounded,
+                          color: Colors.white, size: 17),
+                      const SizedBox(width: 7),
+                      Text('${data['total_banks'] ?? banks.length} Banks',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700)),
+                    ]),
                   ]),
-                ),
-                const SizedBox(height: 14),
-                Row(children: [
-                  const Icon(Icons.account_balance_rounded, color: Colors.white, size: 17),
-                  const SizedBox(width: 7),
-                  Text('${data['total_banks'] ?? banks.length} Banks',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                ]),
-              ]),
             ),
             const SizedBox(height: 15),
             Material(
@@ -4691,16 +4853,22 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
                   child: Row(children: [
                     const Icon(Icons.calendar_month_rounded, color: blue),
                     const SizedBox(width: 12),
-                    Expanded(child: Column(
+                    Expanded(
+                        child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Report Period', style: TextStyle(
-                          color: Color(0xFF64748B), fontSize: 11,
-                        )),
+                        const Text('Report Period',
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 11,
+                            )),
                         const SizedBox(height: 3),
-                        Text('${_displayDate(startDate)}  –  ${_displayDate(endDate)}',
-                          style: const TextStyle(fontWeight: FontWeight.w700,
-                            color: navy, fontSize: 13)),
+                        Text(
+                            '${_displayDate(startDate)}  –  ${_displayDate(endDate)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: navy,
+                                fontSize: 13)),
                       ],
                     )),
                     const Icon(Icons.tune_rounded, color: blue),
@@ -4708,55 +4876,75 @@ class _CompanyFinanceReportPageState extends State<CompanyFinanceReportPage> {
                 ),
               ),
             ),
-            if (loading) const Padding(
-              padding: EdgeInsets.symmetric(vertical: 14),
-              child: LinearProgressIndicator(color: blue),
-            ),
-            if (error != null) Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: _FinanceMessage(message: error!, onRetry: _fetchReport),
-            ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: LinearProgressIndicator(color: blue),
+              ),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: _FinanceMessage(message: error!, onRetry: _fetchReport),
+              ),
             if (report != null) ...[
               const SizedBox(height: 21),
-              const Text('Balance Summary', style: TextStyle(
-                color: navy, fontSize: 18, fontWeight: FontWeight.w800,
-              )),
+              const Text('Balance Summary',
+                  style: TextStyle(
+                    color: navy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  )),
               const SizedBox(height: 12),
               LayoutBuilder(builder: (context, constraints) {
                 final width = (constraints.maxWidth - 12) / 2;
                 return Wrap(spacing: 12, runSpacing: 12, children: [
-                  SizedBox(width: width, child: _metric('Opening Balance',
-                    data['opening_balance'], Icons.account_balance_wallet_outlined)),
-                  SizedBox(width: width, child: _metric('Credit',
-                    data['credit'], Icons.south_west_rounded,
-                    color: const Color(0xFF15803D))),
-                  SizedBox(width: width, child: _metric('Debit',
-                    data['debit'], Icons.north_east_rounded,
-                    color: const Color(0xFFDC2626))),
-                  SizedBox(width: width, child: _metric('Closing Balance',
-                    data['closing_balance'], Icons.payments_outlined)),
+                  SizedBox(
+                      width: width,
+                      child: _metric('Opening Balance', data['opening_balance'],
+                          Icons.account_balance_wallet_outlined)),
+                  SizedBox(
+                      width: width,
+                      child: _metric(
+                          'Credit', data['credit'], Icons.south_west_rounded,
+                          color: const Color(0xFF15803D))),
+                  SizedBox(
+                      width: width,
+                      child: _metric(
+                          'Debit', data['debit'], Icons.north_east_rounded,
+                          color: const Color(0xFFDC2626))),
+                  SizedBox(
+                      width: width,
+                      child: _metric('Closing Balance', data['closing_balance'],
+                          Icons.payments_outlined)),
                 ]);
               }),
               const SizedBox(height: 25),
               Row(children: [
-                const Expanded(child: Text('Bank-wise Breakdown', style: TextStyle(
-                  color: navy, fontSize: 18, fontWeight: FontWeight.w800,
-                ))),
+                const Expanded(
+                    child: Text('Bank-wise Breakdown',
+                        style: TextStyle(
+                          color: navy,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ))),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEAF2FF),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data['total_banks'] ?? banks.length} banks',
-                    style: const TextStyle(color: blue, fontWeight: FontWeight.w800)),
+                      style: const TextStyle(
+                          color: blue, fontWeight: FontWeight.w800)),
                 ),
               ]),
               const SizedBox(height: 13),
               if (banks.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 30),
-                  child: Center(child: Text('No banks found for this company.')),
+                  child:
+                      Center(child: Text('No banks found for this company.')),
                 ),
               ...banks.map(_bankCard),
             ],
@@ -4775,21 +4963,22 @@ class _FinanceMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Column(children: [
-      const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 30),
-      const SizedBox(height: 8),
-      Text(message, textAlign: TextAlign.center),
-      const SizedBox(height: 10),
-      TextButton.icon(
-        onPressed: onRetry,
-        icon: const Icon(Icons.refresh_rounded),
-        label: const Text('Retry'),
-      ),
-    ]),
-  );
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(children: [
+          const Icon(Icons.error_outline_rounded,
+              color: Color(0xFFDC2626), size: 30),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
+          ),
+        ]),
+      );
 }

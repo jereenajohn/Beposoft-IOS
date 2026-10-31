@@ -1,3 +1,5 @@
+import 'package:beposoft/pages/BDM/self_sales_point_ranking_page.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
@@ -117,6 +119,14 @@ class _bdo_dashbordState extends State<bdo_dashbord>
   // end_date   = today
   // ============================================================
 
+  int? _dashboardStaffId;
+  int? _mySalesRank;
+  double? _mySalesPoints;
+  bool _isMySalesPointsLoading = true;
+  int _dashboardRankingRequest = 0;
+  int? _todayDashboardCallSeconds;
+  int? _monthDashboardCallSeconds;
+
   int todayActiveCallCount = 0;
   int todayProductiveCallCount = 0;
   int todayNewLeads = 0;
@@ -200,6 +210,7 @@ class _bdo_dashbordState extends State<bdo_dashbord>
     WidgetsBinding.instance.removeObserver(this);
 
     mailCountTimer?.cancel();
+    _dashboardRankingRequest++;
 
     dashboardSearchController.dispose();
 
@@ -221,6 +232,7 @@ class _bdo_dashbordState extends State<bdo_dashbord>
       fetchMyOrderSummary();
     fetchMyGrvSummary();
       fetchCallDurationSummary();
+      _fetchMyDashboardSalesPoints();
       fetchMyAttendanceDetails();
     }
   }
@@ -606,6 +618,8 @@ class _bdo_dashbordState extends State<bdo_dashbord>
         if (!mounted) return;
 
         setState(() {
+          _todayDashboardCallSeconds = null;
+          _monthDashboardCallSeconds = null;
           todayActiveCallCount = 0;
           todayProductiveCallCount = 0;
           todayNewLeads = 0;
@@ -648,7 +662,7 @@ class _bdo_dashbordState extends State<bdo_dashbord>
             'start_date': startDate,
             'end_date': endDate,
             'page': '1',
-            'page_size': '1',
+            'page_size': '100',
           },
         );
 
@@ -719,9 +733,11 @@ class _bdo_dashbordState extends State<bdo_dashbord>
           );
         }
 
-        return Map<String, dynamic>.from(
-          rawSummary,
-        );
+        final summary = Map<String, dynamic>.from(rawSummary);
+        summary['_dashboard_duration_seconds'] = _dashboardSummaryDuration(summary) ??
+            await _sumDashboardReportDurations(decoded, uri, token)
+                .catchError((Object _) => null);
+        return summary;
       }
 
       final List<Map<String, dynamic>> summaries =
@@ -827,6 +843,8 @@ class _bdo_dashbordState extends State<bdo_dashbord>
       if (!mounted) return;
 
       setState(() {
+        _todayDashboardCallSeconds = todaySummary['_dashboard_duration_seconds'] as int?;
+        _monthDashboardCallSeconds = monthSummary['_dashboard_duration_seconds'] as int?;
         todayActiveCallCount = parsedTodayActive;
         todayProductiveCallCount = parsedTodayProductive;
         todayNewLeads = parsedTodayNewLeads;
@@ -849,6 +867,8 @@ class _bdo_dashbordState extends State<bdo_dashbord>
       if (!mounted) return;
 
       setState(() {
+        _todayDashboardCallSeconds = null;
+        _monthDashboardCallSeconds = null;
         todayActiveCallCount = 0;
         todayProductiveCallCount = 0;
         todayNewLeads = 0;
@@ -952,98 +972,210 @@ class _bdo_dashbordState extends State<bdo_dashbord>
   }
 
   Widget buildMyOrderSummaryCard() {
+    String sales(String value) => isMyOrderSummaryLoading ? '...' : value;
+    String calls(String value) => isCallDurationSummaryLoading ? '...' : value;
+
+    Widget tile(String label, String value, {bool emphasis = false}) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(emphasis ? 1 : .96),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+            child: Text(value, maxLines: 1, style: TextStyle(
+              fontSize: emphasis ? 18 : 16, height: 1.15,
+              color: emphasis ? const Color(0xFF0F172A) : const Color(0xFF0F172A),
+              fontWeight: FontWeight.w900))),
+        ]),
+      );
+    }
+
+    Widget pair(Widget left, Widget right) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Expanded(child: left), const SizedBox(width: 10), Expanded(child: right)],
+    );
+
+    Widget durationRow(String label, int? seconds) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(.96), borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [
+        const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF0F172A), size: 16),
+        const SizedBox(width: 10),
+        Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w800))),
+        const SizedBox(width: 8),
+        Expanded(flex: 3, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight,
+          child: Text(calls(seconds == null ? '--' : _formatDashboardCallDuration(seconds)),
+            style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A), fontWeight: FontWeight.w900)))),
+      ]),
+    );
+
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.blue,
-        borderRadius: BorderRadius.circular(
-          20,
+        gradient: const LinearGradient(colors: [Color(0xFF2196F3), Color(0xFF337DFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        pair(tile('Month Bills', sales('MB - $myTotalBills')),
+          tile('Month Volume', sales('MV - ${formatCompactAmount(myTotalAmount)}'))),
+        const SizedBox(height: 5),
+        pair(tile('Today Bills', sales('TB - $myTodaysBills')),
+          tile('Today Volume', sales('TV - ${formatCompactAmount(myTodaysTotalAmount)}'))),
+        const SizedBox(height: 5),
+        durationRow('Today CD', _todayDashboardCallSeconds),
+        const SizedBox(height: 5),
+        durationRow('Month CD', _monthDashboardCallSeconds),
+        const SizedBox(height: 5),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(.96), borderRadius: BorderRadius.circular(16)),
+          child: Row(children: [
+            const Expanded(child: Text('New leads', style: TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w800))),
+            Text(calls('$monthNewLeads'), style: const TextStyle(fontSize: 18, color: Color(0xFF0F172A), fontWeight: FontWeight.w900)),
+          ]),
         ),
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 12,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildInfoCard(
-                  isMyOrderSummaryLoading
-                      ? '...'
-                      : myTotalBills.toString(),
-                  'Month Bills',
-                ),
+        const SizedBox(height: 5),
+        pair(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MySalesPointRankingPage(),
               ),
-              const SizedBox(
-                width: 6,
-              ),
-              Expanded(
-                child: _buildInfoCard(
-                  isMyOrderSummaryLoading
-                      ? '...'
-                      : formatCompactAmount(
-                          myTotalAmount,
-                        ),
-                  'Month Volume',
-                ),
-              ),
-              const SizedBox(
-                width: 6,
-              ),
-              Expanded(
-                child: _buildInfoCard(
-                  // isMyOrderSummaryLoading
-                  //     ? '...'
-                  //     : myInvoiceCreatedBills.toString(),
-                  '0',
-                  // 'Waiting For Approval',
-                  'Rank',
-                ),
-              ),
-            ],
+            ),
+            child: tile('Rank', _isMySalesPointsLoading ? '...' : (_mySalesRank == null ? '--' : '#$_mySalesRank'), emphasis: true),
           ),
-          const SizedBox(
-            height: 10,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MySalesPointRankingPage(),
+              ),
+            ),
+            child: tile('Points', _isMySalesPointsLoading ? '...' : (_mySalesPoints == null ? '--' : _mySalesPoints!.toStringAsFixed(2)), emphasis: true),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: _buildInfoCard(
-                  isMyOrderSummaryLoading
-                      ? '...'
-                      : myTodaysBills.toString(),
-                  'Today Bills',
-                ),
-              ),
-              const SizedBox(
-                width: 6,
-              ),
-              Expanded(
-                child: _buildInfoCard(
-                  isMyOrderSummaryLoading
-                      ? '...'
-                      : formatCompactAmount(
-                          myTodaysTotalAmount,
-                        ),
-                  'Today Volume',
-                ),
-              ),
-              const SizedBox(
-                width: 6,
-              ),
-              Expanded(
-                child: _buildInfoCard(
-                  '0',
-                  'Points',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ]),
     );
+  }
+
+  Future<void> _fetchMyDashboardSalesPoints() async {
+    final staffId = _dashboardStaffId;
+    if (!mounted || staffId == null) return;
+    final requestId = ++_dashboardRankingRequest;
+    setState(() => _isMySalesPointsLoading = true);
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) throw StateError('Missing session');
+      final now = DateTime.now();
+      final base = api.toString().replaceFirst(RegExp(r'/+$'), '');
+      final uri = Uri.parse('$base/api/sales/point/ranking/').replace(queryParameters: {
+        'start_date': DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, 1)),
+        'end_date': DateFormat('yyyy-MM-dd').format(now),
+        'staff_id': '$staffId',
+      });
+      final response = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token', 'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) throw StateError('Ranking request failed');
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map || decoded['status'] != 'success' || decoded['data'] is! List) {
+        throw const FormatException('Unexpected ranking response');
+      }
+      int? rank;
+      double points = 0;
+      for (final record in decoded['data'] as List) {
+        if (record is! Map || int.tryParse('${record['staff_id']}') != staffId) continue;
+        rank ??= int.tryParse('${record['rank']}');
+        points += double.tryParse('${record['total_points']}') ?? 0;
+      }
+      if (!mounted || requestId != _dashboardRankingRequest) return;
+      setState(() { _mySalesRank = rank; _mySalesPoints = points; });
+    } catch (error) {
+      if (!mounted || requestId != _dashboardRankingRequest) return;
+      setState(() { _mySalesRank = null; _mySalesPoints = null; });
+      debugPrint('Dashboard sales ranking unavailable: $error');
+    } finally {
+      if (mounted && requestId == _dashboardRankingRequest) {
+        setState(() => _isMySalesPointsLoading = false);
+      }
+    }
+  }
+
+  String _formatDashboardCallDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    return '${minutes ~/ 60}H ${minutes % 60} min';
+  }
+
+  int? _dashboardDurationSeconds(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.isFinite && value >= 0 ? value.round() : null;
+    final text = value.toString().trim();
+    final numeric = double.tryParse(text);
+    if (numeric != null && numeric.isFinite && numeric >= 0) return numeric.round();
+    final clock = RegExp(r'^(?:(\d+)\s+days?,?\s*)?(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$').firstMatch(text);
+    if (clock != null) {
+      final days = int.tryParse(clock.group(1) ?? '') ?? 0;
+      return days * 86400 + int.parse(clock.group(2)!) * 3600 +
+          int.parse(clock.group(3)!) * 60 + (double.tryParse(clock.group(4) ?? '') ?? 0).round();
+    }
+    final parts = RegExp(r'(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)', caseSensitive: false).allMatches(text);
+    double total = 0;
+    bool found = false;
+    for (final part in parts) {
+      found = true;
+      final unit = part.group(2)!.toLowerCase();
+      total += double.parse(part.group(1)!) * (unit.startsWith('h') ? 3600 : unit.startsWith('m') ? 60 : 1);
+    }
+    return found ? total.round() : null;
+  }
+
+  Future<int?> _sumDashboardReportDurations(
+    Map decoded,
+    Uri firstUri,
+    String token,
+  ) async {
+    dynamic current = decoded;
+    Uri currentUri = firstUri;
+    final visited = <String>{firstUri.toString()};
+    int total = 0;
+    while (true) {
+      final results = current is Map ? current['results'] : null;
+      final rows = results is Map ? results['data'] : null;
+      if (rows is! List) return null;
+      for (final row in rows) {
+        if (row is! Map) return null;
+        final seconds = _dashboardDurationSeconds(row['call_duration'] ?? row['duration']);
+        if (seconds == null) return null;
+        total += seconds;
+      }
+      final next = current is Map ? current['next']?.toString() : null;
+      if (next == null || next.isEmpty) return total;
+      if (rows.isEmpty) return null;
+      final resolved = currentUri.resolve(next);
+      if (resolved.origin != firstUri.origin || !visited.add(resolved.toString())) return null;
+      if (!mounted) return null;
+      currentUri = resolved;
+      final response = await http.get(currentUri, headers: {
+        'Authorization': 'Bearer $token', 'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) return null;
+      current = jsonDecode(utf8.decode(response.bodyBytes));
+    }
+  }
+
+  int? _dashboardSummaryDuration(Map<String, dynamic> summary) {
+    for (final key in ['total_call_duration_seconds', 'total_duration_seconds', 'call_duration_seconds', 'total_call_duration', 'total_duration', 'call_duration']) {
+      final seconds = _dashboardDurationSeconds(summary[key]);
+      if (seconds != null) return seconds;
+    }
+    // Never infer elapsed time from an average percentage.
+    return null;
   }
 
   // ============================================================
@@ -1070,12 +1202,23 @@ class _bdo_dashbordState extends State<bdo_dashbord>
         );
 
         final data = parsed['data'];
+        if (!mounted) return;
+        if (data is! Map) {
+          setState(() => _isMySalesPointsLoading = false);
+          return;
+        }
+        _dashboardStaffId = int.tryParse('${data['id']}');
+        if (_dashboardStaffId == null) {
+          setState(() => _isMySalesPointsLoading = false);
+        }
 
         setState(() {
           isManager = data['is_manager'] ?? false;
 
           profileImage = data['image']?.toString() ?? '';
         });
+
+        _fetchMyDashboardSalesPoints();
 
         debugPrint(
           "IS MANAGER : $isManager",
@@ -1085,7 +1228,11 @@ class _bdo_dashbordState extends State<bdo_dashbord>
           "PROFILE IMAGE : $profileImage",
         );
       }
+      if (response.statusCode != 200 && mounted) {
+        setState(() => _isMySalesPointsLoading = false);
+      }
     } catch (e) {
+      if (mounted) setState(() => _isMySalesPointsLoading = false);
       debugPrint(
         "PROFILE ERROR : $e",
       );
@@ -2275,16 +2422,12 @@ Widget _buildCallDurationSummaryCard({
         vertical: isVerySmallPhone ? 6 : 7,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(
-          0.13,
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(
           9,
         ),
         border: Border.all(
-          color: Colors.white.withOpacity(
-            0.24,
-          ),
+          color: Color(0xFFE2E8F0),
         ),
       ),
       child: Row(
@@ -2295,9 +2438,7 @@ Widget _buildCallDurationSummaryCard({
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.white.withOpacity(
-                  0.92,
-                ),
+                color: Color(0xFF0F172A),
                 fontSize:
                     isVerySmallPhone ? 8.5 : 9.5,
                 fontWeight: FontWeight.w700,
@@ -2313,7 +2454,7 @@ Widget _buildCallDurationSummaryCard({
               value,
               maxLines: 1,
               style: TextStyle(
-                color: Colors.white,
+                color: Color(0xFF0F172A),
                 fontSize:
                     isVerySmallPhone ? 12 : 13,
                 fontWeight: FontWeight.w900,
@@ -2336,20 +2477,13 @@ Widget _buildCallDurationSummaryCard({
         20,
       ),
       gradient: const LinearGradient(
-        colors: [
-          Color(0xFF56AFFF),
-          Color(0xFF2C74FF),
-        ],
+        colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
       boxShadow: [
         BoxShadow(
-          color: const Color(
-            0xFF2C74FF,
-          ).withOpacity(
-            0.28,
-          ),
+          color: const Color(0xFF0F172A).withOpacity(0.08),
           blurRadius: 12,
           spreadRadius: 1,
           offset: const Offset(
@@ -2402,18 +2536,14 @@ Widget _buildCallDurationSummaryCard({
                 height:
                     isVerySmallPhone ? 30 : 32,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(
-                    0.14,
-                  ),
+                  color: Colors.white.withOpacity(0.14),
                   borderRadius:
                       BorderRadius.circular(
                     10,
                   ),
                   border: Border.all(
                     color:
-                        Colors.white.withOpacity(
-                      0.22,
-                    ),
+                        Colors.white.withOpacity(0.22),
                   ),
                 ),
                 child: Icon(
@@ -2539,18 +2669,14 @@ Widget _buildCallDurationSummaryCard({
         ),
         decoration: BoxDecoration(
           color:
-              Colors.white.withOpacity(
-            0.13,
-          ),
+              Colors.white,
           borderRadius:
               BorderRadius.circular(
             10,
           ),
           border: Border.all(
             color:
-                Colors.white.withOpacity(
-              0.24,
-            ),
+                const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -2563,9 +2689,7 @@ Widget _buildCallDurationSummaryCard({
                     TextOverflow.ellipsis,
                 style: TextStyle(
                   color:
-                      Colors.white.withOpacity(
-                    0.92,
-                  ),
+                      const Color(0xFF0F172A),
                   fontSize:
                       isVerySmallPhone
                           ? 9
@@ -2587,7 +2711,7 @@ Widget _buildCallDurationSummaryCard({
                   value,
                   maxLines: 1,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     fontSize:
                         isVerySmallPhone
                             ? 13
@@ -2610,25 +2734,15 @@ Widget _buildCallDurationSummaryCard({
             BorderRadius.circular(
           20,
         ),
-        gradient:
-            const LinearGradient(
-          colors: [
-            Color(0xFF56AFFF),
-            Color(0xFF2C74FF),
-          ],
-          begin:
-              Alignment.topLeft,
-          end:
-              Alignment.bottomRight,
-        ),
+        gradient: const LinearGradient(
+        colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
         boxShadow: [
           BoxShadow(
             color:
-                const Color(
-              0xFF2C74FF,
-            ).withOpacity(
-              0.28,
-            ),
+                const Color(0xFF0F172A).withOpacity(0.08),
             blurRadius: 12,
             spreadRadius: 1,
             offset:
@@ -2683,19 +2797,14 @@ Widget _buildCallDurationSummaryCard({
                           : 32,
                   decoration:
                       BoxDecoration(
-                    color:
-                        Colors.white.withOpacity(
-                      0.14,
-                    ),
+                    color: Colors.white.withOpacity(0.14),
                     borderRadius:
                         BorderRadius.circular(
                       10,
                     ),
                     border: Border.all(
                       color:
-                          Colors.white.withOpacity(
-                        0.22,
-                      ),
+                          Colors.white.withOpacity(0.22),
                     ),
                   ),
                   child: Icon(
@@ -2779,18 +2888,14 @@ Widget _buildCallDurationSummaryCard({
         ),
         decoration: BoxDecoration(
           color:
-              Colors.white.withOpacity(
-            0.13,
-          ),
+              Colors.white,
           borderRadius:
               BorderRadius.circular(
             10,
           ),
           border: Border.all(
             color:
-                Colors.white.withOpacity(
-              0.24,
-            ),
+                const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -2803,9 +2908,7 @@ Widget _buildCallDurationSummaryCard({
                     TextOverflow.ellipsis,
                 style: TextStyle(
                   color:
-                      Colors.white.withOpacity(
-                    0.92,
-                  ),
+                      const Color(0xFF0F172A),
                   fontSize:
                       isVerySmallPhone
                           ? 9
@@ -2827,7 +2930,7 @@ Widget _buildCallDurationSummaryCard({
                   value,
                   maxLines: 1,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     fontSize:
                         isVerySmallPhone
                             ? 13
@@ -2850,25 +2953,15 @@ Widget _buildCallDurationSummaryCard({
             BorderRadius.circular(
           20,
         ),
-        gradient:
-            const LinearGradient(
-          colors: [
-            Color(0xFF56AFFF),
-            Color(0xFF2C74FF),
-          ],
-          begin:
-              Alignment.topLeft,
-          end:
-              Alignment.bottomRight,
-        ),
+        gradient: const LinearGradient(
+        colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
         boxShadow: [
           BoxShadow(
             color:
-                const Color(
-              0xFF2C74FF,
-            ).withOpacity(
-              0.28,
-            ),
+                const Color(0xFF0F172A).withOpacity(0.08),
             blurRadius: 12,
             spreadRadius: 1,
             offset:
@@ -2923,19 +3016,14 @@ Widget _buildCallDurationSummaryCard({
                           : 32,
                   decoration:
                       BoxDecoration(
-                    color:
-                        Colors.white.withOpacity(
-                      0.14,
-                    ),
+                    color: Colors.white.withOpacity(0.14),
                     borderRadius:
                         BorderRadius.circular(
                       10,
                     ),
                     border: Border.all(
                       color:
-                          Colors.white.withOpacity(
-                        0.22,
-                      ),
+                          Colors.white.withOpacity(0.22),
                     ),
                   ),
                   child: Icon(
@@ -3007,25 +3095,15 @@ Widget _buildCallDurationSummaryCard({
                 BorderRadius.circular(
               20,
             ),
-            gradient:
-                const LinearGradient(
-              colors: [
-                Color(0xFF56AFFF),
-                Color(0xFF2C74FF),
-              ],
-              begin:
-                  Alignment.topLeft,
-              end:
-                  Alignment.bottomRight,
-            ),
+            gradient: const LinearGradient(
+        colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
             boxShadow: [
               BoxShadow(
                 color:
-                    const Color(
-                  0xFF2C74FF,
-                ).withOpacity(
-                  0.28,
-                ),
+                    const Color(0xFF0F172A).withOpacity(0.08),
                 blurRadius: 12,
                 spreadRadius: 1,
                 offset:
@@ -3073,19 +3151,14 @@ Widget _buildCallDurationSummaryCard({
                       height: 34,
                       decoration:
                           BoxDecoration(
-                        color:
-                            Colors.white.withOpacity(
-                          0.14,
-                        ),
+                        color: Colors.white.withOpacity(0.14),
                         borderRadius:
                             BorderRadius.circular(
                           11,
                         ),
                         border: Border.all(
                           color:
-                              Colors.white.withOpacity(
-                            0.22,
-                          ),
+                              Colors.white.withOpacity(0.22),
                         ),
                       ),
                       child: Icon(
@@ -3103,9 +3176,7 @@ Widget _buildCallDurationSummaryCard({
                       'Open',
                       style: TextStyle(
                         color:
-                            Colors.white.withOpacity(
-                          0.90,
-                        ),
+                            const Color(0xFF0F172A),
                         fontSize: 11.5,
                         fontWeight:
                             FontWeight.w600,
@@ -3115,9 +3186,7 @@ Widget _buildCallDurationSummaryCard({
                     Icon(
                       Icons.arrow_forward_rounded,
                       color:
-                          Colors.white.withOpacity(
-                        0.92,
-                      ),
+                          const Color(0xFF0F172A),
                       size: 18,
                     ),
                   ],
@@ -3146,25 +3215,15 @@ Widget _buildCallDurationSummaryCard({
             BorderRadius.circular(
           20,
         ),
-        gradient:
-            const LinearGradient(
-          colors: [
-            Color(0xFF56AFFF),
-            Color(0xFF2C74FF),
-          ],
-          begin:
-              Alignment.topLeft,
-          end:
-              Alignment.bottomRight,
-        ),
+        gradient: const LinearGradient(
+        colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
         boxShadow: [
           BoxShadow(
             color:
-                const Color(
-              0xFF2C74FF,
-            ).withOpacity(
-              0.28,
-            ),
+                const Color(0xFF0F172A).withOpacity(0.08),
             blurRadius: 12,
             spreadRadius: 1,
             offset:
@@ -3219,19 +3278,14 @@ Widget _buildCallDurationSummaryCard({
                           : 34,
                   decoration:
                       BoxDecoration(
-                    color:
-                        Colors.white.withOpacity(
-                      0.14,
-                    ),
+                    color: Colors.white.withOpacity(0.14),
                     borderRadius:
                         BorderRadius.circular(
                       11,
                     ),
                     border: Border.all(
                       color:
-                          Colors.white.withOpacity(
-                        0.22,
-                      ),
+                          Colors.white.withOpacity(0.22),
                     ),
                   ),
                   child: Icon(
@@ -3311,9 +3365,7 @@ Widget _buildCallDurationSummaryCard({
                         decoration:
                             BoxDecoration(
                           color:
-                              Colors.white.withOpacity(
-                            0.11,
-                          ),
+                              Colors.white,
                           borderRadius:
                               BorderRadius.circular(
                             9,
@@ -3321,9 +3373,7 @@ Widget _buildCallDurationSummaryCard({
                           border:
                               Border.all(
                             color:
-                                Colors.white.withOpacity(
-                              0.20,
-                            ),
+                                const Color(0xFFE2E8F0),
                           ),
                         ),
                         child: Row(
@@ -3331,7 +3381,7 @@ Widget _buildCallDurationSummaryCard({
                             Icon(
                               itemIcon,
                               color:
-                                  Colors.white,
+                                  const Color(0xFF0F172A),
                               size:
                                   isVerySmallPhone
                                       ? 13
@@ -3350,7 +3400,7 @@ Widget _buildCallDurationSummaryCard({
                                 style:
                                     TextStyle(
                                   color:
-                                      Colors.white,
+                                      const Color(0xFF0F172A),
                                   fontSize:
                                       isVerySmallPhone
                                           ? 8.5
@@ -3367,9 +3417,7 @@ Widget _buildCallDurationSummaryCard({
                             Icon(
                               Icons.chevron_right_rounded,
                               color:
-                                  Colors.white.withOpacity(
-                                0.90,
-                              ),
+                                  const Color(0xFF0F172A),
                               size: 15,
                             ),
                           ],

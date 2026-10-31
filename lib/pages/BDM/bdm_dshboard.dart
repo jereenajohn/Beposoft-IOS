@@ -19,6 +19,7 @@ import 'package:beposoft/pages/BDM/bdm_grv_list.dart';
 import 'package:beposoft/pages/BDM/bdm_order_list.dart';
 import 'package:beposoft/pages/BDM/bdm_staff_list.dart';
 import 'package:beposoft/pages/BDM/bdm_today_order_list.dart';
+import 'package:beposoft/pages/BDM/self_sales_point_ranking_page.dart';
 import 'package:beposoft/pages/BDO/EmployeeLeaveFormPage%20.dart';
 import 'package:beposoft/pages/WAREHOUSE/warehouse_order_view.dart';
 import 'package:beposoft/pages/logout_hekper.dart';
@@ -77,6 +78,465 @@ bool isFetchingInboxMailCount = false;
   int inboxMailCount = 0;
   Timer? mailCountTimer;
   String profileImage = '';
+  int? _salesPointStaffId;
+  int? _mySalesRank;
+  String _mySalesPoints = '0.00';
+  bool _salesPointsLoading = false;
+  String? _salesPointsError;
+
+  int? _todayDashboardCallSeconds;
+  int? _monthDashboardCallSeconds;
+
+  int todayActiveCallCount = 0;
+  int todayProductiveCallCount = 0;
+  int todayNewLeads = 0;
+  double todayAverageCallDurationPercent = 0.0;
+
+  int monthActiveCallCount = 0;
+  int monthProductiveCallCount = 0;
+  int monthNewLeads = 0;
+  double monthAverageCallDurationPercent = 0.0;
+
+  bool isCallDurationSummaryLoading = false;
+
+  Future<void> fetchCallDurationSummary() async {
+    if (!mounted || isCallDurationSummaryLoading) return;
+
+    setState(() {
+      isCallDurationSummaryLoading = true;
+    });
+
+    try {
+      final String? token = await getTokenFromPrefs();
+
+      if (token == null || token.trim().isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          _todayDashboardCallSeconds = null;
+          _monthDashboardCallSeconds = null;
+          todayActiveCallCount = 0;
+          todayProductiveCallCount = 0;
+          todayNewLeads = 0;
+          todayAverageCallDurationPercent = 0.0;
+
+          monthActiveCallCount = 0;
+          monthProductiveCallCount = 0;
+          monthNewLeads = 0;
+          monthAverageCallDurationPercent = 0.0;
+        });
+
+        return;
+      }
+
+      final DateTime now = DateTime.now();
+
+      final String today = DateFormat(
+        'yyyy-MM-dd',
+      ).format(now);
+
+      final String firstDayOfMonth = DateFormat(
+        'yyyy-MM-dd',
+      ).format(
+        DateTime(
+          now.year,
+          now.month,
+          1,
+        ),
+      );
+
+      Future<Map<String, dynamic>> fetchSummary({
+        required String startDate,
+        required String endDate,
+        required String requestType,
+      }) async {
+        final Uri uri = Uri.parse(
+          '$api/api/sales/team/member/daily/report/add/',
+        ).replace(
+          queryParameters: {
+            'start_date': startDate,
+            'end_date': endDate,
+            'page': '1',
+            'page_size': '100',
+          },
+        );
+
+        debugPrint(
+          '=============================================',
+        );
+
+        debugPrint(
+          'CALL DURATION REQUEST TYPE: $requestType',
+        );
+
+        debugPrint(
+          'CALL DURATION URL: $uri',
+        );
+
+        final http.Response response = await http.get(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+          },
+        ).timeout(const Duration(seconds: 30));
+
+        debugPrint(
+          'CALL DURATION RESPONSE [$requestType]: ${response.statusCode}',
+        );
+
+        debugPrint(
+          'CALL DURATION BODY [$requestType]: ${response.body}',
+        );
+
+        debugPrint(
+          '=============================================',
+        );
+
+        if (response.statusCode != 200) {
+          throw Exception(
+            'Failed to fetch $requestType '
+            'call duration summary '
+            '(${response.statusCode})',
+          );
+        }
+
+        final dynamic decoded = jsonDecode(
+          response.body,
+        );
+
+        if (decoded is! Map<String, dynamic>) {
+          throw Exception(
+            'Invalid response format',
+          );
+        }
+
+        final dynamic results = decoded['results'];
+
+        if (results is! Map) {
+          throw Exception(
+            'Invalid results data',
+          );
+        }
+
+        final dynamic rawSummary = results['summary'];
+
+        if (rawSummary is! Map) {
+          throw Exception(
+            'Invalid summary data',
+          );
+        }
+
+        final summary = Map<String, dynamic>.from(rawSummary);
+        summary['_dashboard_duration_seconds'] = _dashboardSummaryDuration(summary) ??
+            await _sumDashboardReportDurations(decoded, uri, token)
+                .catchError((Object _) => null);
+        return summary;
+      }
+
+      final List<Map<String, dynamic>> summaries =
+          await Future.wait<Map<String, dynamic>>(
+        [
+          fetchSummary(
+            startDate: today,
+            endDate: today,
+            requestType: 'TODAY',
+          ),
+          fetchSummary(
+            startDate: firstDayOfMonth,
+            endDate: today,
+            requestType: 'CURRENT MONTH',
+          ),
+        ],
+      );
+
+      final Map<String, dynamic> todaySummary = summaries[0];
+
+      final Map<String, dynamic> monthSummary = summaries[1];
+
+      final int parsedTodayActive = int.tryParse(
+            todaySummary['active_count']?.toString() ?? '0',
+          ) ??
+          0;
+
+      final int parsedTodayProductive = int.tryParse(
+            todaySummary['productive_count']?.toString() ?? '0',
+          ) ??
+          0;
+
+      final int parsedTodayNewLeads = int.tryParse(
+            todaySummary['new_leads']?.toString() ?? '0',
+          ) ??
+          0;
+
+      final double parsedTodayAverage = double.tryParse(
+            todaySummary['call_duration_average_8hrs']?.toString() ?? '0',
+          ) ??
+          0.0;
+
+      final int parsedMonthActive = int.tryParse(
+            monthSummary['active_count']?.toString() ?? '0',
+          ) ??
+          0;
+
+      final int parsedMonthProductive = int.tryParse(
+            monthSummary['productive_count']?.toString() ?? '0',
+          ) ??
+          0;
+
+      final int parsedMonthNewLeads = int.tryParse(
+            monthSummary['new_leads']?.toString() ?? '0',
+          ) ??
+          0;
+
+      final double parsedMonthAverage = double.tryParse(
+            monthSummary['call_duration_average_8hrs']?.toString() ?? '0',
+          ) ??
+          0.0;
+
+      debugPrint(
+        '=============================================',
+      );
+
+      debugPrint(
+        'TODAY ACTIVE CALL: $parsedTodayActive',
+      );
+
+      debugPrint(
+        'TODAY PRODUCTIVE CALL: $parsedTodayProductive',
+      );
+
+      debugPrint(
+        'TODAY NEW LEADS: $parsedTodayNewLeads',
+      );
+
+      debugPrint(
+        'TODAY AVG CALL DURATION: $parsedTodayAverage',
+      );
+
+      debugPrint(
+        'MONTH ACTIVE CALL: $parsedMonthActive',
+      );
+
+      debugPrint(
+        'MONTH PRODUCTIVE CALL: $parsedMonthProductive',
+      );
+
+      debugPrint(
+        'MONTH NEW LEADS: $parsedMonthNewLeads',
+      );
+
+      debugPrint(
+        'MONTH AVG CALL DURATION: $parsedMonthAverage',
+      );
+
+      debugPrint(
+        '=============================================',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _todayDashboardCallSeconds = todaySummary['_dashboard_duration_seconds'] as int?;
+        _monthDashboardCallSeconds = monthSummary['_dashboard_duration_seconds'] as int?;
+        todayActiveCallCount = parsedTodayActive;
+        todayProductiveCallCount = parsedTodayProductive;
+        todayNewLeads = parsedTodayNewLeads;
+        todayAverageCallDurationPercent = parsedTodayAverage;
+
+        monthActiveCallCount = parsedMonthActive;
+        monthProductiveCallCount = parsedMonthProductive;
+        monthNewLeads = parsedMonthNewLeads;
+        monthAverageCallDurationPercent = parsedMonthAverage;
+      });
+    } catch (error, stackTrace) {
+      debugPrint(
+        'CALL DURATION SUMMARY ERROR: $error',
+      );
+
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _todayDashboardCallSeconds = null;
+        _monthDashboardCallSeconds = null;
+        todayActiveCallCount = 0;
+        todayProductiveCallCount = 0;
+        todayNewLeads = 0;
+        todayAverageCallDurationPercent = 0.0;
+
+        monthActiveCallCount = 0;
+        monthProductiveCallCount = 0;
+        monthNewLeads = 0;
+        monthAverageCallDurationPercent = 0.0;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isCallDurationSummaryLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatDashboardCallDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    return '${minutes ~/ 60}H ${minutes % 60} min';
+  }
+
+  int? _dashboardDurationSeconds(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.isFinite && value >= 0 ? value.round() : null;
+    final text = value.toString().trim();
+    final numeric = double.tryParse(text);
+    if (numeric != null && numeric.isFinite && numeric >= 0) return numeric.round();
+    final clock = RegExp(r'^(?:(\d+)\s+days?,?\s*)?(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$').firstMatch(text);
+    if (clock != null) {
+      final days = int.tryParse(clock.group(1) ?? '') ?? 0;
+      return days * 86400 + int.parse(clock.group(2)!) * 3600 +
+          int.parse(clock.group(3)!) * 60 + (double.tryParse(clock.group(4) ?? '') ?? 0).round();
+    }
+    final parts = RegExp(r'(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)', caseSensitive: false).allMatches(text);
+    double total = 0;
+    bool found = false;
+    for (final part in parts) {
+      found = true;
+      final unit = part.group(2)!.toLowerCase();
+      total += double.parse(part.group(1)!) * (unit.startsWith('h') ? 3600 : unit.startsWith('m') ? 60 : 1);
+    }
+    return found ? total.round() : null;
+  }
+
+  Future<int?> _sumDashboardReportDurations(
+    Map decoded,
+    Uri firstUri,
+    String token,
+  ) async {
+    dynamic current = decoded;
+    Uri currentUri = firstUri;
+    final visited = <String>{firstUri.toString()};
+    int total = 0;
+    while (true) {
+      final results = current is Map ? current['results'] : null;
+      final rows = results is Map ? results['data'] : null;
+      if (rows is! List) return null;
+      for (final row in rows) {
+        if (row is! Map) return null;
+        final seconds = _dashboardDurationSeconds(row['call_duration'] ?? row['duration']);
+        if (seconds == null) return null;
+        total += seconds;
+      }
+      final next = current is Map ? current['next']?.toString() : null;
+      if (next == null || next.isEmpty) return total;
+      if (rows.isEmpty) return null;
+      final resolved = currentUri.resolve(next);
+      if (resolved.origin != firstUri.origin || !visited.add(resolved.toString())) return null;
+      if (!mounted) return null;
+      currentUri = resolved;
+      final response = await http.get(currentUri, headers: {
+        'Authorization': 'Bearer $token', 'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) return null;
+      current = jsonDecode(utf8.decode(response.bodyBytes));
+    }
+  }
+
+  int? _dashboardSummaryDuration(Map<String, dynamic> summary) {
+    for (final key in ['total_call_duration_seconds', 'total_duration_seconds', 'call_duration_seconds', 'total_call_duration', 'total_duration', 'call_duration']) {
+      final seconds = _dashboardDurationSeconds(summary[key]);
+      if (seconds != null) return seconds;
+    }
+    // Never infer elapsed time from an average percentage.
+    return null;
+  }
+
+
+  Future<void> fetchMySalesPoints() async {
+    if (_salesPointsLoading || !mounted) return;
+    setState(() {
+      _salesPointsLoading = true;
+      _salesPointsError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Session unavailable');
+      }
+      final headers = <String, String>{
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      };
+      final base = api.toString().replaceFirst(RegExp(r'/+$'), '');
+      int? staffId = _salesPointStaffId;
+      if (staffId == null) {
+        final profileResponse = await http.get(
+          Uri.parse('$base/api/profile/'), headers: headers,
+        ).timeout(const Duration(seconds: 30));
+        if (!mounted) return;
+        if (profileResponse.statusCode != 200) {
+          throw Exception('Unable to load profile');
+        }
+        final profile = jsonDecode(utf8.decode(profileResponse.bodyBytes));
+        if (profile is Map && profile['data'] is Map) {
+          staffId = int.tryParse(profile['data']['id']?.toString() ?? '');
+        }
+      }
+      if (staffId == null || staffId <= 0) {
+        throw Exception('Invalid staff profile');
+      }
+      _salesPointStaffId = staffId;
+      final now = DateTime.now();
+      final uri = Uri.parse('$base/api/sales/point/ranking/').replace(
+        queryParameters: {
+          'start_date': DateFormat('yyyy-MM-dd').format(
+            DateTime(now.year, now.month, 1),
+          ),
+          'end_date': DateFormat('yyyy-MM-dd').format(now),
+          'staff_id': staffId.toString(),
+        },
+      );
+      final response = await http.get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+      if (!mounted) return;
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load sales points');
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map || decoded['status'] != 'success' ||
+          decoded['data'] is! List) {
+        throw Exception('Invalid ranking response');
+      }
+      Map? ownRecord;
+      for (final item in decoded['data'] as List) {
+        if (item is Map &&
+            int.tryParse(item['staff_id']?.toString() ?? '') == staffId) {
+          ownRecord = item;
+          break;
+        }
+      }
+      setState(() {
+        _mySalesRank = int.tryParse(ownRecord?['rank']?.toString() ?? '');
+        _mySalesPoints = (num.tryParse(
+          ownRecord?['total_points']?.toString() ?? '0',
+        ) ?? 0).toStringAsFixed(2);
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _mySalesRank = null;
+          _salesPointsError = 'Unable to load';
+        });
+      }
+      debugPrint('MY SALES POINTS ERROR: $error');
+    } finally {
+      if (mounted) setState(() => _salesPointsLoading = false);
+    }
+  }
+
 
   // ============================================================
   // BOTTOM NAVIGATION + DASHBOARD SEARCH
@@ -105,6 +565,8 @@ bool isFetchingInboxMailCount = false;
     getProfile();
     fetchFamilyWiseOrderSummary();
     fetchMyAttendanceDetails();
+    fetchMySalesPoints();
+    fetchCallDurationSummary();
 
   mailCountTimer = Timer.periodic(
   const Duration(seconds: 15),
@@ -155,6 +617,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   super.didChangeAppLifecycleState(state);
 
   if (state == AppLifecycleState.resumed) {
+    fetchCallDurationSummary();
     fetchMyAttendanceDetails();
     fetchInboxMailCount();
   }
@@ -865,6 +1328,8 @@ void dispose() {
       });
 
       await Future.wait([
+        fetchMySalesPoints(),
+        fetchCallDurationSummary(),
         fetchproformaData(),
         getfamily(),
         getSalesReport(),
@@ -2695,6 +3160,11 @@ void dispose() {
         'keywords': 'view staffs staff list team members',
       },
       // {
+      //   'title': 'Sales Points',
+      //   'icon': Icons.emoji_events_outlined,
+      //   'keywords': 'sales points rank ranking my performance',
+      // },
+      // {
       //   'title': 'Logout',
       //   'icon': Icons.logout_rounded,
       //   'keywords': 'logout sign out',
@@ -2907,6 +3377,16 @@ void dispose() {
         );
         return;
 
+      case 'Sales Points':
+        await Navigator.push<void>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MySalesPointRankingPage(),
+          ),
+        );
+        if (mounted) await fetchMySalesPoints();
+        return;
+
       case 'Logout':
         await logoutUser(context);
         return;
@@ -2969,79 +3449,95 @@ void dispose() {
   }
 
   Widget buildMyOrderSummaryCard() {
+    String sales(String value) => isFamilySummaryLoading ? '...' : value;
+    String calls(String value) => isCallDurationSummaryLoading ? '...' : value;
+
+    Widget tile(String label, String value, {bool emphasis = false}) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(emphasis ? 1 : .96),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+            child: Text(value, maxLines: 1, style: TextStyle(
+              fontSize: emphasis ? 18 : 16, height: 1.15,
+              color: emphasis ? const Color(0xFF0F172A) : const Color(0xFF0F172A),
+              fontWeight: FontWeight.w900))),
+        ]),
+      );
+    }
+
+    Widget pair(Widget left, Widget right) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Expanded(child: left), const SizedBox(width: 10), Expanded(child: right)],
+    );
+
+    Widget durationRow(String label, int? seconds) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(.96), borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [
+        const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF0F172A), size: 16),
+        const SizedBox(width: 10),
+        Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w800))),
+        const SizedBox(width: 8),
+        Expanded(flex: 3, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight,
+          child: Text(calls(seconds == null ? '--' : _formatDashboardCallDuration(seconds)),
+            style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A), fontWeight: FontWeight.w900)))),
+      ]),
+    );
+
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.blue,
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(colors: [Color(0xFF2196F3), Color(0xFF337DFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(22),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 12,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildInfoCard(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : familyTotalBills.toString(),
-                  'Month Bills',
-                ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        pair(tile('Month Bills', sales('MB - $familyTotalBills')),
+          tile('Month Volume', sales('MV - ${formatCompactAmount(familyTotalAmount)}'))),
+        const SizedBox(height: 5),
+        pair(tile('Today Bills', sales('TB - $familyTodaysBills')),
+          tile('Today Volume', sales('TV - ${formatCompactAmount(familyTodaysTotalAmount)}'))),
+        const SizedBox(height: 5),
+        durationRow('Today CD', _todayDashboardCallSeconds),
+        const SizedBox(height: 5),
+        durationRow('Month CD', _monthDashboardCallSeconds),
+        const SizedBox(height: 5),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(.96), borderRadius: BorderRadius.circular(16)),
+          child: Row(children: [
+            const Expanded(child: Text('New leads', style: TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w800))),
+            Text(calls('$monthNewLeads'), style: const TextStyle(fontSize: 18, color: Color(0xFF0F172A), fontWeight: FontWeight.w900)),
+          ]),
+        ),
+        const SizedBox(height: 5),
+        pair(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MySalesPointRankingPage(),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _buildInfoCard(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : formatCompactAmount(familyTotalAmount),
-                  'Month Volume',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _buildInfoCard(
-                  '0',
-                  'Rank',
-                ),
-              ),
-            ],
+            ),
+            child: tile('Rank', _salesPointsLoading ? '...' : (_mySalesRank == null ? '--' : '#$_mySalesRank'), emphasis: true),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildInfoCard(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : familyTodaysBills.toString(),
-                  'Today Bills',
-                ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MySalesPointRankingPage(),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _buildInfoCard(
-                  isFamilySummaryLoading
-                      ? '...'
-                      : formatCompactAmount(
-                          familyTodaysTotalAmount,
-                        ),
-                  'Today Volume',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _buildInfoCard(
-                  '0',
-                  'Points',
-                ),
-              ),
-            ],
+            ),
+            child: tile('Points', _salesPointsLoading ? '...' : (_salesPointsError != null ? '--' : _mySalesPoints), emphasis: true),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
@@ -3120,6 +3616,50 @@ void dispose() {
                   ],
                 ),
                 const Spacer(),
+                if (title == 'Sales Points') ...[
+                  if (_salesPointsLoading)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  else if (_salesPointsError != null)
+                    Text(
+                      _salesPointsError!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      'Rank: ${_mySalesRank == null ? '-' : '#$_mySalesRank'}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Points: $_mySalesPoints',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 5),
+                  const Text(
+                    'Current month',
+                    style: TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                  const Spacer(),
+                ],
                 Row(
                   children: [
                     Text(
@@ -3256,17 +3796,17 @@ void dispose() {
                           vertical: isVerySmallPhone ? 5 : 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.11),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(9),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.20),
+                            color: const Color(0xFFE2E8F0),
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
                               itemIcon,
-                              color: Colors.white,
+                              color: const Color(0xFF0F172A),
                               size: isVerySmallPhone ? 13 : 14,
                             ),
                             const SizedBox(width: 6),
@@ -3276,7 +3816,7 @@ void dispose() {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: const Color(0xFF0F172A),
                                   fontSize: isVerySmallPhone ? 8.5 : 9.5,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -3285,7 +3825,7 @@ void dispose() {
                             const SizedBox(width: 3),
                             Icon(
                               Icons.chevron_right_rounded,
-                              color: Colors.white.withOpacity(0.90),
+                              color: const Color(0xFF0F172A),
                               size: 15,
                             ),
                           ],

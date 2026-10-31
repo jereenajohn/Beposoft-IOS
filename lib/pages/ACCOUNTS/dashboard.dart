@@ -1,3 +1,4 @@
+import 'package:beposoft/pages/ACCOUNTS/sales_point_ranking_page.dart';
 import 'package:beposoft/pages/ADMIN/dgm_page.dart';
 import 'package:beposoft/pages/ADMIN/family_date_summary_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/daily_goods_movement.dart';
@@ -1847,17 +1848,28 @@ class _admin_dashboardState extends State<dashboard>
                             builder: (context) => EmployeeLeaveFormPage()));
                   },
                 ),
-       ListTile(
-                  leading: Icon(Icons.person),
-                  title: Text('Point System'),
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => ProductPointSystemPage()));
-                    // Navigate to the Settings page or perform any other action
-                  },
-                ),
+      //  ListTile(
+      //             leading: Icon(Icons.person),
+      //             title: Text('Point System'),
+      //             onTap: () {
+      //               Navigator.push(
+      //                   context,
+      //                   MaterialPageRoute(
+      //                       builder: (context) => ProductPointSystemPage()));
+      //               // Navigate to the Settings page or perform any other action
+      //             },
+      //           ),
+      //                 ListTile(
+      //               leading: Icon(Icons.person),
+      //               title: Text('Point System List'),
+      //               onTap: () {
+      //                 Navigator.push(
+      //                     context,
+      //                     MaterialPageRoute(
+      //                         builder: (context) => SalesPointRankingPage()));
+      //                 // Navigate to the Settings page or perform any other action
+      //               },
+      //             ),
                 ListTile(
                   title: const Text('Send Mail'),
                   onTap: () async {
@@ -1935,6 +1947,12 @@ class _admin_dashboardState extends State<dashboard>
                     'Shipped',
                     'Invoice Rejected'
                   ]),
+
+                 _buildDropdownTile(context, 'Point System', [
+                  'Add Point System',
+                  'Point System List',
+                  'Point System Excel',
+                ]),
                 Divider(),
                 Text("Others"),
                 Divider(),
@@ -2423,6 +2441,7 @@ class _admin_dashboardState extends State<dashboard>
                   'Sales Report',
                   'Sales Report Excel',
                   'GST Report',
+                  'Point System Excel',
                   // 'All Division Product Sale Report',
                   // 'Cycling & Skating Monthly Excel',
                   // 'Cycling & Skating Daily Excel',
@@ -2436,6 +2455,7 @@ class _admin_dashboardState extends State<dashboard>
                   'Stock Report',
                   'Damaged Stock',
                   'Finance Report',
+                  'Order Comparison Report',
                   'Actual Delivery Report',
                   'Product Usability Report',
                   'Dispatched & Pending Orders Report',

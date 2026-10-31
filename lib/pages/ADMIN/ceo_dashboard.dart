@@ -8629,6 +8629,11 @@ _buildDashboardCard(
                     'Shipped',
                     'Invoice Rejected'
                   ]),
+                   _buildDropdownTile(context, 'Point System', [
+                  'Add Point System',
+                  'Point System List',
+                  'Point System Excel',
+                ]),
                   Divider(),
                   Text("Others"),
                   Divider(),
@@ -9230,6 +9235,7 @@ _buildDashboardCard(
                   _buildDropdownTile(context, 'Reports', [
                     'Sales Report',
                     'Sales Report Excel',
+                    'Point System Excel',
                     'GST Report',
                     'Product Stock Report',
                     'Order Items Excel Report',
