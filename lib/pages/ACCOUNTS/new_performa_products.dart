@@ -31,6 +31,7 @@ import 'package:beposoft/pages/ACCOUNTS/performa_cart.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
 
 import 'package:beposoft/pages/api.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 
@@ -596,7 +597,11 @@ class _CreatePerformaProduct_ListState
               if (variant['family'] == null) {
                 variant['family'] = product['family'];
               }
-
+// Inherit tax from the parent product when the variant
+// does not have its own tax, matching the React implementation.
+if (variant['tax'] == null) {
+  variant['tax'] = product['tax'];
+}
               // ======================================================
 
               // FLATTEN VARIANT
@@ -1206,134 +1211,252 @@ class _CreatePerformaProduct_ListState
     return 0.0;
   }
 
-  Future<bool> _addProductDirectlyToProforma({
-    required dynamic productId,
-    required int quantity,
-  }) async {
-    final int? orderId = widget.proformaOrderId;
+ 
+Future<bool> _addProductDirectlyToProforma({
+  required dynamic productId,
+  required int quantity,
+}) async {
+  final int? orderId = widget.proformaOrderId;
 
-    if (orderId == null || orderId <= 0) {
-      return false;
-    }
+  if (orderId == null || orderId <= 0) {
+    debugPrint('ADD PRODUCT ERROR: Invalid Proforma Order ID');
+    return false;
+  }
 
-    final String? token = await getTokenFromPrefs();
+  final String? token = await getTokenFromPrefs();
 
-    if (token == null || token.trim().isEmpty) {
-      if (mounted) {
-        showCustomPopup(
-          "Error",
-          "Authentication token not found.",
-        );
-      }
+  if (token == null || token.trim().isEmpty) {
+    debugPrint('ADD PRODUCT ERROR: Authentication token not found');
 
-      return false;
-    }
-
-    final Map<String, dynamic>? item = _findProductDataById(productId);
-
-    final double rate = _readItemNumber(
-      item,
-      [
-        'rate',
-        'selling_price',
-        'price',
-        'actual_price',
-        'mrp',
-      ],
-    );
-
-    final double discount = _readItemNumber(
-      item,
-      ['discount'],
-    );
-
-    final double tax = _readItemNumber(
-      item,
-      ['tax'],
-    );
-
-    final String rawDescription = item?['description']?.toString().trim() ?? '';
-
-    final String description =
-        rawDescription.isNotEmpty ? rawDescription : 'Additional product';
-
-    try {
-      final http.Response response = await _postWithProductAudit(
-        Uri.parse(
-          '$api/api/perfoma/order/$orderId/item/add/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'product': productId,
-          'quantity': quantity,
-          'rate': rate,
-          'discount': discount,
-          'tax': tax,
-          'description': description,
-        }),
-      );
-
-      debugPrint(
-        "ADD PRODUCT STATUS: ${response.statusCode}",
-      );
-
-      debugPrint(
-        "ADD PRODUCT RESPONSE: ${response.body}",
-      );
-
-      debugPrint(
-        "ADD PRODUCT PAYLOAD: ${jsonEncode({
-              'product': productId,
-              'quantity': quantity,
-              'rate': rate,
-              'discount': discount,
-              'tax': tax,
-              'description': description,
-            })}",
-      );
-
-      if (!mounted) return false;
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
-      }
-
-      String message = "Failed to add Product!";
-
-      try {
-        final dynamic decoded = jsonDecode(
-          response.body,
-        );
-
-        if (decoded is Map) {
-          message = decoded['message']?.toString() ??
-              decoded['detail']?.toString() ??
-              decoded['error']?.toString() ??
-              message;
-        }
-      } catch (_) {}
-
+    if (mounted) {
       showCustomPopup(
         "Error",
-        message,
+        "Authentication token not found.",
       );
+    }
 
-      return false;
+    return false;
+  }
+
+  final Map<String, dynamic>? item =
+      _findProductDataById(productId);
+
+      debugPrint(
+  'SELECTED PRODUCT TAX DEBUG: ${jsonEncode({
+    'product_id': productId,
+    'product_name': item?['name'],
+    'tax': item?['tax'],
+    'tax_percentage': item?['tax_percentage'],
+    'gst': item?['gst'],
+    'gst_percentage': item?['gst_percentage'],
+    'parent_product_id': item?['_parent_product_id'],
+    'is_variant': item?['_is_variant'],
+  })}',
+);
+
+  final double rate = _readItemNumber(
+    item,
+    [
+      'rate',
+      'selling_price',
+      'price',
+      'actual_price',
+      'mrp',
+    ],
+  );
+
+  final double discount = _readItemNumber(
+    item,
+    ['discount'],
+  );
+
+  final double tax = _readItemNumber(
+    item,
+    ['tax'],
+  );
+
+  final String rawDescription =
+      item?['description']?.toString().trim() ?? '';
+
+  final String description = rawDescription.isNotEmpty
+      ? rawDescription
+      : 'Additional product';
+
+  final Map<String, dynamic> payload = {
+    'product': productId,
+    'quantity': quantity,
+    'rate': rate,
+    'discount': discount,
+    'tax': tax,
+    'description': description,
+  };
+
+  final String endpoint =
+      '$api/api/perfoma/order/$orderId/item/add/';
+
+  // Print complete JSON without debugPrint truncation.
+  void printCompleteData(String label, dynamic data) {
+    debugPrint(
+      '\n========== $label ==========',
+    );
+
+    String formattedData;
+
+    try {
+      formattedData =
+          const JsonEncoder.withIndent('  ').convert(data);
     } catch (_) {
-      if (mounted) {
-        showCustomPopup(
-          "Error",
-          "Failed to add Product!",
-        );
+      formattedData = data.toString();
+    }
+
+    const int chunkSize = 800;
+
+    for (int i = 0; i < formattedData.length; i += chunkSize) {
+      final int end = (i + chunkSize < formattedData.length)
+          ? i + chunkSize
+          : formattedData.length;
+
+      debugPrint(
+        formattedData.substring(i, end),
+        wrapWidth: 1024,
+      );
+    }
+
+    debugPrint(
+      '========== END $label ==========\n',
+    );
+  }
+
+  if (kDebugMode) {
+    debugPrint(
+      '\n==================================================',
+    );
+    debugPrint(
+      '             ADD PRODUCT TO PROFORMA',
+    );
+    debugPrint(
+      '==================================================',
+    );
+
+    debugPrint('Proforma Order ID : $orderId');
+    debugPrint('Selected Product ID : $productId');
+    debugPrint('Selected Quantity : $quantity');
+
+    // Print every field returned for the selected product.
+    printCompleteData(
+      'COMPLETE SELECTED PRODUCT DATA',
+      item ?? {'message': 'Product data not found'},
+    );
+
+    debugPrint('Product Rate : $rate');
+    debugPrint('Product Discount : $discount');
+    debugPrint('Product Tax : $tax');
+    debugPrint('Product Description : $description');
+
+    // Print request URL and all submitted values.
+    debugPrint('API METHOD : POST');
+    debugPrint('API ENDPOINT : $endpoint');
+
+    printCompleteData(
+      'COMPLETE ADD PRODUCT API PAYLOAD',
+      payload,
+    );
+  }
+
+  try {
+    final http.Response response =
+        await _postWithProductAudit(
+      Uri.parse(endpoint),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(payload),
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '\n========== ADD PRODUCT API RESPONSE ==========',
+      );
+      debugPrint('Status Code : ${response.statusCode}');
+      debugPrint('Reason Phrase : ${response.reasonPhrase}');
+
+      dynamic responseData;
+
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (_) {
+        responseData = response.body;
       }
 
-      return false;
+      printCompleteData(
+        'COMPLETE API RESPONSE BODY',
+        responseData,
+      );
     }
+
+    if (!mounted) return false;
+
+    if (response.statusCode == 200 ||
+        response.statusCode == 201) {
+      if (kDebugMode) {
+        debugPrint(
+          'ADD PRODUCT SUCCESS: Product added successfully',
+        );
+        debugPrint('Product ID : $productId');
+        debugPrint('Quantity : $quantity');
+        debugPrint('Proforma Order ID : $orderId');
+      }
+
+      return true;
+    }
+
+    String message = "Failed to add Product!";
+
+    try {
+      final dynamic decoded = jsonDecode(response.body);
+
+      if (decoded is Map) {
+        message = decoded['message']?.toString() ??
+            decoded['detail']?.toString() ??
+            decoded['error']?.toString() ??
+            message;
+      }
+    } catch (_) {}
+
+    if (kDebugMode) {
+      debugPrint('ADD PRODUCT FAILED');
+      debugPrint('Status Code : ${response.statusCode}');
+      debugPrint('Error Message : $message');
+    }
+
+    showCustomPopup(
+      "Error",
+      message,
+    );
+
+    return false;
+  } catch (error, stackTrace) {
+    if (kDebugMode) {
+      debugPrint(
+        '\n========== ADD PRODUCT EXCEPTION ==========',
+      );
+      debugPrint('Error : $error');
+      debugPrint('Stack Trace : $stackTrace');
+    }
+
+    if (mounted) {
+      showCustomPopup(
+        "Error",
+        "Failed to add Product!",
+      );
+    }
+
+    return false;
   }
+}
+
 
   // ============================================================
 

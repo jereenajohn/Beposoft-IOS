@@ -2,6 +2,7 @@ import 'package:beposoft/Sales%20Directors/DSR_BDO_List.dart';
 import 'package:beposoft/Sales%20Directors/sd_all_dsr_reportpage.dart';
 import 'package:beposoft/Sales%20Directors/sd_confirm_call_duration.dart';
 import 'package:beposoft/pages/ACCOUNTS/BDO_call_List.dart';
+import 'package:beposoft/pages/ACCOUNTS/Customer_complete_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/Dispatched_Pending_Orders_Summary_Report.dart';
 import 'package:beposoft/pages/ACCOUNTS/Staff_exit_form_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Expenses.dart';
@@ -20,6 +21,7 @@ import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/proforma_list_payment_slips.dart';
 import 'package:beposoft/pages/ACCOUNTS/sales_point_ranking_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
+import 'package:beposoft/pages/ACCOUNTS/statewise_sales_report_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/teamsales_pointsandranking_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/view_all_team_members.dart';
 import 'package:beposoft/pages/ADMIN/add_attendance.dart';
@@ -166,6 +168,24 @@ class drower {
           ),
         );
         break;
+      case 'Statewise Sales Report Excel':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StateWiseSalesReportPage(),
+          ),
+        );
+        break;
+  case 'Customer Complete Report':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CustomerCompleteReportPage(),
+          ),
+        );
+        break;
+        
+        
       case 'Add Customer':
         Navigator.push(
           context,

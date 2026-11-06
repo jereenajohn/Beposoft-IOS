@@ -9236,6 +9236,8 @@ _buildDashboardCard(
                     'Sales Report',
                     'Sales Report Excel',
                     'Point System Excel',
+                    'Statewise Sales Report Excel',
+                    'Customer Complete Report',
                     'GST Report',
                     'Product Stock Report',
                     'Order Items Excel Report',

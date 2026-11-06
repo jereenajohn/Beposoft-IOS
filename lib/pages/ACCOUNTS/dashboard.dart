@@ -2442,6 +2442,8 @@ class _admin_dashboardState extends State<dashboard>
                   'Sales Report Excel',
                   'GST Report',
                   'Point System Excel',
+                  'Statewise Sales Report Excel',
+                  'Customer Complete Report',
                   // 'All Division Product Sale Report',
                   // 'Cycling & Skating Monthly Excel',
                   // 'Cycling & Skating Daily Excel',

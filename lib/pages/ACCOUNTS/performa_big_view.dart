@@ -3713,23 +3713,116 @@ class _PerformaInvoice_BigView_ListState
     }
   }
 
-  Future<void> _openAddProductPage(int orderId) async {
-    final before =
-        Map<String, dynamic>.from(_auditCopy(_loadedProforma) as Map);
-    final bool? productAdded = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreatePerformaProduct_List(
-          proformaOrderId: orderId,
-        ),
+
+Future<void> _openAddProductPage(int orderId) async {
+  final before = Map<String, dynamic>.from(
+    _auditCopy(_loadedProforma) as Map,
+  );
+
+  final bool? productAdded = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CreatePerformaProduct_List(
+        proformaOrderId: orderId,
       ),
+    ),
+  );
+
+  await _logReturnedProductChanges(orderId, before);
+
+  if (!mounted || productAdded != true) return;
+
+  // Reload the latest product details from the API.
+  await fetchperformalistData();
+
+  if (!mounted) return;
+
+  // Print complete product details after returning to Big View.
+  assert(() {
+    void printFullJson(String title, dynamic data) {
+      debugPrint('\n========== $title ==========');
+
+      final String output =
+          const JsonEncoder.withIndent('  ').convert(data);
+
+      const int chunkSize = 800;
+
+      for (int i = 0; i < output.length; i += chunkSize) {
+        final int end = (i + chunkSize < output.length)
+            ? i + chunkSize
+            : output.length;
+
+        debugPrint(
+          output.substring(i, end),
+          wrapWidth: 1024,
+        );
+      }
+
+      debugPrint('========== END $title ==========\n');
+    }
+
+    debugPrint(
+      '\n================================================',
+    );
+    debugPrint('PRODUCT ADDED - RETURNED TO BIG VIEW');
+    debugPrint('Proforma Order ID: $orderId');
+    debugPrint('Invoice: ${widget.invoice}');
+    debugPrint(
+      '================================================',
     );
 
-    await _logReturnedProductChanges(orderId, before);
-    if (!mounted || productAdded != true) return;
+    // Raw API data including all fields.
+    final dynamic rawItems = _loadedProforma['perfoma_items'];
 
-    await fetchperformalistData();
-  }
+    printFullJson(
+      'COMPLETE PRODUCT DETAILS FROM API',
+      rawItems ?? [],
+    );
+
+    // Product details mapped for display in Big View.
+    for (final order in orders) {
+      if (_asInt(order['id']) != orderId) continue;
+
+      final dynamic items = order['perfoma_items'];
+
+      if (items is! List) continue;
+
+      debugPrint('Total Products: ${items.length}');
+
+      for (int index = 0; index < items.length; index++) {
+        final dynamic item = items[index];
+
+        printFullJson(
+          'BIG VIEW PRODUCT ${index + 1}',
+          item,
+        );
+
+        if (item is Map) {
+          debugPrint('Product ID: ${item['product_id']}');
+          debugPrint('Product Name: ${item['name']}');
+          debugPrint('Quantity: ${item['quantity']}');
+          debugPrint('Actual Price: ${item['actual_price']}');
+          debugPrint('Rate: ${item['rate']}');
+          debugPrint('Discount: ${item['discount']}');
+          debugPrint('Tax: ${item['tax']}');
+          debugPrint('Description: ${item['description']}');
+          debugPrint('Images: ${item['first_image']}');
+        }
+      }
+
+      debugPrint(
+        'Invoice Total Amount: ${order['total_amount']}',
+      );
+    }
+
+    debugPrint(
+      '\n========== BIG VIEW PRODUCT LOG COMPLETED ==========\n',
+    );
+
+    return true;
+  }());
+}
+
 
   Future<void> _openInvoiceUrl(String invoice) async {
     final Uri url = Uri.parse('$api/performainvoice/$invoice/');

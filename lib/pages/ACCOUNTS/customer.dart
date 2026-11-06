@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
+import 'package:beposoft/pages/ACCOUNTS/Customer_complete_report.dart';
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_address.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_attribute.dart';
@@ -62,13 +68,21 @@ class _customer_listState extends State<customer_list> {
   List<Map<String, dynamic>> familyFiltered = [];
   List<Map<String, dynamic>> stateFiltered = [];
   List<Map<String, dynamic>> sta = [];
+  List<Map<String, dynamic>> type = [];
 
   String? selectedFamilyFilter = "All";
   String? selectedStateFilter = "All";
   String? selectedStaffFilter = "All";
+  String? selectedCustomerTypeFilter = "All";
   int currentPage = 1;
   int totalPages = 1;
   bool loadingPage = false;
+  bool _exportingExcel = false;
+  final ScrollController _customerScrollController = ScrollController();
+  Timer? _searchDebounce;
+  int _requestGeneration = 0;
+  bool _hasMoreCustomers = true;
+  String? _paginationError;
 
   List<String> categories = ["cycling", 'skating', 'fitness', 'bepocart'];
   String selectededu = "cycling";
@@ -81,14 +95,19 @@ class _customer_listState extends State<customer_list> {
   @override
   void initState() {
     super.initState();
+    _customerScrollController.addListener(_onCustomerScroll);
     getcustomer();
     getfamily();
     getstate();
     getstaff();
+    getcustomertype();
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _requestGeneration++;
+    _customerScrollController.dispose();
     searchController.dispose();
     super.dispose();
   }
@@ -119,109 +138,290 @@ class _customer_listState extends State<customer_list> {
     return prefs.getString('department');
   }
 
-  Future<void> getcustomer({int page = 1}) async {
-    try {
-      setState(() {
-        loadingPage = true;
-      });
-
-      final token = await gettokenFromPrefs();
-
-      final Map<String, String> queryParams = {
-        'page': page.toString(),
-      };
-
-      if (searchController.text.trim().isNotEmpty) {
-        queryParams['search'] = searchController.text.trim();
-      }
-
-      final uri = Uri.parse('$api/api/customers/').replace(
-        queryParameters: queryParams,
-      );
-
-      var response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final parsed = jsonDecode(response.body);
-
-        List data = parsed['results'];
-        int count = parsed['count'];
-        totalPages = (count / 10).ceil();
-
-        List<Map<String, dynamic>> newCustomers = [];
-
-        for (var item in data) {
-          newCustomers.add({
-            'id': item['id'],
-            'name': item['name'],
-            'created_at': item['created_at'],
-            'phone': item['phone'],
-            'family': item['family'],
-            'state_name': item['state_name'],
-            'manager': item['manager'],
-          });
-        }
-
-        setState(() {
-          currentPage = page;
-          customer = newCustomers;
-        });
-
-        applyFilters();
-      } else {
-        setState(() {
-          customer = [];
-          filteredProducts = [];
-          totalPages = 1;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        customer = [];
-        filteredProducts = [];
-      });
-    } finally {
-      setState(() {
-        loadingPage = false;
-      });
+  void _onCustomerScroll() {
+    if (!_customerScrollController.hasClients ||
+        loadingPage || !_hasMoreCustomers) return;
+    if (_customerScrollController.position.extentAfter < 350) {
+      getcustomer(page: currentPage + 1);
     }
   }
 
-  void applyFilters() {
-    List<Map<String, dynamic>> temp = List.from(customer);
-
-    if (selectedFamilyFilter != null && selectedFamilyFilter != "All") {
-      temp = temp
-          .where((cust) =>
-              (cust['family'] ?? '').toString().toLowerCase() ==
-              selectedFamilyFilter!.toLowerCase())
-          .toList();
-    }
-
-    if (selectedStateFilter != null && selectedStateFilter != "All") {
-      temp = temp
-          .where((cust) =>
-              (cust['state_name'] ?? '').toString().toLowerCase() ==
-              selectedStateFilter!.toLowerCase())
-          .toList();
-    }
-
-    if (selectedStaffFilter != null && selectedStaffFilter != "All") {
-      temp = temp
-          .where((cust) =>
-              (cust['manager'] ?? '').toString() == selectedStaffFilter)
-          .toList();
-    }
-
+  Future<void> getcustomer({int page = 1}) async {
+    if (!mounted) return;
+    if (loadingPage && page != 1) return;
+    final int generation = page == 1
+        ? ++_requestGeneration
+        : _requestGeneration;
     setState(() {
-      filteredProducts = temp;
+      loadingPage = true;
+      _paginationError = null;
+      if (page == 1) {
+        currentPage = 0;
+        totalPages = 1;
+        _hasMoreCustomers = true;
+        customer = [];
+        filteredProducts = [];
+      }
     });
+
+    try {
+      final token = await gettokenFromPrefs();
+      if (token == null || token.isEmpty) {
+        throw StateError('Authentication token not found');
+      }
+      final uri = Uri.parse('$api/api/customers/').replace(
+        queryParameters: {
+          'page': page.toString(),
+          if (searchController.text.trim().isNotEmpty)
+            'search': searchController.text.trim(),
+          if (selectedStaffFilter != null && selectedStaffFilter != 'All')
+            'manager': selectedStaffFilter!,
+          if (selectedStateFilter != null && selectedStateFilter != 'All')
+            'state': selectedStateFilter!,
+          if (selectedFamilyFilter != null && selectedFamilyFilter != 'All')
+            'family': selectedFamilyFilter!,
+          if (selectedCustomerTypeFilter != null && selectedCustomerTypeFilter != 'All')
+            'customer_type': selectedCustomerTypeFilter!,
+        },
+      );
+      final response = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      });
+      if (response.statusCode != 200) {
+        throw HttpException('Unable to load customers (${response.statusCode})');
+      }
+      final parsed = jsonDecode(response.body);
+      if (parsed is! Map || parsed['results'] is! List) {
+        throw const FormatException('Unexpected customer API response');
+      }
+      final List data = parsed['results'] as List;
+      final int count = (parsed['count'] as num?)?.toInt() ?? 0;
+      final newCustomers = data.whereType<Map>().map((item) => <String, dynamic>{
+        'id': item['id'],
+        'name': item['name'],
+        'created_at': item['created_at'],
+        'phone': item['phone'],
+        'family': item['family'],
+        'state_name': item['state_name'],
+        'manager': item['manager'],
+      }).toList();
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        currentPage = page;
+        totalPages = count == 0 ? 1 : (count / (data.isEmpty ? 10 : data.length)).ceil();
+        final seen = customer.map((e) => e['id']).toSet();
+        for (final entry in newCustomers) {
+          if (seen.add(entry['id'])) customer.add(entry);
+        }
+        _hasMoreCustomers = data.isNotEmpty && customer.length < count;
+      });
+      applyFilters();
+    } catch (error) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        _paginationError = error.toString();
+        if (page == 1) _hasMoreCustomers = false;
+      });
+    } finally {
+      if (mounted && generation == _requestGeneration) {
+        setState(() => loadingPage = false);
+      }
+    }
+  }
+
+  // Staff List uses /api/get/staffs/ with results.data and pagination.
+  // Resolve IDs only for the Excel Manager column; leave the UI unchanged.
+  Future<Map<String, String>> _loadManagerNamesForExcel(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final names = <String, String>{};
+    for (final staff in sta) {
+      final id = staff['id']?.toString().trim() ?? '';
+      final name = staff['name']?.toString().trim() ?? '';
+      if (id.isNotEmpty && name.isNotEmpty) names[id] = name;
+    }
+
+    final requiredIds = rows
+        .map((row) => row['manager']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty && !names.containsKey(id))
+        .toSet();
+    if (requiredIds.isEmpty) return names;
+
+    final token = await gettokenFromPrefs();
+    if (token == null || token.isEmpty) {
+      throw StateError('Authentication token not found');
+    }
+
+    Uri? next = Uri.parse('$api/api/get/staffs/');
+    final visited = <String>{};
+    while (next != null && requiredIds.isNotEmpty) {
+      if (!visited.add(next.toString())) {
+        throw StateError('Staff API returned a repeated pagination URL');
+      }
+      final response = await http.get(next, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw HttpException(
+          'Unable to resolve staff names (${response.statusCode})',
+        );
+      }
+      final parsed = jsonDecode(response.body);
+      if (parsed is! Map || parsed['results'] is! Map ||
+          parsed['results']['data'] is! List) {
+        throw const FormatException('Unexpected staff API response');
+      }
+      for (final entry in parsed['results']['data'] as List) {
+        if (entry is! Map) continue;
+        final id = entry['id']?.toString().trim() ?? '';
+        final name = entry['name']?.toString().trim() ?? '';
+        if (id.isNotEmpty && name.isNotEmpty) {
+          names[id] = name;
+          requiredIds.remove(id);
+        }
+      }
+      final nextValue = parsed['next']?.toString();
+      next = nextValue == null || nextValue.isEmpty
+          ? null
+          : next!.resolve(nextValue);
+    }
+    return names;
+  }
+
+  Future<void> _exportCustomersExcel() async {
+    if (_exportingExcel) return;
+
+    // Same export flow as GSTReportPage: export already loaded report data.
+    final rows = List<Map<String, dynamic>>.from(filteredProducts);
+    if (rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No customers to export')),
+      );
+      return;
+    }
+
+    setState(() => _exportingExcel = true);
+    try {
+      final managerNames = await _loadManagerNamesForExcel(rows);
+      final workbook = Excel.createExcel();
+      final defaultSheet = workbook.getDefaultSheet();
+      if (defaultSheet != null) {
+        workbook.delete(defaultSheet);
+      }
+      final sheet = workbook['Customers'];
+      final headers = <String>[
+        'ID', 'Customer Name', 'Created At', 'Phone',
+        'Family', 'State', 'Manager',
+      ];
+
+      sheet.appendRow(headers);
+      for (int col = 0; col < headers.length; col++) {
+        sheet.cell(CellIndex.indexByColumnRow(
+          columnIndex: col,
+          rowIndex: 0,
+        )).cellStyle = CellStyle(
+          bold: true,
+          horizontalAlign: HorizontalAlign.Center,
+          verticalAlign: VerticalAlign.Center,
+        );
+      }
+
+      for (final cust in rows) {
+        sheet.appendRow([
+          cust['id']?.toString() ?? '',
+          cust['name']?.toString() ?? '',
+          cust['created_at']?.toString() ?? '',
+          cust['phone']?.toString() ?? '',
+          cust['family']?.toString() ?? '',
+          cust['state_name']?.toString() ?? '',
+          managerNames[cust['manager']?.toString().trim() ?? ''] ?? '',
+        ]);
+      }
+
+      final bytes = workbook.encode();
+      if (bytes == null) {
+        throw StateError('Could not generate Excel file');
+      }
+
+      final directory = await getApplicationDocumentsDirectory();
+      final now = DateTime.now();
+      final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}'
+          '${now.day.toString().padLeft(2, '0')}_'
+          '${now.hour.toString().padLeft(2, '0')}'
+          '${now.minute.toString().padLeft(2, '0')}'
+          '${now.second.toString().padLeft(2, '0')}';
+      final filePath = '${directory.path}/Customers_$stamp.xlsx';
+      await File(filePath).writeAsBytes(bytes, flush: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Excel exported successfully (${rows.length} customers)')),
+      );
+      await OpenFilex.open(filePath);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel export failed: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingExcel = false);
+    }
+  }
+
+  // Filtering is performed by Django. Keep the visible list in sync with
+  // the backend response rather than filtering only loaded records.
+  void applyFilters() {
+    if (!mounted) return;
+    setState(() {
+      filteredProducts = List<Map<String, dynamic>>.from(customer);
+    });
+  }
+
+  void _reloadFilteredCustomers() {
+    if (_customerScrollController.hasClients) {
+      _customerScrollController.jumpTo(0);
+    }
+    getcustomer(page: 1);
+  }
+
+  void _clearFilters() {
+    _searchDebounce?.cancel();
+    searchController.clear();
+    setState(() {
+      selectedFamilyFilter = 'All';
+      selectedStateFilter = 'All';
+      selectedStaffFilter = 'All';
+      selectedCustomerTypeFilter = 'All';
+    });
+    _reloadFilteredCustomers();
+  }
+
+  Future<void> getcustomertype() async {
+    try {
+      final token = await gettokenFromPrefs();
+      if (token == null || token.isEmpty) return;
+      final response = await http.get(
+        Uri.parse('$api/api/customer-types/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode != 200) return;
+      final parsed = jsonDecode(response.body);
+      final data = parsed is List ? parsed : (parsed is Map ? parsed['data'] : null);
+      if (data is! List) return;
+      final customerTypes = data.whereType<Map>().map((entry) => <String, dynamic>{
+        'id': entry['id'],
+        'name': entry['type_name'],
+      }).toList();
+      if (mounted) setState(() => type = customerTypes);
+    } catch (error) {
+      debugPrint('Failed to load customer types: $error');
+    }
   }
 
   Future<void> getstaff() async {
@@ -308,49 +508,6 @@ class _customer_listState extends State<customer_list> {
         });
       }
     } catch (error) {}
-  }
-
-  Widget paginationControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-          onPressed:
-              currentPage > 1 ? () => getcustomer(page: currentPage - 1) : null,
-          child: Text(
-            "Prev",
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-        SizedBox(width: 10),
-        Text(
-          "Page $currentPage / $totalPages",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        SizedBox(width: 10),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-          onPressed: currentPage < totalPages
-              ? () => getcustomer(page: currentPage + 1)
-              : null,
-          child: Text(
-            "Next",
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-      ],
-    );
   }
 
   void logout() async {
@@ -531,6 +688,13 @@ class _customer_listState extends State<customer_list> {
             },
           ),
           actions: [
+            IconButton(
+              tooltip: 'Export customers to Excel',
+              icon: _exportingExcel
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.file_download_outlined, color: Colors.green),
+              onPressed: _exportingExcel ? null : _exportCustomersExcel,
+            ),
             IconButton(
               icon: Image.asset('lib/assets/profile.png'),
               onPressed: () {},
@@ -743,7 +907,10 @@ class _customer_listState extends State<customer_list> {
                       ),
                     ),
                     onChanged: (value) {
-                      getcustomer(page: 1);
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+                        if (mounted) _reloadFilteredCustomers();
+                      });
                     },
                   ),
                   SizedBox(height: 10),
@@ -767,13 +934,14 @@ class _customer_listState extends State<customer_list> {
                                   color: Colors.blueAccent, width: 2),
                             ),
                           ),
+                          key: ValueKey('selectedFamilyFilter_${selectedFamilyFilter}'),
                           value: selectedFamilyFilter,
                           items: [
                             DropdownMenuItem(
                                 value: "All", child: Text("All Family")),
                             ...fam.map(
                               (f) => DropdownMenuItem(
-                                value: f['name'],
+                                value: f['id'].toString(),
                                 child: Text(
                                   f['name'],
                                   overflow: TextOverflow.ellipsis,
@@ -787,7 +955,7 @@ class _customer_listState extends State<customer_list> {
                               selectedStateFilter = "All";
                               selectedStaffFilter = "All";
                             });
-                            applyFilters();
+                            _reloadFilteredCustomers();
                           },
                         ),
                       ),
@@ -810,13 +978,14 @@ class _customer_listState extends State<customer_list> {
                                   color: Colors.blueAccent, width: 2),
                             ),
                           ),
+                          key: ValueKey('selectedStateFilter_${selectedStateFilter}'),
                           value: selectedStateFilter,
                           items: [
                             DropdownMenuItem(
                                 value: "All", child: Text("All States")),
                             ...stat.map(
                               (s) => DropdownMenuItem(
-                                value: s['name'],
+                                value: s['id'].toString(),
                                 child: Text(
                                   s['name'],
                                   overflow: TextOverflow.ellipsis,
@@ -830,7 +999,7 @@ class _customer_listState extends State<customer_list> {
                               selectedFamilyFilter = "All";
                               selectedStaffFilter = "All";
                             });
-                            applyFilters();
+                            _reloadFilteredCustomers();
                           },
                         ),
                       ),
@@ -853,6 +1022,7 @@ class _customer_listState extends State<customer_list> {
                                   color: Colors.blueAccent, width: 2),
                             ),
                           ),
+                          key: ValueKey('selectedStaffFilter_${selectedStaffFilter}'),
                           value: selectedStaffFilter,
                           items: [
                             DropdownMenuItem(
@@ -873,8 +1043,59 @@ class _customer_listState extends State<customer_list> {
                               selectedFamilyFilter = "All";
                               selectedStateFilter = "All";
                             });
-                            applyFilters();
+                            _reloadFilteredCustomers();
                           },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          key: ValueKey('selectedCustomerTypeFilter_${selectedCustomerTypeFilter}'),
+                          value: selectedCustomerTypeFilter,
+                          decoration: InputDecoration(
+                            labelText: 'Customer Type',
+                            labelStyle: const TextStyle(color: Colors.blue),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: const BorderSide(color: Colors.blue, width: 2),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
+                            ),
+                          ),
+                          items: [
+                            const DropdownMenuItem(value: 'All', child: Text('All Types')),
+                            ...type.map((t) => DropdownMenuItem<String>(
+                              value: t['id'].toString(),
+                              child: Text(t['name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
+                            )),
+                          ],
+                          onChanged: (value) {
+                            setState(() => selectedCustomerTypeFilter = value);
+                            _reloadFilteredCustomers();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _clearFilters,
+                          icon: const Icon(Icons.filter_alt_off_outlined),
+                          label: const Text('Clear Filters'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.blue,
+                            side: const BorderSide(color: Colors.blue, width: 2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            minimumSize: const Size(0, 56),
+                          ),
                         ),
                       ),
                     ],
@@ -882,17 +1103,31 @@ class _customer_listState extends State<customer_list> {
                 ],
               ),
             ),
-            paginationControls(),
-            SizedBox(height: 10),
-            if (loadingPage)
-              Padding(
+            const SizedBox(height: 10),
+            if (loadingPage && customer.isEmpty)
+              const Padding(
                 padding: EdgeInsets.all(20),
                 child: Center(child: CircularProgressIndicator()),
               ),
             Expanded(
               child: ListView.builder(
-                itemCount: filteredProducts.length,
+                controller: _customerScrollController,
+                itemCount: filteredProducts.length +
+                    ((loadingPage || _paginationError != null) ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index >= filteredProducts.length) {
+                    if (loadingPage) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    return TextButton.icon(
+                      onPressed: () => getcustomer(page: currentPage + 1),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Could not load more customers. Tap to retry.'),
+                    );
+                  }
                   final customerData = filteredProducts[index];
                   return Card(
                     color: Colors.white,
@@ -902,7 +1137,19 @@ class _customer_listState extends State<customer_list> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Padding(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CustomerCompleteReportPage(
+                              customerId: customerData['id'],
+                            ),
+                          ),
+                        );
+                      },
+                      child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -980,6 +1227,7 @@ class _customer_listState extends State<customer_list> {
                           ),
                         ],
                       ),
+                    ),
                     ),
                   );
                 },
