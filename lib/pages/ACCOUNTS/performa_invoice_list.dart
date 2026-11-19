@@ -71,6 +71,7 @@ class _ProformaInvoiceListState extends State<ProformaInvoiceList> {
   int? selectedCompanyId;
   int? selectedStaffId;
   String selectedStaffName = '';
+  String? selectedStatus;
 
   String searchQuery = '';
 
@@ -93,13 +94,17 @@ static const Set<String> _allInvoiceDepartments = {
   }
 
   String get _invoiceEndpoint {
+    if (selectedStatus != null) {
+      return '$api/api/perfoma/invoices/status/filter/';
+    }
     return canViewAllInvoices
         ? '$api/api/perfoma/invoices/new/'
         : '$api/api/performa/invoice/staff/new/';
   }
 
   bool get hasActiveFilters {
-    return searchQuery.trim().isNotEmpty ||
+    return selectedStatus != null ||
+        searchQuery.trim().isNotEmpty ||
         selectedStartDate != null ||
         selectedEndDate != null ||
         selectedCustomerId != null ||
@@ -165,6 +170,10 @@ static const Set<String> _allInvoiceDepartments = {
       queryParameters['search'] = searchQuery.trim();
     }
 
+    if (selectedStatus != null) {
+      queryParameters['status'] = selectedStatus!;
+    }
+
     if (selectedStartDate != null) {
       queryParameters['start_date'] = _formatDateForApi(selectedStartDate);
     }
@@ -190,11 +199,102 @@ static const Set<String> _allInvoiceDepartments = {
     );
   }
 
+  int _invoiceRequestId = 0;
+
+  // Restricted staff never request the all-invoice status endpoint.
+  // Filter only records returned by the authenticated staff endpoint.
+  Future<Map<String, dynamic>> _fetchStaffStatusPage({
+    required int page,
+    required String token,
+    required bool includeSearch,
+  }) async {
+    final requestedStatus = selectedStatus!;
+    final requestGeneration = _invoiceRequestId;
+    final staffEndpoint = Uri.parse('$api/api/performa/invoice/staff/new/');
+    final parameters = Map<String, String>.from(
+      _buildInvoiceUri(page: 1, includeSearch: includeSearch).queryParameters,
+    )..remove('status');
+    // The logged-in staff scope comes from the token, never a selectable ID.
+    parameters.remove('manage_staff');
+    final matches = <Map<String, dynamic>>[];
+    final seenIds = <String>{};
+    var sourcePage = 1;
+    while (true) {
+      if (!mounted || requestGeneration != _invoiceRequestId) {
+        throw StateError('Invoice request superseded.');
+      }
+      final uri = staffEndpoint.replace(queryParameters: {
+        ...parameters,
+        'page': sourcePage.toString(),
+      });
+      final response = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      });
+      if (response.statusCode != 200) {
+        throw Exception('Request failed with status ${response.statusCode}.');
+      }
+      final dynamic decoded = jsonDecode(response.body);
+      final dynamic rawRows = decoded is List
+          ? decoded
+          : decoded is Map
+              ? (decoded['results'] ?? decoded['data'])
+              : null;
+      if (rawRows is! List) {
+        throw Exception('Invalid staff proforma invoice response.');
+      }
+      var added = 0;
+      for (final row in rawRows.whereType<Map>()) {
+        final record = Map<String, dynamic>.from(row);
+        final identity = record['id']?.toString() ?? jsonEncode(record);
+        if (!seenIds.add(identity)) continue;
+        added++;
+        if (record['status']?.toString().trim().toLowerCase() ==
+            requestedStatus.trim().toLowerCase()) {
+          matches.add(record);
+        }
+      }
+      final hasNext = decoded is Map &&
+          decoded['next'] != null &&
+          decoded['next'].toString().trim().isNotEmpty;
+      if (!hasNext) break;
+      if (added == 0) {
+        throw Exception('Unable to read the next staff invoice page.');
+      }
+      sourcePage++;
+    }
+    // Paginate after filtering so counts and page controls match visible data.
+    const pageSize = _invoicePageSize;
+    final start = (page - 1) * pageSize;
+    final visible = matches.skip(start).take(pageSize).toList();
+    return <String, dynamic>{
+      'results': visible,
+      'count': matches.length,
+      'next': start + pageSize < matches.length
+          ? staffEndpoint.replace(queryParameters: {
+              ...parameters, 'page': (page + 1).toString(),
+            }).toString()
+          : null,
+      'previous': page > 1
+          ? staffEndpoint.replace(queryParameters: {
+              ...parameters, 'page': (page - 1).toString(),
+            }).toString()
+          : null,
+    };
+  }
+
   Future<Map<String, dynamic>> _fetchInvoicePage({
     required int page,
     required String token,
     required bool includeSearch,
   }) async {
+    if (selectedStatus != null && !canViewAllInvoices) {
+      return _fetchStaffStatusPage(
+        page: page,
+        token: token,
+        includeSearch: includeSearch,
+      );
+    }
     final http.Response response = await http.get(
       _buildInvoiceUri(
         page: page,
@@ -214,6 +314,14 @@ static const Set<String> _allInvoiceDepartments = {
 
     final dynamic parsed = jsonDecode(response.body);
 
+    if (selectedStatus != null && parsed is List) {
+      return <String, dynamic>{
+        'results': parsed,
+        'count': parsed.length,
+        'next': null,
+        'previous': null,
+      };
+    }
     if (parsed is! Map) {
       throw Exception('Invalid proforma invoice response.');
     }
@@ -258,6 +366,7 @@ static const Set<String> _allInvoiceDepartments = {
 
   Future<void> fetchOrderData({required int page}) async {
     if (!mounted) return;
+    final int requestId = ++_invoiceRequestId;
 
     setState(() {
       isLoading = true;
@@ -291,7 +400,7 @@ static const Set<String> _allInvoiceDepartments = {
       final List<Map<String, dynamic>> invoiceList =
           _extractMappedInvoices(parsed);
 
-      if (!mounted) return;
+      if (!mounted || requestId != _invoiceRequestId) return;
 
       setState(() {
         orders = invoiceList;
@@ -304,7 +413,7 @@ static const Set<String> _allInvoiceDepartments = {
         loadError = null;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || requestId != _invoiceRequestId) return;
 
       setState(() {
         isLoading = false;
@@ -1421,6 +1530,7 @@ static const Set<String> _allInvoiceDepartments = {
     setState(() {
       searchQuery = '';
       staffSearchQuery = '';
+      selectedStatus = null;
       selectedStartDate = null;
       selectedEndDate = null;
       selectedCustomerId = null;
@@ -1538,6 +1648,46 @@ static const Set<String> _allInvoiceDepartments = {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Status',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF344054),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: selectedStatus ?? '',
+                          isExpanded: true,
+                          decoration: _filterInputDecoration(
+                            hint: 'All statuses',
+                            icon: Icons.filter_alt_outlined,
+                          ),
+                          items: const [
+                            DropdownMenuItem<String>(
+                              value: '',
+                              child: Text('All statuses'),
+                            ),
+                            DropdownMenuItem<String>(
+                              value: 'Pending',
+                              child: Text('Pending'),
+                            ),
+                            DropdownMenuItem<String>(
+                              value: 'Invoice Rejected',
+                              child: Text('Proforma Rejected'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedStatus = value == null || value.isEmpty
+                                  ? null
+                                  : value;
+                            });
+                            setSheetState(() {});
+                          },
                         ),
                         const SizedBox(height: 16),
                         const Text(
@@ -2038,7 +2188,10 @@ static const Set<String> _allInvoiceDepartments = {
   }
 
   Widget _statusChip(dynamic statusValue) {
-    final String status = _safeText(statusValue, fallback: 'Unknown');
+    final String rawStatus = _safeText(statusValue, fallback: 'Unknown');
+    final String status = rawStatus.trim().toLowerCase() == 'invoice rejected'
+        ? 'Proforma Rejected'
+        : rawStatus;
 
     return Container(
       padding: const EdgeInsets.symmetric(

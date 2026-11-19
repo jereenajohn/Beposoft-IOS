@@ -28,6 +28,7 @@ import 'package:beposoft/pages/ACCOUNTS/purchases_request.dart';
 import 'package:beposoft/pages/ACCOUNTS/recipts_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_Expense.dart';
 import 'package:beposoft/pages/ACCOUNTS/update_staff.dart';
+import 'package:beposoft/pages/ACCOUNTS/staff_complete_report_page.dart' show StaffCompleteReportPage;
 import 'package:beposoft/pages/ACCOUNTS/view_customer.dart';
 import 'package:beposoft/pages/ADMIN/admin_dashboard.dart';
 import 'package:beposoft/pages/ADMIN/ceo_dashboard.dart';
@@ -943,6 +944,50 @@ if (selectedBloodGroup.trim().isNotEmpty) {
     },
   );
 }
+  void _viewStaffCompleteReport(Map<String, dynamic> staffData) {
+    final staffId = staffData['id']?.toString().trim();
+    if (staffId == null || staffId.isEmpty || staffId == 'null') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open report: staff ID is missing.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => StaffCompleteReportPage(staffId: staffId),
+      ),
+    );
+  }
+
+  Widget _staffReportMenu(Map<String, dynamic> staffData) {
+    return PopupMenuButton<String>(
+      tooltip: 'Staff options',
+      icon: const Icon(Icons.more_vert, color: Colors.black54, size: 22),
+      padding: EdgeInsets.zero,
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onSelected: (value) {
+        if (value == 'complete_report') {
+          _viewStaffCompleteReport(staffData);
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem<String>(
+          value: 'complete_report',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.assessment_outlined, size: 20, color: Color(0xFF2858DF)),
+              SizedBox(width: 10),
+              Text('View Complete Report'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInfoRow(String title, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -1396,14 +1441,24 @@ if (selectedBloodGroup.trim().isNotEmpty) {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                staffData['name']?.toString() ??
-                                                    '',
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.black87,
-                                                ),
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.only(top: 10),
+                                                      child: Text(
+                                                        staffData['name']?.toString() ?? '',
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  _staffReportMenu(staffData),
+                                                ],
                                               ),
                                               const SizedBox(height: 6),
                                               // _buildInfoRow(

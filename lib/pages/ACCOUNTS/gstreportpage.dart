@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -45,6 +46,202 @@ class _GSTReportPageState extends State<GSTReportPage> {
   DateTime? endDate;
 
   String selectedCompany = '';
+  final TextEditingController _invoiceSearchController = TextEditingController();
+  final Set<String> selectedOrderIds = <String>{};
+  final Map<String, String> _invoiceLabels = <String, String>{};
+  List<Map<String, dynamic>> invoiceOptions = [];
+  bool invoiceDropdownOpen = false;
+  bool ordersLoading = false;
+  String? ordersNextPage;
+  String? _ordersError;
+  Timer? _invoiceDebounce;
+  int _orderRequestId = 0;
+
+  @override
+  void dispose() {
+    _invoiceDebounce?.cancel();
+    _orderRequestId++;
+    _invoiceSearchController.dispose();
+    super.dispose();
+  }
+
+  String _orderLabel(Map<String, dynamic> order) {
+    for (final key in ['invoice', 'invoice_number']) {
+      final value = order[key]?.toString() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return 'Order #${order['id']}';
+  }
+
+  void _searchInvoices(String search) {
+    _invoiceDebounce?.cancel();
+    _orderRequestId++;
+    setState(() {
+      ordersLoading = true;
+      ordersNextPage = null;
+      invoiceOptions = [];
+      _ordersError = null;
+    });
+    _invoiceDebounce = Timer(const Duration(milliseconds: 300), () {
+      fetchInvoiceOptions(search: search);
+    });
+  }
+
+  Future<void> fetchInvoiceOptions({String? search, String? nextUrl}) async {
+    final requestId = ++_orderRequestId;
+    setState(() { ordersLoading = true; _ordersError = null; });
+    try {
+      final token = await _getToken();
+      if (!mounted || requestId != _orderRequestId) return;
+      if (token == null || token.isEmpty) {
+        throw Exception('Token missing. Please login again.');
+      }
+      final base = Uri.parse(apiBase);
+      final params = <String, String>{};
+      final query = (search ?? _invoiceSearchController.text).trim();
+      if (query.isNotEmpty) params['search'] = query;
+      if (startDate != null) params['start_date'] = _apiDate(startDate);
+      if (endDate != null) params['end_date'] = _apiDate(endDate);
+      final uri = nextUrl == null
+          ? base.resolve('orders/').replace(queryParameters: params)
+          : base.resolve(nextUrl);
+      // Never send the authorization token to a different origin.
+      if (uri.scheme != base.scheme || uri.host != base.host || uri.port != base.port) {
+        throw Exception('Invalid invoice pagination URL');
+      }
+      final response = await http.get(uri, headers: _headers(token))
+          .timeout(const Duration(seconds: 30));
+      if (!mounted || requestId != _orderRequestId) return;
+      if (response.statusCode != 200) throw Exception('Error fetching invoice list');
+      final decoded = jsonDecode(response.body);
+      final results = decoded is Map ? decoded['results'] : null;
+      final list = results is Map ? results['results'] : results;
+      final merged = <String, Map<String, dynamic>>{
+        if (nextUrl != null)
+          for (final order in invoiceOptions) order['id'].toString(): order,
+      };
+      if (list is List) {
+        for (final value in list.whereType<Map>()) {
+          if (value['id'] == null) continue;
+          final order = Map<String, dynamic>.from(value);
+          final id = order['id'].toString();
+          merged[id] = order;
+          _invoiceLabels[id] = _orderLabel(order);
+        }
+      }
+      final data = decoded is Map ? decoded['data'] : null;
+      final next = decoded is Map ? (decoded['next'] ?? (data is Map ? data['next'] : null)) : null;
+      setState(() {
+        invoiceOptions = merged.values.toList();
+        ordersNextPage = next == null || next.toString().isEmpty ? null : next.toString();
+      });
+    } catch (error) {
+      if (!mounted || requestId != _orderRequestId) return;
+      setState(() {
+        _ordersError = error.toString().replaceFirst('Exception: ', '');
+        if (nextUrl == null) invoiceOptions = [];
+      });
+    } finally {
+      if (mounted && requestId == _orderRequestId) {
+        setState(() { ordersLoading = false; });
+      }
+    }
+  }
+
+  Widget invoiceSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Select Invoices (Multiple)', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: loading ? null : () {
+            setState(() { invoiceDropdownOpen = !invoiceDropdownOpen; });
+            if (invoiceDropdownOpen) _searchInvoices(_invoiceSearchController.text);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(children: [
+              Expanded(child: Text(selectedOrderIds.isEmpty
+                  ? 'Click to search and select invoices'
+                  : '${selectedOrderIds.length} invoice(s) selected')),
+              Icon(invoiceDropdownOpen ? Icons.expand_less : Icons.expand_more),
+            ]),
+          ),
+        ),
+        if (invoiceDropdownOpen) ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: _invoiceSearchController,
+            onChanged: _searchInvoices,
+            enabled: !loading,
+            decoration: const InputDecoration(
+              hintText: 'Search invoice number or order...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          Row(children: [
+            TextButton(
+              onPressed: loading || invoiceOptions.isEmpty ? null : () {
+                setState(() {
+                  selectedOrderIds.addAll(invoiceOptions.map((o) => o['id'].toString()));
+                });
+              },
+              child: const Text('Select loaded'),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: loading ? null : () { setState(selectedOrderIds.clear); },
+              child: const Text('Clear selection'),
+            ),
+          ]),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280),
+            child: ListView.builder(
+              shrinkWrap: true,
+              primary: false,
+              itemCount: invoiceOptions.length,
+              itemBuilder: (context, index) {
+                final order = invoiceOptions[index];
+                final id = order['id'].toString();
+                return CheckboxListTile(
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text(_orderLabel(order)),
+                  value: selectedOrderIds.contains(id),
+                  onChanged: loading ? null : (checked) {
+                    setState(() {
+                      if (checked == true) { selectedOrderIds.add(id); }
+                      else { selectedOrderIds.remove(id); }
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          if (ordersLoading) const Padding(
+            padding: EdgeInsets.all(12),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          if (_ordersError != null) Text(_ordersError!, style: const TextStyle(color: Colors.red)),
+          if (_ordersError != null && !ordersLoading)
+            TextButton(onPressed: () => fetchInvoiceOptions(nextUrl: ordersNextPage), child: const Text('Retry')),
+          if (!ordersLoading && _ordersError == null && invoiceOptions.isEmpty)
+            const Padding(padding: EdgeInsets.all(12), child: Text('No invoices found')),
+          if (!ordersLoading && ordersNextPage != null && _ordersError == null)
+            TextButton(onPressed: () => fetchInvoiceOptions(nextUrl: ordersNextPage),
+              child: const Text('Load more invoices')),
+        ],
+        if (selectedOrderIds.isNotEmpty) Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('Selected Invoice Numbers: ${selectedOrderIds.map((id) => _invoiceLabels[id] ?? 'Order #$id').join(', ')}',
+            style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        ),
+      ],
+    );
+  }
+
 
   List<Map<String, dynamic>> gstData = [];
   List<Map<String, dynamic>> companyList = [];
@@ -200,7 +397,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
 
     try {
       final date = DateTime.parse(value.toString());
-      return DateFormat('dd-MMM-yy').format(date).toUpperCase();
+      return DateFormat('dd-MMM-yy', 'en_GB').format(date);
     } catch (_) {
       return '';
     }
@@ -354,18 +551,8 @@ class _GSTReportPageState extends State<GSTReportPage> {
   Future<void> fetchGSTReport() async {
     if (loading) return;
 
-    if (startDate == null) {
-      _showMessage('Please select start date', isError: true);
-      return;
-    }
-
-    if (endDate == null) {
-      _showMessage('Please select end date', isError: true);
-      return;
-    }
-
-    if (endDate!.isBefore(startDate!)) {
-      _showMessage('Start date cannot be greater than end date', isError: true);
+    if (selectedOrderIds.isEmpty) {
+      _showMessage('Please select at least one invoice', isError: true);
       return;
     }
 
@@ -381,17 +568,17 @@ class _GSTReportPageState extends State<GSTReportPage> {
         return;
       }
 
-      final params = <String, String>{};
+      final params = <String, String>{'order_ids': selectedOrderIds.join(',')};
 
       if (selectedCompany.isNotEmpty) {
         params['company'] = selectedCompany;
       }
 
       final uri = Uri.parse(
-        '${apiBase}gst/orders/report/${_apiDate(startDate)}/${_apiDate(endDate)}/',
+        '${apiBase}gst/orders/report/',
       ).replace(queryParameters: params.isEmpty ? null : params);
 
-      final response = await http.get(uri, headers: _headers(token));
+      final response = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -411,7 +598,12 @@ class _GSTReportPageState extends State<GSTReportPage> {
           currentPage = 1;
         });
       } else {
-        _showMessage('Error fetching GST report', isError: true);
+        String message = 'Error fetching GST report';
+        try {
+          final error = jsonDecode(response.body);
+          if (error is Map) message = (error['message'] ?? error['detail'] ?? message).toString();
+        } catch (_) {}
+        _showMessage(message, isError: true);
 
         if (!mounted) return;
 
@@ -441,7 +633,17 @@ class _GSTReportPageState extends State<GSTReportPage> {
   }
 
   void clearFilter() {
+    _invoiceDebounce?.cancel();
+    _orderRequestId++;
+    _invoiceSearchController.clear();
     setState(() {
+      selectedOrderIds.clear();
+      _invoiceLabels.clear();
+      invoiceOptions = [];
+      ordersNextPage = null;
+      ordersLoading = false;
+      invoiceDropdownOpen = false;
+      _ordersError = null;
       startDate = null;
       endDate = null;
       selectedCompany = '';
@@ -500,7 +702,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
           'date': _invoiceDate(row['order_date']),
 
           // Same as React: Math.round(invoiceValue)
-          'total_amount': invoiceValue.round().toString(),
+          'total_amount': (invoiceValue + 0.5).floor().toString(),
 
           'placeOfSupply': _placeOfSupply(row['address']),
           'taxRate': '$taxRate%',
@@ -599,7 +801,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
           'Invoice date': _invoiceDate(row['order_date']),
 
           // Same as React: Math.round(invoiceValue)
-          'Invoice Value': invoiceValue.round(),
+          'Invoice Value': (invoiceValue + 0.5).floor(),
 
           'Place Of Supply': _placeOfSupply(row['address']),
           'Reverse Charge': 'N',
@@ -968,6 +1170,10 @@ class _GSTReportPageState extends State<GSTReportPage> {
 
       sheet.appendRow([title]);
       sheet.appendRow(b2cSummaryHeaders);
+      sheet.merge(
+        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+        CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+      );
 
       final titleCell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
@@ -1085,7 +1291,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
   }
 
   Future<void> refreshPage() async {
-    if (startDate != null && endDate != null) {
+    if (selectedOrderIds.isNotEmpty) {
       await fetchGSTReport();
     } else {
       await fetchCompanies();
@@ -1325,140 +1531,21 @@ class _GSTReportPageState extends State<GSTReportPage> {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Filters',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 700;
-
-              if (isWide) {
-                return Row(
-                  children: [
-                    Expanded(
-                      child: dateBox(
-                        label: 'Start Date',
-                        value: startDate,
-                        onTap: pickStartDate,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: dateBox(
-                        label: 'End Date',
-                        value: endDate,
-                        onTap: pickEndDate,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: companyDropdown()),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 120,
-                      child: actionButton(
-                        label: 'Filter',
-                        icon: Icons.filter_alt_outlined,
-                        color: Colors.blue.shade700,
-                        onTap: fetchGSTReport,
-                        busy: loading,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 110,
-                      height: 44,
-                      child: OutlinedButton.icon(
-                        onPressed: loading ? null : clearFilter,
-                        icon: const Icon(Icons.close, size: 17),
-                        label: const Text(
-                          'Clear',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blueGrey.shade800,
-                          side: BorderSide(color: Colors.blueGrey.shade200),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: dateBox(
-                          label: 'Start Date',
-                          value: startDate,
-                          onTap: pickStartDate,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: dateBox(
-                          label: 'End Date',
-                          value: endDate,
-                          onTap: pickEndDate,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  companyDropdown(),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: actionButton(
-                          label: 'Filter',
-                          icon: Icons.filter_alt_outlined,
-                          color: Colors.blue.shade700,
-                          onTap: fetchGSTReport,
-                          busy: loading,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: SizedBox(
-                          height: 44,
-                          child: OutlinedButton.icon(
-                            onPressed: loading ? null : clearFilter,
-                            icon: const Icon(Icons.close, size: 17),
-                            label: const Text(
-                              'Clear',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.blueGrey.shade800,
-                              side: BorderSide(color: Colors.blueGrey.shade200),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        invoiceSelector(),
+        const SizedBox(height: 14),
+        companyDropdown(),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(child: actionButton(
+            label: 'Filter', icon: Icons.filter_alt_outlined,
+            color: Colors.blue.shade700, onTap: fetchGSTReport, busy: loading)),
+          const SizedBox(width: 10),
+          Expanded(child: OutlinedButton.icon(
+            onPressed: loading ? null : clearFilter,
+            icon: const Icon(Icons.close, size: 17), label: const Text('Clear'))),
+        ]),
+      ]),
     );
   }
 
@@ -1479,7 +1566,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
                   label: 'Export B2B Excel',
                   icon: Icons.file_download_outlined,
                   color: Colors.green.shade700,
-                  onTap: totalCount == 0 ? null : exportB2BExcel,
+                  onTap: loading || totalCount == 0 ? null : exportB2BExcel,
                   busy: exportingB2B,
                 ),
               ),
@@ -1489,7 +1576,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
                   label: 'Export B2C Excel',
                   icon: Icons.file_download_outlined,
                   color: Colors.blue.shade700,
-                  onTap: totalCount == 0 ? null : exportB2CExcel,
+                  onTap: loading || totalCount == 0 ? null : exportB2CExcel,
                   busy: exportingB2C,
                 ),
               ),
@@ -1503,7 +1590,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
                   label: 'Export B2C Detailed',
                   icon: Icons.file_download_outlined,
                   color: Colors.indigo.shade600,
-                  onTap: totalCount == 0 ? null : exportB2CDetailedExcel,
+                  onTap: loading || totalCount == 0 ? null : exportB2CDetailedExcel,
                   busy: exportingB2CDetailed,
                 ),
               ),
@@ -1513,7 +1600,7 @@ class _GSTReportPageState extends State<GSTReportPage> {
                   label: 'Export HSN Excel',
                   icon: Icons.file_download_outlined,
                   color: Colors.orange.shade700,
-                  onTap: totalCount == 0 ? null : exportHSNExcel,
+                  onTap: loading || totalCount == 0 ? null : exportHSNExcel,
                   busy: exportingHSN,
                 ),
               ),

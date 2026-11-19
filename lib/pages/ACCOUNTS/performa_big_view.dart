@@ -212,6 +212,139 @@ class _PerformaInvoice_BigView_ListState
         'ceo',
         'coo',
       }.contains(department?.trim().toLowerCase());
+  final Set<int> _updatingStatusIds = <int>{};
+
+  Future<void> _updateProformaStatus(int proformaId, String status) async {
+    if (status != 'Invoice Rejected' && status != 'Pending') return;
+    if (!_canGenerateInvoice || _updatingStatusIds.contains(proformaId)) return;
+    if (proformaId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid proforma ID.')),
+      );
+      return;
+    }
+    setState(() => _updatingStatusIds.add(proformaId));
+    try {
+      final rejecting = status == 'Invoice Rejected';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(rejecting ? 'Reject Proforma?' : 'Change to Pending?'),
+          content: Text(rejecting
+              ? 'Are you sure you want to reject this proforma?'
+              : 'Are you sure you want to change this proforma status to Pending?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(rejecting ? 'Reject Proforma' : 'Change to Pending'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true || !_canGenerateInvoice) return;
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Session expired. Please log in again.');
+      }
+      if (!mounted) return;
+      final response = await _auditMutation(
+        proformaId,
+        null,
+        'PUT',
+        'proforma_status_updated',
+        Uri.parse('$api/api/perfoma/invoice/status/update/$proformaId/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'status': status}),
+      );
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {}
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final detail = decoded is Map
+            ? (decoded['errors'] ?? decoded['detail'] ??
+                decoded['message'] ?? decoded['error'])
+            : null;
+        throw Exception(detail?.toString() ??
+            'Unable to update proforma status (${response.statusCode}).');
+      }
+      if (!mounted) return;
+      // The successful PUT also works with an empty 204 response.
+      setState(() {
+        for (final order in orders) {
+          if (order['id']?.toString() == proformaId.toString()) {
+            order['status'] = status;
+          }
+        }
+        if (_loadedProforma['id']?.toString() == proformaId.toString()) {
+          _loadedProforma['status'] = status;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(rejecting
+            ? 'Proforma status updated to Proforma Rejected.'
+            : 'Proforma status updated to Pending.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is Exception
+          ? error.toString().replaceFirst('Exception: ', '')
+          : 'Unable to update proforma status. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) setState(() => _updatingStatusIds.remove(proformaId));
+    }
+  }
+
+  Widget _buildProformaStatusAction(Map<String, dynamic> order) {
+    final id = int.tryParse(order['id']?.toString() ?? '');
+    final updating = id != null && _updatingStatusIds.contains(id);
+    final rejected = order['status']?.toString().trim().toLowerCase() ==
+        'invoice rejected';
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: updating || id == null || id <= 0
+              ? null
+              : () => _updateProformaStatus(
+                  id, rejected ? 'Pending' : 'Invoice Rejected'),
+          icon: updating
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(rejected ? Icons.restore_rounded : Icons.cancel_outlined, size: 18),
+          label: Text(updating
+              ? 'Updating status...'
+              : rejected ? 'Change to Pending' : 'Reject Proforma'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: rejected
+                ? const Color(0xFFB54708)
+                : const Color(0xFFB42318),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   bool isLoading = true;
   String? loadError;
   bool isDownloading = false;
@@ -3319,7 +3452,10 @@ class _PerformaInvoice_BigView_ListState
   }
 
   Widget _statusChip(String status) {
-    final displayStatus = _safeText(status, fallback: "Unknown");
+    final rawStatus = _safeText(status, fallback: "Unknown");
+    final displayStatus = rawStatus.trim().toLowerCase() == 'invoice rejected'
+        ? 'Proforma Rejected'
+        : rawStatus;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -3528,16 +3664,47 @@ class _PerformaInvoice_BigView_ListState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _safeText(item['name']),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF101828),
-                        height: 1.3,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _safeText(item['name']),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF101828),
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          tooltip: 'Edit product',
+                          onPressed: () {
+                            _showEditProductDialog(
+                              orderId: orderId,
+                              item: item,
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: Color(0xFF2563EB),
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0xFFEFF6FF),
+                            minimumSize: const Size(40, 40),
+                            padding: const EdgeInsets.all(8),
+                            tapTargetSize: MaterialTapTargetSize.padded,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 7),
                     Wrap(
@@ -3724,6 +3891,7 @@ Future<void> _openAddProductPage(int orderId) async {
     MaterialPageRoute(
       builder: (context) => CreatePerformaProduct_List(
         proformaOrderId: orderId,
+        proformaInvoice: widget.invoice,
       ),
     ),
   );
@@ -4217,6 +4385,7 @@ Future<void> _openAddProductPage(int orderId) async {
                 ],
               ),
             ),
+            if (_canGenerateInvoice) _buildProformaStatusAction(order),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(18),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:beposoft/loginpage.dart';
 import 'package:beposoft/pages/ACCOUNTS/csodashboard.dart';
@@ -32,6 +33,22 @@ class _Sales_ReportState extends State<Sales_Report> {
   List<Map<String, dynamic>> sortedSta = [];
   List<Map<String, dynamic>> fam = [];
 
+  List<Map<String, dynamic>> stat = [];
+  List<Map<String, dynamic>> products = [];
+  String? selectedStateId;
+  String? selectedProductId;
+  bool _loadingStates = false;
+  bool _loadingProducts = false;
+  String? _stateError;
+  String? _productError;
+  bool _productDropdownOpen = false;
+  String _selectedProductName = '';
+  String? _nextProductUrl;
+  int _productGeneration = 0;
+  Timer? _productDebounce;
+  final TextEditingController _productSearch = TextEditingController();
+  int _reportRequest = 0;
+
   double totalBills = 0.0;
   double totalAmount = 0.0;
   double approvedBills = 0.0;
@@ -65,6 +82,7 @@ class _Sales_ReportState extends State<Sales_Report> {
     getSalesReport();
     getstaff();
     getfamily();
+    getstate();
   }
 
   Future<String?> getTokenFromPrefs() async {
@@ -194,9 +212,257 @@ class _Sales_ReportState extends State<Sales_Report> {
     } catch (_) {}
   }
 
+  Future<void> getstate() async {
+    if (_loadingStates || !mounted) return;
+    setState(() {
+      _loadingStates = true;
+      _stateError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.isEmpty) {
+        throw const FormatException('Please log in again.');
+      }
+      final response = await http.get(
+        Uri.parse('$api/api/states/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw const FormatException('Unable to load states.');
+      }
+      final parsed = jsonDecode(response.body);
+      if (parsed is! Map || parsed['data'] is! List) {
+        throw const FormatException('Unexpected state response.');
+      }
+      final byId = <String, Map<String, dynamic>>{};
+      for (final item in parsed['data']) {
+        if (item is Map && item['id'] != null) {
+          byId[item['id'].toString()] = {
+            'id': item['id'],
+            'name': item['name']?.toString() ?? 'Unnamed state',
+          };
+        }
+      }
+      if (!mounted) return;
+      setState(() => stat = byId.values.toList());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _stateError = error is FormatException
+          ? error.message.toString() : 'Unable to load states.');
+    } finally {
+      if (mounted) setState(() => _loadingStates = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _productGeneration++;
+    _productDebounce?.cancel();
+    _productSearch.dispose();
+    super.dispose();
+  }
+
+  void _searchProducts(String value) {
+    _productDebounce?.cancel();
+    _productGeneration++;
+    setState(() {
+      products = [];
+      _nextProductUrl = null;
+      _loadingProducts = true;
+      _productError = null;
+    });
+    _productDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) fetchProductList();
+    });
+  }
+
+  List<dynamic>? _productRows(dynamic value, [int depth = 0]) {
+    if (value is List) return value;
+    if (value is! Map || depth > 4) return null;
+    for (final key in ['results', 'data', 'products']) {
+      final rows = _productRows(value[key], depth + 1);
+      if (rows != null) return rows;
+    }
+    return null;
+  }
+
+  Future<void> fetchProductList({bool loadMore = false}) async {
+    if (!mounted || (loadMore && (_loadingProducts || _nextProductUrl == null))) return;
+    final generation = loadMore ? _productGeneration : ++_productGeneration;
+    final search = _productSearch.text.trim();
+    final nextUrl = _nextProductUrl;
+    setState(() {
+      _loadingProducts = true;
+      _productError = null;
+      if (!loadMore) {
+        products = [];
+        _nextProductUrl = null;
+      }
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      final prefs = await SharedPreferences.getInstance();
+      final warehouse = prefs.get('warehouse')?.toString().trim();
+      if (token == null || token.isEmpty) {
+        throw const FormatException('Please log in again.');
+      }
+      if (warehouse == null || warehouse.isEmpty) {
+        throw const FormatException('Warehouse not found.');
+      }
+      final endpoint = Uri.parse('$api/api/warehouse/products/gets/$warehouse/');
+      final uri = loadMore ? endpoint.resolve(nextUrl!) : endpoint.replace(
+        queryParameters: {if (search.isNotEmpty) 'search': search},
+      );
+      if (uri.origin != endpoint.origin) {
+        throw const FormatException('Invalid product pagination.');
+      }
+      final response = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (!mounted || generation != _productGeneration) return;
+      if (response.statusCode != 200) {
+        throw FormatException('Unable to load products (${response.statusCode}).');
+      }
+      final parsed = jsonDecode(response.body);
+      final rows = _productRows(parsed);
+      if (rows == null) {
+        throw const FormatException('Unexpected product response.');
+      }
+      dynamic next;
+      if (parsed is Map) {
+        next = parsed['next'];
+        if (next == null && parsed['results'] is Map) next = parsed['results']['next'];
+        if (next == null && parsed['data'] is Map) next = parsed['data']['next'];
+      }
+      final byId = <String, Map<String, dynamic>>{
+        if (loadMore) for (final item in products) item['id'].toString(): item,
+      };
+      for (final item in rows) {
+        if (item is! Map) continue;
+        final id = item['id'] ?? item['product_id'];
+        if (id == null) continue;
+        byId[id.toString()] = {
+          'id': id.toString(),
+          'name': (item['name'] ?? item['product_name'] ?? 'Product $id').toString(),
+        };
+      }
+      final nextText = next?.toString().trim() ?? '';
+      setState(() {
+        products = byId.values.toList();
+        _nextProductUrl = nextText.isEmpty ? null : uri.resolve(nextText).toString();
+      });
+    } catch (error) {
+      if (!mounted || generation != _productGeneration) return;
+      setState(() => _productError = error is FormatException
+          ? error.message.toString() : 'Unable to load products.');
+    } finally {
+      if (mounted && generation == _productGeneration) {
+        setState(() => _loadingProducts = false);
+      }
+    }
+  }
+
+  void _selectProduct(String? id, String name) {
+    _productDebounce?.cancel();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      selectedProductId = id;
+      _selectedProductName = name;
+      _productDropdownOpen = false;
+    });
+    getSalesReport();
+  }
+
+  Widget _buildProductDropdown() => InkWell(
+    borderRadius: BorderRadius.circular(18),
+    onTap: () {
+      setState(() => _productDropdownOpen = !_productDropdownOpen);
+      if (_productDropdownOpen) fetchProductList();
+    },
+    child: Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        border: Border.all(color: Colors.blueAccent, width: 1),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(children: [
+        const Icon(Icons.inventory_2_outlined, size: 18, color: Colors.blueAccent),
+        const SizedBox(width: 8),
+        Expanded(child: Text(selectedProductId == null ? 'Select Product' : _selectedProductName,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 13,
+            color: selectedProductId == null ? Colors.grey : Colors.black))),
+        Icon(_productDropdownOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+          size: 20, color: Colors.blue),
+      ]),
+    ),
+  );
+
+  Widget _buildProductSearchPanel() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    child: Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.blueAccent),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(
+          controller: _productSearch,
+          onChanged: _searchProducts,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) {
+            _productDebounce?.cancel();
+            fetchProductList();
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Search products',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: IconButton(icon: const Icon(Icons.clear), onPressed: () {
+              _productSearch.clear();
+              _searchProducts('');
+            }),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        SizedBox(height: 150, child: ListView(children: [
+          ListTile(dense: true, title: const Text('All Products'),
+            onTap: () => _selectProduct(null, '')),
+          ...products.map((product) => ListTile(
+            dense: true,
+            title: Text(product['name'].toString()),
+            trailing: product['id'].toString() == selectedProductId
+                ? const Icon(Icons.check, color: Colors.blueAccent) : null,
+            onTap: () => _selectProduct(product['id'].toString(), product['name'].toString()),
+          )),
+          if (_loadingProducts)
+            const Padding(padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()))
+          else if (_productError != null)
+            TextButton(onPressed: () => fetchProductList(loadMore: products.isNotEmpty),
+              child: Text('$_productError Tap to retry'))
+          else if (products.isEmpty)
+            const Padding(padding: EdgeInsets.all(12), child: Text('No products found'))
+          else if (_nextProductUrl != null)
+            TextButton(onPressed: () => fetchProductList(loadMore: true),
+              child: const Text('Load more products')),
+        ])),
+      ]),
+    ),
+  );
+
   Future<void> getSalesReport() async {
     if (!mounted) return;
 
+    final request = ++_reportRequest;
     setState(() {
       isLoading = true;
     });
@@ -212,6 +478,8 @@ class _Sales_ReportState extends State<Sales_Report> {
           if (endDate != null) 'end_date': apiDateFormat.format(endDate!),
           if (familyId.isNotEmpty) 'family': familyId,
           if (staffId.isNotEmpty) 'staff': staffId,
+          if (selectedStateId != null) 'state': selectedStateId!,
+          if (selectedProductId != null) 'product': selectedProductId!,
         },
       );
 
@@ -224,6 +492,8 @@ class _Sales_ReportState extends State<Sales_Report> {
           'Content-Type': 'application/json',
         },
       );
+
+      if (!mounted || request != _reportRequest) return;
 
       debugPrint('SALES REPORT STATUS: ${response.statusCode}');
       debugPrint('SALES REPORT BODY: ${response.body}');
@@ -269,6 +539,7 @@ class _Sales_ReportState extends State<Sales_Report> {
         );
       }
     } catch (error) {
+      if (!mounted || request != _reportRequest) return;
       debugPrint('SALES REPORT ERROR: $error');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -277,7 +548,7 @@ class _Sales_ReportState extends State<Sales_Report> {
         ),
       );
     } finally {
-      if (mounted) {
+      if (mounted && request == _reportRequest) {
         setState(() {
           isLoading = false;
         });
@@ -322,6 +593,16 @@ class _Sales_ReportState extends State<Sales_Report> {
 
     setState(() {
       selectedFamily = null;
+      selectedFamilyId = null;
+      selectedStaffId = null;
+      selectedStateId = null;
+      selectedProductId = null;
+      _selectedProductName = '';
+      _productDropdownOpen = false;
+      _productSearch.clear();
+      _productDebounce?.cancel();
+      _productGeneration++;
+      _loadingProducts = false;
       selectedstaff = null;
       sortedSta = sta;
       startDate = today;
@@ -670,7 +951,7 @@ class _Sales_ReportState extends State<Sales_Report> {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        "Select division and staff to filter. Date filter is applied from backend.",
+                        "Select division, staff, state and product to filter. Date filter is applied from backend.",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -760,6 +1041,54 @@ class _Sales_ReportState extends State<Sales_Report> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildFilterDropdown(
+                      hint: _loadingStates ? 'Loading states...' : 'Select State',
+                      value: selectedStateId,
+                      icon: Icons.location_on_outlined,
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '', child: Text('All States'),
+                        ),
+                        ...stat.map((state) => DropdownMenuItem<String>(
+                          value: state['id'].toString(),
+                          child: Text(state['name'].toString(),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13)),
+                        )),
+                      ],
+                      onChanged: (value) {
+                        setState(() => selectedStateId =
+                            value == null || value.isEmpty ? null : value);
+                        getSalesReport();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildProductDropdown(),
+                  ),
+                ],
+              ),
+            ),
+            if (_productDropdownOpen) _buildProductSearchPanel(),
+            if (_stateError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    if (_stateError != null)
+                      TextButton(onPressed: getstate,
+                        child: Text('$_stateError Tap to retry')),
+
+                  ],
+                ),
+              ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: getSalesReport,

@@ -41,10 +41,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class CreatePerformaProduct_List extends StatefulWidget {
   final int? proformaOrderId;
+  final String? proformaInvoice;
 
   const CreatePerformaProduct_List({
     super.key,
     this.proformaOrderId,
+    this.proformaInvoice,
   });
 
   @override
@@ -66,7 +68,103 @@ class _CreatePerformaProduct_ListState
     final productSnapshot =
         product == null ? null : jsonDecode(jsonEncode(product));
     final isProforma = endpoint.path.contains('/perfoma/order/');
-    final response = await http.post(endpoint, headers: headers, body: body);
+    String method = 'POST';
+    Map<String, dynamic>? previousItem;
+    Uri mutationEndpoint = endpoint;
+    if (isProforma) {
+      final invoice = widget.proformaInvoice?.trim();
+      if (invoice == null || invoice.isEmpty) {
+        throw StateError('Reopen Add Product from the proforma to verify existing products.');
+      }
+      final snapshot = await http.get(
+        Uri.parse('$api/api/perfoma/${Uri.encodeComponent(invoice)}/invoice/'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 30));
+      if (snapshot.statusCode != 200) {
+        throw StateError('Unable to verify existing proforma products. Please try again.');
+      }
+      final dynamic decoded = jsonDecode(snapshot.body);
+      if (decoded is! Map ||
+          decoded['id']?.toString() != widget.proformaOrderId.toString() ||
+          decoded['perfoma_items'] is! List) {
+        throw StateError('Invalid proforma response. No product was saved.');
+      }
+      String? productKey(dynamic value) {
+        if (value is Map) value = value['id'];
+        final key = value?.toString().trim();
+        return key == null || key.isEmpty ? null : key;
+      }
+
+      final selectedId = productKey(submittedData['product']);
+      if (selectedId == null) {
+        throw StateError('Invalid product. No product was saved.');
+      }
+      final matches = <Map<String, dynamic>>[];
+      for (final dynamic raw in decoded['perfoma_items'] as List) {
+        if (raw is! Map) {
+          throw StateError('Invalid proforma item. No product was saved.');
+        }
+        final row = Map<String, dynamic>.from(raw);
+        final rowProductId = productKey(
+          row['product_id'] ?? row['product'] ?? row['productID'],
+        );
+        if (rowProductId == null) {
+          throw StateError('The proforma API must return product IDs to safely add products.');
+        }
+        if (rowProductId == selectedId) matches.add(row);
+      }
+      if (matches.length > 1) {
+        throw StateError('This product already has duplicate rows. Please resolve them before adding more.');
+      }
+      if (matches.isNotEmpty) {
+        previousItem = matches.single;
+        final existingId = int.tryParse(previousItem['id'].toString());
+        final existingQuantity = int.tryParse(previousItem['quantity'].toString());
+        final addedQuantity = int.tryParse(submittedData['quantity'].toString());
+        if (existingId == null || existingId <= 0 ||
+            existingQuantity == null || existingQuantity <= 0 ||
+            addedQuantity == null || addedQuantity <= 0) {
+          throw StateError('Invalid existing product details. No product was saved.');
+        }
+        final preserved = <String, dynamic>{};
+        for (final field in ['rate', 'discount', 'tax']) {
+          final value = num.tryParse(previousItem[field].toString());
+          if (value == null || !value.isFinite) {
+            throw StateError('Invalid existing product $field. No product was saved.');
+          }
+          preserved[field] = value;
+        }
+        final existingDescription =
+            previousItem['description']?.toString().trim() ?? '';
+        final incomingDescription =
+            submittedData['description']?.toString().trim() ?? '';
+        final description = existingDescription.isNotEmpty
+            ? existingDescription
+            : incomingDescription.isNotEmpty
+                ? incomingDescription
+                : 'Additional product';
+        submittedData
+          ..clear()
+          ..addAll({
+            'quantity': existingQuantity + addedQuantity,
+            ...preserved,
+            'description': description,
+          });
+        method = 'PUT';
+        mutationEndpoint = Uri.parse(
+          '$api/api/perfoma/order/${widget.proformaOrderId}/item/$existingId/update/',
+        );
+        body = jsonEncode(submittedData);
+      }
+    }
+    if (isProforma && kDebugMode) {
+      debugPrint('ACTUAL PROFORMA API METHOD: $method');
+      debugPrint('ACTUAL PROFORMA API ENDPOINT: $mutationEndpoint');
+      debugPrint('ACTUAL PROFORMA API PAYLOAD: ${jsonEncode(submittedData)}');
+    }
+    final response = method == 'PUT'
+        ? await http.put(mutationEndpoint, headers: headers, body: body)
+        : await http.post(mutationEndpoint, headers: headers, body: body);
     // Audit collection must not turn a successful save into a UI error.
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
@@ -77,16 +175,19 @@ class _CreatePerformaProduct_ListState
           savedData = response.body;
         }
         final logged = await AuditLogService.logCreate(
-          action: isProforma ? 'proforma_product_added' : 'cart_product_added',
+          action: isProforma
+              ? (method == 'PUT' ? 'proforma_product_updated' : 'proforma_product_added')
+              : 'cart_product_added',
           afterData: <String, dynamic>{
+            if (previousItem != null) 'previous_item': previousItem,
             'submitted_data': submittedData,
             'product_details': productSnapshot,
             if (isProforma) 'proforma_order_id': widget.proformaOrderId,
             'response_data': savedData,
             'metadata': <String, dynamic>{
               'source': 'CreatePerformaProduct_List',
-              'method': 'POST',
-              'endpoint': endpoint.path,
+              'method': method,
+              'endpoint': mutationEndpoint.path,
               'http_status': response.statusCode,
               'recorded_at': DateTime.now().toUtc().toIso8601String(),
             },
@@ -1212,7 +1313,25 @@ if (variant['tax'] == null) {
   }
 
  
+bool _isSavingProformaProduct = false;
+
 Future<bool> _addProductDirectlyToProforma({
+  required dynamic productId,
+  required int quantity,
+}) async {
+  if (_isSavingProformaProduct) return false;
+  _isSavingProformaProduct = true;
+  try {
+    return await _saveProductDirectlyToProforma(
+      productId: productId,
+      quantity: quantity,
+    );
+  } finally {
+    _isSavingProformaProduct = false;
+  }
+}
+
+Future<bool> _saveProductDirectlyToProforma({
   required dynamic productId,
   required int quantity,
 }) async {
@@ -1354,7 +1473,7 @@ Future<bool> _addProductDirectlyToProforma({
     debugPrint('Product Description : $description');
 
     // Print request URL and all submitted values.
-    debugPrint('API METHOD : POST');
+    debugPrint('INITIAL ADD REQUEST (may become a quantity update after checking existing products)');
     debugPrint('API ENDPOINT : $endpoint');
 
     printCompleteData(
@@ -1422,6 +1541,14 @@ Future<bool> _addProductDirectlyToProforma({
             decoded['detail']?.toString() ??
             decoded['error']?.toString() ??
             message;
+        final errors = decoded['errors'];
+        if (errors is Map && errors.isNotEmpty) {
+          final details = errors.entries.map((entry) {
+            final value = entry.value;
+            return '${entry.key}: ${value is List ? value.join(', ') : value}';
+          }).join('\n');
+          message = '$message\n$details';
+        }
       }
     } catch (_) {}
 
@@ -1449,7 +1576,7 @@ Future<bool> _addProductDirectlyToProforma({
     if (mounted) {
       showCustomPopup(
         "Error",
-        "Failed to add Product!",
+        error is StateError ? error.message.toString() : "Failed to add Product!",
       );
     }
 
