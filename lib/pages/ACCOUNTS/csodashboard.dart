@@ -84,6 +84,9 @@ class _cso_dashboardState extends State<cso_dashboard>
   int invoiceCreatedCount = 0;
 
   List<Map<String, dynamic>> csoFamilySummaryCards = [];
+  bool _divisionSummaryLoading = true;
+  bool _divisionSummaryBusy = false;
+  String? _divisionSummaryError;
 
   String familyName = '';
   var family = '';
@@ -593,65 +596,113 @@ class _cso_dashboardState extends State<cso_dashboard>
     } catch (error) {}
   }
 
+  void _applyDivisionSummary(List<Map<String, dynamic>> families) {
+    if (!mounted) return;
+    setState(() {
+      csoFamilySummaryCards = families;
+      todayBillsExcludingBepocartCount = families.fold<int>(
+        0, (sum, item) => sum + ((item['today_count'] as num?)?.toInt() ?? 0),
+      );
+      todayOrdersTotalAmountt = families.fold<double>(
+        0.0,
+        (sum, item) => sum +
+            ((item['today_total_amount'] as num?)?.toDouble() ?? 0.0),
+      ).round();
+    });
+  }
+
   Future<void> fetchCsoFamilySummary() async {
+    if (!mounted || _divisionSummaryBusy) return;
+    _divisionSummaryBusy = true;
+    setState(() {
+      _divisionSummaryLoading = true;
+      _divisionSummaryError = null;
+    });
+    final totalTimer = Stopwatch()..start();
+    final requestTimer = Stopwatch();
+    String? cacheKey;
     try {
       final token = await getTokenFromPrefs();
-
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view division performance.');
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final account = prefs.getString('username')?.trim() ?? '';
+      // Scope cached results to the signed-in account and current day.
+      if (account.isNotEmpty) {
+        cacheKey = 'cso_division_summary_v1_${Uri.encodeComponent(account)}';
+        if (csoFamilySummaryCards.isEmpty) {
+          try {
+            final cached = prefs.getString(cacheKey);
+            if (cached != null) {
+              final decoded = jsonDecode(cached);
+              if (decoded is Map &&
+                  decoded['date'] == DateFormat('yyyy-MM-dd').format(DateTime.now()) &&
+                  decoded['data'] is List) {
+                final families = (decoded['data'] as List)
+                    .whereType<Map>()
+                    .map((row) => Map<String, dynamic>.from(row))
+                    .toList();
+                _applyDivisionSummary(families);
+              }
+            }
+          } catch (error) {
+            debugPrint('DIVISION SUMMARY CACHE READ ERROR: $error');
+          }
+        }
+      }
+      requestTimer.start();
       final response = await http.get(
         Uri.parse('$api/api/orders/summary/family/data/'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-      );
-
-      if (response.statusCode == 200) {
-        final parsed = jsonDecode(response.body);
-        final List results = parsed['results'] ?? [];
-
-        final filteredFamilies = results.where((item) {
-          final familyName =
-              (item['family_name'] ?? '').toString().toLowerCase();
-
-          return familyName == 'cycling' || familyName == 'skating';
-        }).map<Map<String, dynamic>>((item) {
-          return {
-            'family_id': item['family_id'],
-            'family_name': item['family_name'],
-            'today_count': item['today_count'] ?? 0,
-            'today_total_amount': item['today_total_amount'] ?? 0.0,
-            'month_count': item['month_count'] ?? 0,
-            'month_total_amount': item['month_total_amount'] ?? 0.0,
-            'payment_status_summary': item['payment_status_summary'] ?? {},
-            'grv_return_summary': item['grv_return_summary'] ?? {},
-          };
-        }).toList();
-
-        final int totalTodayBills = filteredFamilies.fold<int>(
-          0,
-          (sum, item) {
-            return sum + ((item['today_count'] as num?)?.toInt() ?? 0);
-          },
-        );
-
-        final double totalTodayVolume = filteredFamilies.fold<double>(
-          0.0,
-          (sum, item) {
-            return sum +
-                ((item['today_total_amount'] as num?)?.toDouble() ?? 0.0);
-          },
-        );
-
-        setState(() {
-          csoFamilySummaryCards = filteredFamilies;
-
-          // Blue card values: Cycling + Skating only
-          todayBillsExcludingBepocartCount = totalTodayBills;
-          todayOrdersTotalAmountt = totalTodayVolume.round();
-        });
+      ).timeout(const Duration(seconds: 30));
+      requestTimer.stop();
+      debugPrint('DIVISION SUMMARY API: ${requestTimer.elapsedMilliseconds} ms; '
+          'HTTP ${response.statusCode}');
+      if (response.statusCode != 200) {
+        throw Exception('Unable to load division performance (${response.statusCode}).');
       }
-    } catch (e) {
-      debugPrint('CSO FAMILY SUMMARY ERROR: $e');
+      final parsed = jsonDecode(response.body);
+      if (parsed is! Map || parsed['results'] is! List) {
+        throw const FormatException('Invalid division performance response.');
+      }
+      final families = (parsed['results'] as List).whereType<Map>().where((item) {
+        final name = (item['family_name'] ?? '').toString().toLowerCase();
+        return name == 'cycling' || name == 'skating';
+      }).map<Map<String, dynamic>>((item) => {
+        'family_id': item['family_id'],
+        'family_name': item['family_name'],
+        'today_count': item['today_count'] ?? 0,
+        'today_total_amount': item['today_total_amount'] ?? 0.0,
+        'month_count': item['month_count'] ?? 0,
+        'month_total_amount': item['month_total_amount'] ?? 0.0,
+        'payment_status_summary': item['payment_status_summary'] ?? {},
+        'grv_return_summary': item['grv_return_summary'] ?? {},
+      }).toList();
+      _applyDivisionSummary(families);
+      if (cacheKey != null) {
+        try {
+          await prefs.setString(cacheKey, jsonEncode({
+            'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+            'data': families,
+          }));
+        } catch (error) {
+          debugPrint('DIVISION SUMMARY CACHE WRITE ERROR: $error');
+        }
+      }
+    } catch (error) {
+      debugPrint('DIVISION SUMMARY ERROR: $error');
+      if (mounted) setState(() => _divisionSummaryError = error.toString());
+    } finally {
+      requestTimer.stop();
+      totalTimer.stop();
+      debugPrint('DIVISION SUMMARY TOTAL: ${totalTimer.elapsedMilliseconds} ms; '
+          'request elapsed: ${requestTimer.elapsedMilliseconds} ms');
+      _divisionSummaryBusy = false;
+      if (mounted) setState(() => _divisionSummaryLoading = false);
     }
   }
 
@@ -2194,7 +2245,38 @@ class _cso_dashboardState extends State<cso_dashboard>
 
   Widget _buildFamilySummarySection() {
     if (csoFamilySummaryCards.isEmpty) {
-      return const SizedBox.shrink();
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Division-Wise Performance', style: TextStyle(
+            color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
+          if (_divisionSummaryLoading) ...[
+            const LinearProgressIndicator(
+              color: Colors.white, backgroundColor: Colors.white24),
+            const SizedBox(height: 10),
+            const Text('Loading division performance...',
+              style: TextStyle(color: Colors.white)),
+          ] else ...[
+            Text(_divisionSummaryError ?? 'No division performance data available.',
+              style: const TextStyle(color: Colors.white)),
+            TextButton(
+              onPressed: fetchCsoFamilySummary,
+              child: const Text('Retry', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ]),
+      );
     }
 
     return Column(
@@ -2209,6 +2291,17 @@ class _cso_dashboardState extends State<cso_dashboard>
             color: Color(0xFF111827),
           ),
         ),
+        if (_divisionSummaryLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Text('Showing saved results. Updating...',
+              style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          ),
+        if (_divisionSummaryError != null)
+          TextButton(
+            onPressed: fetchCsoFamilySummary,
+            child: const Text('Showing saved results. Refresh failed. Retry'),
+          ),
         const SizedBox(height: 6),
         // Text(
         //   'Cycling and Skating sales overview',
@@ -2257,17 +2350,24 @@ class _cso_dashboardState extends State<cso_dashboard>
               },
               child: InkWell(
                 borderRadius: BorderRadius.circular(20),
-                onTap: _navigateToCsoOrderList,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => SalesReportExcelsummary()),
+                ),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 14),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(color: Colors.white.withOpacity(0.22)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: const Color(0xFF2C74FF).withOpacity(0.28),
                         blurRadius: 14,
                         offset: const Offset(0, 8),
                       ),
@@ -2282,14 +2382,14 @@ class _cso_dashboardState extends State<cso_dashboard>
                             height: 46,
                             width: 46,
                             decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.12),
+                              color: Colors.white.withOpacity(0.14),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Icon(
                               familyName.toLowerCase() == 'cycling'
                                   ? Icons.directions_bike
                                   : Icons.ice_skating,
-                              color: Colors.blue,
+                              color: Colors.white,
                               size: 27,
                             ),
                           ),
@@ -2300,7 +2400,7 @@ class _cso_dashboardState extends State<cso_dashboard>
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF111827),
+                                color: Colors.white,
                                 letterSpacing: 0.4,
                               ),
                             ),
@@ -2393,14 +2493,14 @@ class _cso_dashboardState extends State<cso_dashboard>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white.withOpacity(0.14),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: Colors.white.withOpacity(0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Colors.blueGrey),
+          Icon(icon, size: 18, color: Colors.white),
           const SizedBox(height: 8),
           Text(
             value,
@@ -2409,7 +2509,7 @@ class _cso_dashboardState extends State<cso_dashboard>
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF111827),
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 3),
@@ -2418,7 +2518,7 @@ class _cso_dashboardState extends State<cso_dashboard>
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: Color(0xFF6B7280),
+              color: Colors.white70,
             ),
           ),
         ],
@@ -3122,6 +3222,9 @@ class _cso_dashboardState extends State<cso_dashboard>
             'Sales Report',
             'Credit Sales Report',
             'COD Sales Report',
+            'Product Sale Report',
+            'Statewise Sales Report Excel',
+            'Statewise Sales Report',
             'Product Stock Report',
             'Family Wise Excel Report',
             'Product Sale Report',
@@ -3315,9 +3418,9 @@ class _cso_dashboardState extends State<cso_dashboard>
                       ],
                     ),
                   ),
-                  buildCsoDashboardCards(),
-                  const SizedBox(height: 16),
                   _buildFamilySummarySection(),
+                  const SizedBox(height: 16),
+                  buildCsoDashboardCards(),
                 ],
               ),
             ),

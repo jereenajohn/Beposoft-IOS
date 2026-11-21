@@ -1,3 +1,4 @@
+import 'package:beposoft/pages/ACCOUNTS/company_gst_report_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/sales_point_ranking_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/teamsales_pointsandranking_page.dart';
 import 'package:beposoft/pages/ADMIN/dgm_page.dart';
@@ -87,6 +88,13 @@ class admin_dashboard extends StatefulWidget {
 
 class _admin_dashboardState extends State<admin_dashboard>
     with WidgetsBindingObserver {
+  bool _gstLoading = false;
+  String? _gstError;
+  bool _gstShowMonth = false;
+  int _gstRequestVersion = 0;
+  Map<String, Map<String, dynamic>> _gstTodayByCompany = {};
+  Map<String, Map<String, dynamic>> _gstMonthByCompany = {};
+
   Map<String, String> myAttendanceByDate = {};
   bool isMyAttendanceLoading = true;
   bool myAttendanceFailed = false;
@@ -168,6 +176,7 @@ class _admin_dashboardState extends State<admin_dashboard>
     fetchMyAttendanceDetails();
     fetchOrdersSummaryFamilyData();
     getdgm();
+    _fetchGstCardData();
 
     mailCountTimer = Timer.periodic(
       const Duration(seconds: 5),
@@ -211,6 +220,7 @@ class _admin_dashboardState extends State<admin_dashboard>
       fetchBeposoftSummary();
       fetchOrdersSummaryFamilyData();
       getdgm();
+      _fetchGstCardData();
     }
   }
 
@@ -1842,6 +1852,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'New Proforma Invoice',
                   'Proforma Invoice List',
                   'Proforma Invoice List (Payment-Slips)',
+                  'Rejected Proforma Invoice List',
                 ]),
                 _buildDropdownTile(
                   context,
@@ -2345,6 +2356,7 @@ class _admin_dashboardState extends State<admin_dashboard>
                   'Point System Excel',
                   'Statewise Sales Report Excel',
                   'Customer Complete Report',
+                  'Staff Complete Report',
                   'GST Report',
                   // 'All Division Product Sale Report',
                   // 'Cycling & Skating Monthly Excel',
@@ -4005,12 +4017,159 @@ class _admin_dashboardState extends State<admin_dashboard>
     );
   }
 
+  // GST card: aggregate the API's order rows by company for each period.
+  Future<Map<String, Map<String, dynamic>>> _loadGstCompanyTotals(
+    String token,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final uri = Uri.parse('$api/api/orders/tax/report/').replace(
+      queryParameters: {
+        'start_date': DateFormat('yyyy-MM-dd').format(start),
+        'end_date': DateFormat('yyyy-MM-dd').format(end),
+      },
+    );
+    final response = await http.get(uri, headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    }).timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw Exception('Unable to load GST (${response.statusCode}).');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map ||
+        decoded['status'] != 'success' ||
+        decoded['data'] is! List) {
+      throw const FormatException('Invalid GST report response.');
+    }
+    // Do not silently display partial totals if pagination is introduced.
+    if (decoded['next'] != null && decoded['next'].toString().isNotEmpty) {
+      throw const FormatException('GST report requires all order rows.');
+    }
+    final totals = <String, Map<String, dynamic>>{};
+    for (final raw in decoded['data'] as List) {
+      if (raw is! Map) {
+        throw const FormatException('Invalid GST order row.');
+      }
+      final name = raw['company_name']?.toString().trim() ?? '';
+      final key = raw['company_id']?.toString() ?? 'name:$name';
+      final entry = totals.putIfAbsent(key, () => {
+        'name': name.isEmpty ? 'Unnamed company' : name,
+        'net': 0.0,
+        'gst': 0.0,
+        'without_tax': 0.0,
+      });
+      entry['net'] = (entry['net'] as double) + _asDouble(raw['net_amount']);
+      entry['gst'] = (entry['gst'] as double) + _asDouble(raw['tax_amount']);
+      entry['without_tax'] = (entry['without_tax'] as double) +
+          _asDouble(raw['amount_before_tax']);
+    }
+    return totals;
+  }
+
+  Future<void> _fetchGstCardData() async {
+    if (!mounted) return;
+    final version = ++_gstRequestVersion;
+    setState(() {
+      _gstLoading = true;
+      _gstError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view GST.');
+      }
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final monthStart = DateTime(now.year, now.month, 1);
+      final results = await Future.wait([
+        _loadGstCompanyTotals(token, today, today),
+        _loadGstCompanyTotals(token, monthStart, today),
+      ]);
+      if (!mounted || version != _gstRequestVersion) return;
+      setState(() {
+        _gstTodayByCompany = results[0];
+        _gstMonthByCompany = results[1];
+      });
+    } catch (error) {
+      if (mounted && version == _gstRequestVersion) {
+        setState(() => _gstError = error.toString());
+      }
+    } finally {
+      if (mounted && version == _gstRequestVersion) {
+        setState(() => _gstLoading = false);
+      }
+    }
+  }
+
   Widget _buildGstGridCard() {
+    final selected = _gstShowMonth ? _gstMonthByCompany : _gstTodayByCompany;
+    // Include companies with no orders in the selected period as zero totals.
+    final names = <String, String>{};
+    for (final item in company) {
+      names[item['id'].toString()] = item['name']?.toString() ?? 'Unnamed company';
+    }
+    for (final entry in _gstMonthByCompany.entries) {
+      names[entry.key] = entry.value['name'].toString();
+    }
+    for (final entry in _gstTodayByCompany.entries) {
+      names[entry.key] = entry.value['name'].toString();
+    }
+    names.removeWhere((_, name) =>
+        name.trim().toLowerCase() == 'test company');
+    final keys = names.keys.toList()
+      ..sort((a, b) => names[a]!.compareTo(names[b]!));
+
+    Widget periodButton(String label, bool month) {
+      final active = _gstShowMonth == month;
+      return Expanded(
+        child: InkWell(
+          onTap: () => setState(() => _gstShowMonth = month),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            decoration: BoxDecoration(
+              color: active ? Colors.white : Colors.white.withOpacity(.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: active ? const Color(0xFF2C74FF) : Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget amountLine(String label, dynamic value) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(
+              color: Colors.white70, fontSize: 10,
+            )),
+            Text(_currency.format(_asDouble(value)),
+              style: const TextStyle(
+                color: Colors.white, fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => d.navigateToSelectedPage(context, 'GST Report'),
+        onTap: null,
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
@@ -4019,89 +4178,113 @@ class _admin_dashboardState extends State<admin_dashboard>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2C74FF).withOpacity(0.28),
-                blurRadius: 12,
-                spreadRadius: 1,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            boxShadow: [BoxShadow(
+              color: const Color(0xFF2C74FF).withOpacity(.28),
+              blurRadius: 12, spreadRadius: 1, offset: const Offset(0, 6),
+            )],
           ),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'GST',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(11),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.22),
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.receipt_long_outlined,
-                        color: Colors.white,
-                        size: 19,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: Center(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.22),
-                        ),
-                      ),
-                      child: const Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'GST Report',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: Colors.white,
-                            size: 19,
-                          ),
-                        ],
-                      ),
+                Row(children: [
+                  const Expanded(child: Text('GST', style: TextStyle(
+                    color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ))),
+                  InkWell(
+                    onTap: _gstLoading ? null : _fetchGstCardData,
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 18),
                     ),
                   ),
+                ]),
+                const SizedBox(height: 5),
+                Row(children: [
+                  periodButton('Today', false),
+                  const SizedBox(width: 5),
+                  periodButton('This month', true),
+                ]),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: _gstLoading
+                    ? const Center(child: SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                      ))
+                    : _gstError != null
+                      ? SingleChildScrollView(child: Column(children: [
+                          Text(_gstError!, style: const TextStyle(
+                            color: Colors.white, fontSize: 11)),
+                          TextButton(
+                            onPressed: _fetchGstCardData,
+                            child: const Text('Retry',
+                              style: TextStyle(color: Colors.white)),
+                          ),
+                        ]))
+                      : keys.isEmpty
+                        ? const Center(child: Text('No company data',
+                            style: TextStyle(color: Colors.white, fontSize: 11)))
+                        : ListView.separated(
+                            primary: false,
+                            padding: EdgeInsets.zero,
+                            itemCount: keys.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final key = keys[index];
+                              final totals = selected[key];
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  if (key.startsWith('name:')) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Company ID is missing. Please refresh the report.')),
+                                    );
+                                    return;
+                                  }
+                                  final now = DateTime.now();
+                                  final today = DateTime(now.year, now.month, now.day);
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => CompanyGstReportPage(
+                                      companyId: key,
+                                      companyName: names[key]!,
+                                      initialStartDate: _gstShowMonth
+                                          ? DateTime(today.year, today.month, 1) : today,
+                                      initialEndDate: today,
+                                    ),
+                                  ));
+                                },
+                                child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(.14),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(.22)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(names[key]!, style: const TextStyle(
+                                      color: Colors.white, fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    )),
+                                    amountLine('Total Order amount', totals?['net']),
+                                    amountLine('Total GST', totals?['gst']),
+                                    amountLine('Total amount without tax',
+                                      totals?['without_tax']),
+                                  ],
+                                ),
+                                ),
+                              );
+                            },
+                          ),
                 ),
               ],
             ),

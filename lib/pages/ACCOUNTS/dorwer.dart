@@ -4,6 +4,7 @@ import 'package:beposoft/Sales%20Directors/sd_confirm_call_duration.dart';
 import 'package:beposoft/pages/ACCOUNTS/BDO_call_List.dart';
 import 'package:beposoft/pages/ACCOUNTS/Customer_complete_report.dart';
 import 'package:beposoft/pages/ACCOUNTS/Dispatched_Pending_Orders_Summary_Report.dart';
+import 'package:beposoft/pages/ACCOUNTS/Rejected_proforma_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/Staff_exit_form_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Expenses.dart';
 import 'package:beposoft/pages/ACCOUNTS/add_Recipt.dart';
@@ -20,6 +21,7 @@ import 'package:beposoft/pages/ACCOUNTS/other_receipts.dart';
 import 'package:beposoft/pages/ACCOUNTS/product_rack_usability_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/proforma_list_payment_slips.dart';
 import 'package:beposoft/pages/ACCOUNTS/sales_point_ranking_page.dart';
+import 'package:beposoft/pages/ACCOUNTS/staff_complete_report_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/staff_exit_form_list.dart';
 import 'package:beposoft/pages/ACCOUNTS/statewise_sales_report_page.dart';
 import 'package:beposoft/pages/ACCOUNTS/teamsales_pointsandranking_page.dart';
@@ -181,6 +183,14 @@ class drower {
           context,
           MaterialPageRoute(
             builder: (context) => CustomerCompleteReportPage(),
+          ),
+        );
+        break;
+          case 'Staff Complete Report':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StaffCompleteReportPage(),
           ),
         );
         break;
@@ -717,6 +727,14 @@ class drower {
               builder: (context) => ProformaPaymentSlipInvoiceList()),
         );
         break;
+         case  'Rejected Proforma Invoice List':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => RejectedProformaInvoiceList(status: 'Invoice Rejected',)),
+        );
+        break;
+       
       case 'View Orders List':
         Navigator.push(
           context,

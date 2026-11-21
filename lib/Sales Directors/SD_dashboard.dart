@@ -1,5 +1,6 @@
 import 'package:beposoft/pages/BDM/self_sales_point_ranking_page.dart';
 import 'dart:convert';
+import 'package:beposoft/pages/ACCOUNTS/my_grv_page.dart';
 import 'dart:io';
 import 'package:beposoft/Sales%20Directors/sd_add_attendance.dart';
 import 'package:beposoft/Sales%20Directors/sd_add_team_staffs.dart';
@@ -53,6 +54,12 @@ class SdDashboard extends StatefulWidget {
 
 class _SdDashboardState extends State<SdDashboard>
     with WidgetsBindingObserver {
+  int myGrvBills = 0;
+  double myGrvOrderAmount = 0.0;
+  double myGrvAmount = 0.0;
+  bool isMyGrvSummaryLoading = false;
+  bool hasMyGrvSummaryError = false;
+
   Map<String, String> myAttendanceByDate = {};
   bool isMyAttendanceLoading = true;
   bool myAttendanceFailed = false;
@@ -188,6 +195,7 @@ Timer? mailCountTimer;
 void initState() {
   super.initState();
   fetchMySalesPoints();
+  fetchMyGrvSummary();
 
   WidgetsBinding.instance.addObserver(this);
 
@@ -229,6 +237,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 
   if (state == AppLifecycleState.resumed) {
     fetchMySalesPoints();
+    fetchMyGrvSummary();
     fetchMyAttendanceDetails();
     fetchInboxMailCount();
   }
@@ -946,6 +955,63 @@ void dispose() {
     }
   }
 
+  Future<void> fetchMyGrvSummary() async {
+    if (!mounted || isMyGrvSummaryLoading) return;
+    setState(() {
+      isMyGrvSummaryLoading = true;
+      hasMyGrvSummaryError = false;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw StateError('Authentication token is missing');
+      }
+      final now = DateTime.now();
+      final dateFormat = DateFormat('yyyy-MM-dd');
+      final uri = Uri.parse('$api/api/my/grv/data/').replace(
+        queryParameters: {
+          'start_date': dateFormat.format(DateTime(now.year, now.month, 1)),
+          'end_date': dateFormat.format(DateTime(now.year, now.month + 1, 0)),
+        },
+      );
+      final response = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw HttpException('My GRV request failed: ${response.statusCode}');
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) throw const FormatException('Invalid My GRV response');
+      final result = decoded['results'] ?? decoded;
+      if (result is! Map || result['status'] != 'success' ||
+          result['order_summary'] is! Map || result['summary'] is! Map) {
+        throw const FormatException('My GRV summary is missing');
+      }
+      final orderSummary = result['order_summary'] as Map;
+      final summary = result['summary'] as Map;
+      final bills = int.tryParse(summary['total_grv_count'].toString());
+      final orderAmount = double.tryParse(orderSummary['total_order_amount'].toString());
+      final grvAmount = double.tryParse(summary['total_grv_amount'].toString());
+      if (bills == null || orderAmount == null || grvAmount == null ||
+          !orderAmount.isFinite || !grvAmount.isFinite) {
+        throw const FormatException('Invalid My GRV summary totals');
+      }
+      if (!mounted) return;
+      setState(() {
+        myGrvBills = bills;
+        myGrvOrderAmount = orderAmount;
+        myGrvAmount = grvAmount;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('MY GRV SUMMARY ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) setState(() => hasMyGrvSummaryError = true);
+    } finally {
+      if (mounted) setState(() => isMyGrvSummaryLoading = false);
+    }
+  }
+
   Future<void> refreshDashboardData() async {
     try {
       setState(() {
@@ -954,6 +1020,7 @@ void dispose() {
 
       await Future.wait([
         fetchMySalesPoints(),
+        fetchMyGrvSummary(),
         fetchproformaData(),
         getfamily(),
         getSalesReport(),
@@ -2967,6 +3034,12 @@ void dispose() {
             'proforma invoice new proforma invoice proforma invoice list orders list',
       },
 
+      {
+        'title': 'My GRV',
+        'icon': Icons.assignment_return_outlined,
+        'keywords': 'my grv goods return voucher return products exchange',
+      },
+
       // {
       //   'title': 'Orders',
       //   'icon': Icons.receipt_long_outlined,
@@ -3136,6 +3209,13 @@ void dispose() {
 
   Future<void> _navigateFromFrontCard(String item) async {
     switch (item) {
+      case 'My GRV':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const MyGrvPage()),
+        );
+        return;
+
       case 'Add Attendance':
         Navigator.push(
           context,
@@ -3261,6 +3341,207 @@ void dispose() {
   // ============================================================
   // SIMPLE BDO-STYLE FRONT MENU CARD
   // ============================================================
+
+  Widget _buildMyGrvSummaryCard({
+    required bool isVerySmallPhone,
+  }) {
+    Widget buildMetricRow({
+      required String label,
+      required String value,
+    }) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal:
+              isVerySmallPhone ? 8 : 10,
+          vertical:
+              isVerySmallPhone ? 6 : 7,
+        ),
+        decoration: BoxDecoration(
+          color:
+              Colors.white,
+          borderRadius:
+              BorderRadius.circular(
+            10,
+          ),
+          border: Border.all(
+            color:
+                const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow:
+                    TextOverflow.ellipsis,
+                style: TextStyle(
+                  color:
+                      const Color(0xFF0F172A),
+                  fontSize:
+                      isVerySmallPhone
+                          ? 9
+                          : 10,
+                  fontWeight:
+                      FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(
+              width: 8,
+            ),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment:
+                    Alignment.centerRight,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize:
+                        isVerySmallPhone
+                            ? 13
+                            : 15,
+                    fontWeight:
+                        FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
+        gradient: const LinearGradient(
+        colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                const Color(0xFF0F172A).withOpacity(0.08),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset:
+                const Offset(
+              0,
+              6,
+            ),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(
+          isVerySmallPhone ? 9 : 10,
+        ),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    'My GRV',
+                    maxLines: 2,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize:
+                          isVerySmallPhone
+                              ? 10.5
+                              : 12,
+                      height: 1.15,
+                      fontWeight:
+                          FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 6,
+                ),
+                Container(
+                  width:
+                      isVerySmallPhone
+                          ? 30
+                          : 32,
+                  height:
+                      isVerySmallPhone
+                          ? 30
+                          : 32,
+                  decoration:
+                      BoxDecoration(
+                    color: Colors.white.withOpacity(0.14),
+                    borderRadius:
+                        BorderRadius.circular(
+                      10,
+                    ),
+                    border: Border.all(
+                      color:
+                          Colors.white.withOpacity(0.22),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.assignment_return_outlined,
+                    color: Colors.white,
+                    size:
+                        isVerySmallPhone
+                            ? 17
+                            : 18,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(
+              height: 6,
+            ),
+
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  buildMetricRow(
+                    label: 'Bill',
+                    value: isMyGrvSummaryLoading ? '...' : hasMyGrvSummaryError
+                        ? '--' : myGrvBills.toString(),
+                  ),
+                  const SizedBox(height: 5),
+                  buildMetricRow(
+                    label: 'Value',
+                    value: isMyGrvSummaryLoading ? '...' : hasMyGrvSummaryError
+                        ? '--' : formatCompactAmount(myGrvAmount),
+                  ),
+                  const SizedBox(height: 5),
+                  buildMetricRow(
+                    label: 'Act.Sales',
+                    value: isMyGrvSummaryLoading ? '...' : hasMyGrvSummaryError
+                        ? '--' : formatCompactAmount(myGrvOrderAmount - myGrvAmount),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildFrontMenuCard({
     required String title,
@@ -3564,6 +3845,18 @@ void dispose() {
             final String? groupType =
                 item['groupType']?.toString();
 
+            if (itemTitle == 'My GRV') {
+              return GestureDetector(
+                onTap: () async {
+                  await _navigateFromFrontCard(itemTitle);
+                  if (mounted) await fetchMyGrvSummary();
+                },
+                child: _buildMyGrvSummaryCard(
+                  isVerySmallPhone: isVerySmallPhone,
+                ),
+              );
+            }
+
             if (groupType == 'myAttendanceCalendar') {
               return _buildMyAttendanceCalendarCard();
             }
@@ -3724,6 +4017,18 @@ void dispose() {
 
             final String? groupType =
                 item['groupType']?.toString();
+
+            if (itemTitle == 'My GRV') {
+              return GestureDetector(
+                onTap: () async {
+                  await _navigateFromFrontCard(itemTitle);
+                  if (mounted) await fetchMyGrvSummary();
+                },
+                child: _buildMyGrvSummaryCard(
+                  isVerySmallPhone: isVerySmallPhone,
+                ),
+              );
+            }
 
             if (groupType == 'myAttendanceCalendar') {
               return _buildMyAttendanceCalendarCard();

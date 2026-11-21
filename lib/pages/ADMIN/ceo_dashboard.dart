@@ -1,3 +1,4 @@
+import 'package:beposoft/pages/ACCOUNTS/company_gst_report_page.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:beposoft/pages/ACCOUNTS/Create_Purchase_Product_List.dart';
@@ -107,6 +108,19 @@ class ceo_dashboard extends StatefulWidget {
 
 class _ceo_dashboardState extends State<ceo_dashboard>
     with WidgetsBindingObserver {
+  bool _gstLoading = false;
+  String? _gstError;
+  bool _gstShowMonth = false;
+  int _gstRequestVersion = 0;
+  Map<String, Map<String, dynamic>> _gstTodayByCompany = {};
+  Map<String, Map<String, dynamic>> _gstMonthByCompany = {};
+
+  List<Map<String, dynamic>> _gstCompanies = [];
+  bool isBottomSearchOpen = false;
+  String dashboardSearchQuery = '';
+  final TextEditingController dashboardSearchController = TextEditingController();
+  final FocusNode dashboardSearchFocusNode = FocusNode();
+
   List<String> statusOptions = ["pending", "approved", "rejected"];
   final _currency =
       NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
@@ -294,6 +308,8 @@ List<Map<String, dynamic>> todayDivisionWiseFamilyData = [];
   @override
   void initState() {
     super.initState();
+    _fetchGstCompanies();
+    _fetchGstCardData();
     WidgetsBinding.instance.addObserver(this);
     _getUsername(); // Get the username when the page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -373,6 +389,8 @@ List<Map<String, dynamic>> todayDivisionWiseFamilyData = [];
 
     if (state == AppLifecycleState.resumed) {
       fetchInboxMailCount();
+      _fetchGstCompanies();
+      _fetchGstCardData();
     }
   }
 
@@ -380,7 +398,678 @@ List<Map<String, dynamic>> todayDivisionWiseFamilyData = [];
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     mailCountTimer?.cancel();
+    dashboardSearchController.dispose();
+    dashboardSearchFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchGstCompanies() async {
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) return;
+      final response = await http.get(
+        Uri.parse('$api/api/company/data/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 25));
+      if (response.statusCode != 200) return;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['data'] is! List) return;
+      final companies = <Map<String, dynamic>>[];
+      for (final item in decoded['data'] as List) {
+        if (item is Map && item['id'] != null &&
+            item['name']?.toString().trim().toLowerCase() != 'test company') {
+          companies.add({
+            'id': item['id'],
+            'name': item['name']?.toString() ?? 'Unnamed company',
+          });
+        }
+      }
+      if (mounted) setState(() => _gstCompanies = companies);
+    } catch (error) {
+      debugPrint('GST company list error: $error');
+    }
+  }
+
+  // GST card: aggregate the API's order rows by company for each period.
+  Future<Map<String, Map<String, dynamic>>> _loadGstCompanyTotals(
+    String token,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final uri = Uri.parse('$api/api/orders/tax/report/').replace(
+      queryParameters: {
+        'start_date': DateFormat('yyyy-MM-dd').format(start),
+        'end_date': DateFormat('yyyy-MM-dd').format(end),
+      },
+    );
+    final response = await http.get(uri, headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    }).timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw Exception('Unable to load GST (${response.statusCode}).');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map ||
+        decoded['status'] != 'success' ||
+        decoded['data'] is! List) {
+      throw const FormatException('Invalid GST report response.');
+    }
+    // Do not silently display partial totals if pagination is introduced.
+    if (decoded['next'] != null && decoded['next'].toString().isNotEmpty) {
+      throw const FormatException('GST report requires all order rows.');
+    }
+    final totals = <String, Map<String, dynamic>>{};
+    for (final raw in decoded['data'] as List) {
+      if (raw is! Map) {
+        throw const FormatException('Invalid GST order row.');
+      }
+      final name = raw['company_name']?.toString().trim() ?? '';
+      final key = raw['company_id']?.toString() ?? 'name:$name';
+      final entry = totals.putIfAbsent(key, () => {
+        'name': name.isEmpty ? 'Unnamed company' : name,
+        'net': 0.0,
+        'gst': 0.0,
+        'without_tax': 0.0,
+      });
+      entry['net'] = (entry['net'] as double) + _asDouble(raw['net_amount']);
+      entry['gst'] = (entry['gst'] as double) + _asDouble(raw['tax_amount']);
+      entry['without_tax'] = (entry['without_tax'] as double) +
+          _asDouble(raw['amount_before_tax']);
+    }
+    return totals;
+  }
+
+  Future<void> _fetchGstCardData() async {
+    if (!mounted) return;
+    final version = ++_gstRequestVersion;
+    setState(() {
+      _gstLoading = true;
+      _gstError = null;
+    });
+    try {
+      final token = await getTokenFromPrefs();
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Please log in again to view GST.');
+      }
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final monthStart = DateTime(now.year, now.month, 1);
+      final results = await Future.wait([
+        _loadGstCompanyTotals(token, today, today),
+        _loadGstCompanyTotals(token, monthStart, today),
+      ]);
+      if (!mounted || version != _gstRequestVersion) return;
+      setState(() {
+        _gstTodayByCompany = results[0];
+        _gstMonthByCompany = results[1];
+      });
+    } catch (error) {
+      if (mounted && version == _gstRequestVersion) {
+        setState(() => _gstError = error.toString());
+      }
+    } finally {
+      if (mounted && version == _gstRequestVersion) {
+        setState(() => _gstLoading = false);
+      }
+    }
+  }
+
+  Widget _buildGstGridCard() {
+    final selected = _gstShowMonth ? _gstMonthByCompany : _gstTodayByCompany;
+    // Include companies with no orders in the selected period as zero totals.
+    final names = <String, String>{};
+    for (final item in _gstCompanies) {
+      names[item['id'].toString()] = item['name']?.toString() ?? 'Unnamed company';
+    }
+    for (final entry in _gstMonthByCompany.entries) {
+      names[entry.key] = entry.value['name'].toString();
+    }
+    for (final entry in _gstTodayByCompany.entries) {
+      names[entry.key] = entry.value['name'].toString();
+    }
+    names.removeWhere((_, name) =>
+        name.trim().toLowerCase() == 'test company');
+    final keys = names.keys.toList()
+      ..sort((a, b) => names[a]!.compareTo(names[b]!));
+
+    Widget periodButton(String label, bool month) {
+      final active = _gstShowMonth == month;
+      return Expanded(
+        child: InkWell(
+          onTap: () => setState(() => _gstShowMonth = month),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            decoration: BoxDecoration(
+              color: active ? Colors.white : Colors.white.withOpacity(.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: active ? const Color(0xFF2C74FF) : Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget amountLine(String label, dynamic value) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(
+              color: Colors.white70, fontSize: 10,
+            )),
+            Text(_currency.format(_asDouble(value)),
+              style: const TextStyle(
+                color: Colors.white, fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Material(
+      key: const ValueKey<String>('GST'),
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: null,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF56AFFF), Color(0xFF2C74FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [BoxShadow(
+              color: const Color(0xFF2C74FF).withOpacity(.28),
+              blurRadius: 12, spreadRadius: 1, offset: const Offset(0, 6),
+            )],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Expanded(child: Text('GST', style: TextStyle(
+                    color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ))),
+                  InkWell(
+                    onTap: _gstLoading ? null : _fetchGstCardData,
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 18),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 5),
+                Row(children: [
+                  periodButton('Today', false),
+                  const SizedBox(width: 5),
+                  periodButton('This month', true),
+                ]),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: _gstLoading
+                    ? const Center(child: SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                      ))
+                    : _gstError != null
+                      ? SingleChildScrollView(child: Column(children: [
+                          Text(_gstError!, style: const TextStyle(
+                            color: Colors.white, fontSize: 11)),
+                          TextButton(
+                            onPressed: _fetchGstCardData,
+                            child: const Text('Retry',
+                              style: TextStyle(color: Colors.white)),
+                          ),
+                        ]))
+                      : keys.isEmpty
+                        ? const Center(child: Text('No company data',
+                            style: TextStyle(color: Colors.white, fontSize: 11)))
+                        : ListView.separated(
+                            primary: false,
+                            padding: EdgeInsets.zero,
+                            itemCount: keys.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final key = keys[index];
+                              final totals = selected[key];
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  if (key.startsWith('name:')) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Company ID is missing. Please refresh the report.')),
+                                    );
+                                    return;
+                                  }
+                                  final now = DateTime.now();
+                                  final today = DateTime(now.year, now.month, now.day);
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => CompanyGstReportPage(
+                                      companyId: key,
+                                      companyName: names[key]!,
+                                      initialStartDate: _gstShowMonth
+                                          ? DateTime(today.year, today.month, 1) : today,
+                                      initialEndDate: today,
+                                    ),
+                                  ));
+                                },
+                                child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(.14),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(.22)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(names[key]!, style: const TextStyle(
+                                      color: Colors.white, fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    )),
+                                    amountLine('Total Order amount', totals?['net']),
+                                    amountLine('Total GST', totals?['gst']),
+                                    amountLine('Total amount without tax',
+                                      totals?['without_tax']),
+                                  ],
+                                ),
+                                ),
+                              );
+                            },
+                          ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleBottomSearch() {
+    final bool shouldOpen = !isBottomSearchOpen;
+
+    setState(() {
+      isBottomSearchOpen = shouldOpen;
+
+      if (!shouldOpen) {
+        dashboardSearchQuery = '';
+
+        dashboardSearchController.clear();
+      }
+    });
+
+    if (shouldOpen) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) {
+          if (!mounted) return;
+
+          dashboardSearchFocusNode.requestFocus();
+        },
+      );
+    } else {
+      dashboardSearchFocusNode.unfocus();
+    }
+  }
+
+  void _closeBottomSearch() {
+    if (!isBottomSearchOpen &&
+        dashboardSearchController.text.isEmpty &&
+        dashboardSearchQuery.isEmpty) {
+      return;
+    }
+
+    dashboardSearchFocusNode.unfocus();
+
+    setState(() {
+      isBottomSearchOpen = false;
+
+      dashboardSearchQuery = '';
+
+      dashboardSearchController.clear();
+    });
+  }
+
+  // ============================================================
+  // BOTTOM MAIL
+  // ============================================================
+
+  Future<void> _openBottomMail() async {
+    _closeBottomSearch();
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const StaffMailPage(),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await fetchInboxMailCount();
+  }
+
+  // ============================================================
+  // BOTTOM PROFILE
+  // ============================================================
+
+  void _openBottomProfile() {
+    _closeBottomSearch();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(),
+      ),
+    );
+  }
+
+  // ============================================================
+  // MODERN BOTTOM NAVIGATION
+  // ============================================================
+
+  Widget _buildModernBottomNavigationBar() {
+    return MediaQuery.removePadding(
+      context: context,
+      removeBottom: true,
+      child: Material(
+        color: Colors.white,
+        elevation: 14,
+        shadowColor: Colors.black.withOpacity(
+          0.10,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              height: 68,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 7,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(
+                    26,
+                  ),
+                  topRight: Radius.circular(
+                    26,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Profile',
+                      isSelected: false,
+                      onTap: _openBottomProfile,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.mail_outline_rounded,
+                      label: 'Mail',
+                      isSelected: false,
+                      badgeCount: inboxMailCount,
+                      onTap: () {
+                        _openBottomMail();
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildBottomNavigationItem(
+                      icon: Icons.search_rounded,
+                      label: 'Search',
+                      isSelected: isBottomSearchOpen,
+                      onTap: _toggleBottomSearch,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(
+                milliseconds: 220,
+              ),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: isBottomSearchOpen
+                  ? Padding(
+                      key: const ValueKey<String>(
+                        'dashboard-search-open',
+                      ),
+                      padding: const EdgeInsets.fromLTRB(
+                        12,
+                        9,
+                        12,
+                        4,
+                      ),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFF2F2F7,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            16,
+                          ),
+                          border: Border.all(
+                            color: const Color(
+                              0xFFE5E5EA,
+                            ),
+                          ),
+                        ),
+                        child: TextField(
+                          controller: dashboardSearchController,
+                          focusNode: dashboardSearchFocusNode,
+                          textInputAction: TextInputAction.search,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          onChanged: (String value) {
+                            setState(
+                              () {
+                                dashboardSearchQuery = value;
+                              },
+                            );
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search cards',
+                            hintStyle: const TextStyle(
+                              color: Color(
+                                0xFF8E8E93,
+                              ),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Color(
+                                0xFF8E8E93,
+                              ),
+                              size: 22,
+                            ),
+                            suffixIcon: dashboardSearchQuery.isNotEmpty
+                                ? IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      dashboardSearchController.clear();
+
+                                      setState(
+                                        () {
+                                          dashboardSearchQuery = '';
+                                        },
+                                      );
+
+                                      dashboardSearchFocusNode.requestFocus();
+                                    },
+                                    icon: const Icon(
+                                      Icons.cancel_rounded,
+                                      color: Color(
+                                        0xFF8E8E93,
+                                      ),
+                                      size: 20,
+                                    ),
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>(
+                        'dashboard-search-closed',
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
+    final Color foregroundColor = isSelected
+        ? const Color(
+            0xFF2C74FF,
+          )
+        : const Color(
+            0xFF6B7280,
+          );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(
+          20,
+        ),
+        onTap: onTap,
+        child: SizedBox(
+          height: 54,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(
+                      milliseconds: 180,
+                    ),
+                    width: 36,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(
+                              0xFFEAF2FF,
+                            )
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(
+                        12,
+                      ),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: foregroundColor,
+                      size: 23,
+                    ),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -7,
+                      top: -5,
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFFF3B30,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            20,
+                          ),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(
+                height: 2,
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 10.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void initdata() async {
@@ -1606,6 +2295,8 @@ Future<void> fetchTeamWiseAttendanceCount() async {
     });
 
     await Future.wait([
+      _fetchGstCompanies(),
+      _fetchGstCardData(),
       Future(() => initdata()),
       Future(() => getGrvList()),
       Future(() => fetchproformaData()),
@@ -4166,7 +4857,7 @@ Widget _buildDashboardLineItem({
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
         childAspectRatio: 0.72,
-        children: [
+        children: <Widget>[
           _buildDashboardCard(
   title: "Sales",
   value:
@@ -4919,7 +5610,14 @@ _buildDashboardCard(
     });
   },
 ),
-        ],
+          _buildGstGridCard(),
+        ].where((card) {
+          final query = dashboardSearchQuery.trim().toLowerCase();
+          if (query.isEmpty) return true;
+          final key = card.key;
+          return key is ValueKey<String> &&
+              key.value.toLowerCase().contains(query);
+        }).toList(),
       ),
     );
   }
@@ -5099,6 +5797,7 @@ _buildDashboardCard(
   }
 
   return Material(
+    key: ValueKey<String>(title),
     color: Colors.transparent,
     child: InkWell(
       borderRadius: BorderRadius.circular(20),
@@ -8287,66 +8986,28 @@ _buildDashboardCard(
             elevation: 0,
             backgroundColor: Colors.white,
             // leading: Icon(Icons.arrow_back, color: Colors.black),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.mail_outline_rounded,
-                        color: Colors.black,
-                        size: 28,
-                      ),
-                      onPressed: () async {
-                        await Navigator.push<void>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const StaffMailPage(),
-                          ),
-                        );
-
-                        if (!mounted) return;
-
-                        await fetchInboxMailCount();
-                      },
-                    ),
-                    if (inboxMailCount > 0)
-                      Positioned(
-                        right: 4,
-                        top: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          child: Text(
-                            inboxMailCount > 99
-                                ? '99+'
-                                : inboxMailCount.toString(),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(
+                right: 12,
               ),
-            ],
-          ),
+              child: IconButton(
+                tooltip: 'Logout',
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.black,
+                  size: 27,
+                ),
+                onPressed: () async {
+                  await logoutUser(
+                    context,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _buildModernBottomNavigationBar(),
           drawer: Drawer(
             backgroundColor: Colors.white,
             child: Container(
@@ -8597,7 +9258,8 @@ _buildDashboardCard(
                   _buildDropdownTile(context, 'Proforma Invoice', [
                     'New Proforma Invoice',
                     'Proforma Invoice List',
-                    'Proforma Invoice List (Payment-Slips)'
+                    'Proforma Invoice List (Payment-Slips)',
+                    'Rejected Proforma Invoice List',
                   ]),
                     _buildDropdownTile(
                 context,
@@ -9238,6 +9900,7 @@ _buildDashboardCard(
                     'Point System Excel',
                     'Statewise Sales Report Excel',
                     'Customer Complete Report',
+                    'Staff Complete Report',
                     'GST Report',
                     'Product Stock Report',
                     'Order Items Excel Report',

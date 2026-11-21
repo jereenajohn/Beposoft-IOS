@@ -2096,6 +2096,68 @@ class _MyGrvPageState extends State<MyGrvPage> {
   // GRV DETAILS BOTTOM SHEET
   // ============================================================
 
+  Future<void> _updateGrvNote(
+    Map<String, dynamic> item,
+    String note,
+  ) async {
+    final int? id = int.tryParse(item['id']?.toString() ?? '');
+    if (id == null || id <= 0) {
+      throw Exception('Unable to update note: invalid GRV ID.');
+    }
+    final String? token = await getTokenFromPrefs();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Your session has expired. Please log in again.');
+    }
+    final response = await http.put(
+      Uri.parse('$api/api/grv/update/$id/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      // Submit only the editable field; never overwrite other GRV values.
+      body: jsonEncode({'note': note}),
+    ).timeout(const Duration(seconds: 30));
+
+    dynamic decoded;
+    if (response.body.trim().isNotEmpty) {
+      try {
+        decoded = jsonDecode(response.body);
+      } on FormatException {
+        // A successful update may have an empty or non-JSON response.
+      }
+    }
+    if (response.statusCode == 401) {
+      throw Exception('Your session has expired. Please log in again.');
+    }
+    if (response.statusCode == 403) {
+      throw Exception('You do not have permission to update this GRV.');
+    }
+    final bool failed = response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        (decoded is Map &&
+            decoded['status']?.toString().toLowerCase() == 'error');
+    if (failed) {
+      String message = 'Unable to update note (${response.statusCode}).';
+      if (decoded is Map) {
+        final dynamic detail = decoded['note'] ??
+            decoded['detail'] ?? decoded['message'] ?? decoded['error'];
+        if (detail != null) {
+          message = detail is List ? detail.join(' ') : detail.toString();
+        }
+      }
+      throw Exception(message);
+    }
+    item['note'] = note;
+    if (!mounted) return;
+    for (final record in grvList) {
+      if (record['id'].toString() == id.toString()) {
+        record['note'] = note;
+      }
+    }
+    applyFilters();
+  }
+
   void showGrvDetails(
 
     Map<String, dynamic> item,
@@ -2557,12 +2619,10 @@ class _MyGrvPageState extends State<MyGrvPage> {
 
                         ),
 
-                        buildDetailRow(
-
-                          'Note',
-
-                          item['note'],
-
+                        _GrvNoteEditor(
+                          key: ValueKey('grv-note-${item['id']}'),
+                          initialNote: item['note']?.toString() ?? '',
+                          onSave: (note) => _updateGrvNote(item, note),
                         ),
 
                         const SizedBox(height: 24),
@@ -3625,4 +3685,140 @@ class _MyGrvPageState extends State<MyGrvPage> {
 
   }
 
+}
+
+class _GrvNoteEditor extends StatefulWidget {
+  const _GrvNoteEditor({
+    super.key,
+    required this.initialNote,
+    required this.onSave,
+  });
+
+  final String initialNote;
+  final Future<void> Function(String note) onSave;
+
+  @override
+  State<_GrvNoteEditor> createState() => _GrvNoteEditorState();
+}
+
+class _GrvNoteEditorState extends State<_GrvNoteEditor> {
+  late final TextEditingController _controller;
+  late String _savedNote;
+  bool _saving = false;
+  String? _error;
+  bool _success = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _savedNote = widget.initialNote;
+    _controller = TextEditingController(text: _savedNote);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving || _controller.text == _savedNote) return;
+    final note = _controller.text;
+    setState(() {
+      _saving = true;
+      _error = null;
+      _success = false;
+    });
+    try {
+      await widget.onSave(note);
+      if (!mounted) return;
+      setState(() {
+        _savedNote = note;
+        _success = true;
+      });
+      FocusScope.of(context).unfocus();
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Request timed out. Please try again.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF2C74FF);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Note', style: TextStyle(
+          color: Color(0xFF7A8495), fontSize: 14,
+        )),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _controller,
+          enabled: !_saving,
+          minLines: 3,
+          maxLines: 6,
+          textCapitalization: TextCapitalization.sentences,
+          scrollPadding: const EdgeInsets.all(100),
+          onChanged: (_) => setState(() {
+            _error = null;
+            _success = false;
+          }),
+          decoration: InputDecoration(
+            hintText: 'Enter note',
+            filled: true,
+            fillColor: const Color(0xFFF5F7FB),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE8ECF3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: blue),
+            ),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: const TextStyle(color: Color(0xFFDC2626))),
+        ],
+        if (_success) ...[
+          const SizedBox(height: 8),
+          const Text('Note updated successfully.',
+              style: TextStyle(color: Color(0xFF16A34A))),
+        ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _saving || _controller.text == _savedNote ? null : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: blue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: _saving
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white,
+                    ))
+                : const Icon(Icons.save_outlined, size: 20),
+            label: Text(_saving ? 'Updating...' : 'Update Note'),
+          ),
+        ),
+      ],
+    );
+  }
 }
